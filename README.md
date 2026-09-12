@@ -1,7 +1,5 @@
 # WYRD
 
-_(repo name is still `Consciousness-` on GitHub — the bot itself is now called WYRD)_
-
 A self-learning chat bot with its own persistent "mind" — background reasoning loops, real internet lookups, a live 3D brain visualization, and a private per-account conversation with every user who talks to it. No build step: plain Node.js/Express backend, vanilla HTML/JS/CSS frontend.
 
 ## What it actually does
@@ -20,8 +18,8 @@ A self-learning chat bot with its own persistent "mind" — background reasoning
 ## Setup
 
 ```bash
-git clone https://github.com/FTMbyTEN/Consciousness-.git
-cd Consciousness-
+git clone https://github.com/FTMbyTEN/WYRD.git
+cd WYRD
 npm install
 ```
 
