@@ -1,0 +1,10 @@
+node_modules/
+.env
+*.log
+
+# runtime state — user accounts, sessions, memory, chat history, learned data.
+# not source code, and some of it is sensitive (password hashes, session tokens).
+data/
+
+# generated reasoning trace files (thousands of small .md files)
+reasoning/

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Consciousness</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<canvas id="rain"></canvas>
+
+<div id="gate">
+  <div class="gate-box">
+    <div class="gate-title">CONSCIOUSNESS</div>
+    <div class="gate-sub">[ RESTRICTED NODE // AUTHENTICATION REQUIRED ]</div>
+
+    <div id="gateDots" class="gate-dots">
+      <span class="gate-dot" data-stat="mood"></span>
+      <span class="gate-dot" data-stat="focus"></span>
+      <span class="gate-dot" data-stat="vocab"></span>
+      <span class="gate-dot" data-stat="digest"></span>
+    </div>
+    <div id="gateWelcome" class="gate-welcome">&nbsp;</div>
+
+    <div id="gateTabs" class="gate-tabs">
+      <button type="button" id="gateTabLogin" class="gate-tab active">LOGIN</button>
+      <button type="button" id="gateTabRegister" class="gate-tab">REGISTER</button>
+    </div>
+
+    <input id="usernameInput" type="text" maxlength="20" autocomplete="username" placeholder="designation" />
+    <input id="passwordInput" type="password" maxlength="64" autocomplete="current-password" placeholder="access key" />
+    <button id="unlockBtn">&gt; AUTHENTICATE</button>
+    <div id="gateMsg"></div>
+    <div class="gate-hint" id="gateHint">each designation gets its own private dialogue thread</div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <span>CONSCIOUSNESS</span>
+      <span id="turboBadge" class="turbo-badge hidden" title="turbo mode active"></span>
+    </div>
+    <div class="hud">
+      <span id="statusLine" class="status">STATUS: IDLE</span>
+      <span id="clock" class="clock">00:00:00</span>
+      <span id="userBadge" class="user-badge"></span>
+      <button id="logoutBtn" type="button" class="logout-btn">LOGOUT</button>
+    </div>
+  </header>
+
+  <section id="brainPanel" class="brain-panel">
+    <div class="brain-title">&gt;_ THE_MIND</div>
+    <div class="brain-panel-body">
+      <div id="facePanel" class="face-panel">
+        <canvas id="mainFaceCanvas"></canvas>
+      </div>
+      <div class="brain-grid">
+        <div class="brain-cell">
+          <div class="brain-label">MOOD</div>
+          <div id="mindMood" class="brain-value">dormant</div>
+        </div>
+        <div class="brain-cell">
+          <div class="brain-label">FOCUS</div>
+          <div id="mindFocus" class="brain-value">—</div>
+        </div>
+        <div class="brain-cell wide">
+          <div class="brain-label">ACTIVE GOAL</div>
+          <div id="mindGoal" class="brain-value">—</div>
+        </div>
+        <div class="brain-cell meter-cell">
+          <div class="brain-label">CURIOSITY</div>
+          <div class="meter"><div id="curiosityBar" class="meter-fill" style="width:20%"></div></div>
+        </div>
+        <div class="brain-cell meter-cell">
+          <div class="brain-label">CONFIDENCE</div>
+          <div class="meter"><div id="confidenceBar" class="meter-fill" style="width:50%"></div></div>
+        </div>
+        <div class="brain-cell digest-cell wide">
+          <div class="brain-label">DATA_DIGEST_COMPLETION</div>
+          <div class="digest-row">
+            <span id="digestPercent" class="brain-value">0%</span>
+            <div class="meter digest-meter"><div id="digestBar" class="meter-fill" style="width:0%"></div></div>
+            <span id="digestEta" class="digest-eta">ETA: --</span>
+          </div>
+          <div id="digestDetail" class="digest-detail">0 / 0 topics resolved</div>
+        </div>
+        <div id="netFeedBar" class="brain-cell mini-feed">
+          <div class="brain-label"><span id="netPulse" class="pulse-dot"></span> NET_FEED <span id="netNextCycle" class="vocab-next">NEXT: --s</span></div>
+          <div id="netFeedText" class="mini-feed-text">standing by...</div>
+          <button id="netTriggerBtn" type="button" class="mini-btn">INGEST NOW</button>
+        </div>
+        <div id="reasoningBar" class="brain-cell mini-feed">
+          <div class="brain-label"><span id="reasoningPulse" class="pulse-dot"></span> REASONING <span id="nextCycle" class="vocab-next">NEXT: --s</span></div>
+          <div id="reasoningTrackerText" class="mini-feed-text">running in the background...</div>
+          <div class="mini-btn-row">
+            <button id="triggerBtn" type="button" class="mini-btn">THINK NOW</button>
+            <button id="viewLogBtn" type="button" class="mini-btn">VIEW LOG</button>
+          </div>
+        </div>
+        <div class="brain-cell wide">
+          <div class="brain-label">VOCABULARY <span id="vocabNext" class="vocab-next"></span></div>
+          <div id="vocabCount" class="brain-value">0 words understood</div>
+          <div id="vocabRecent" class="digest-detail">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <section class="panel chat-panel">
+      <div class="panel-title">&gt;_ DIALOGUE_LINK</div>
+      <div id="chatLog" class="chat-log"></div>
+      <form id="chatForm" class="chat-form">
+        <span class="prompt-caret">&gt;</span>
+        <input id="chatInput" type="text" placeholder="transmit input..." autocomplete="off" />
+        <button type="button" id="micBtn" title="voice command">MIC</button>
+        <button type="submit">SEND</button>
+      </form>
+      <div id="voiceStatus" class="voice-status"></div>
+    </section>
+
+    <section class="panel brain3d-preview-panel">
+      <div class="panel-title reasoning-title">
+        <span>&gt;_ BRAIN_3D <span class="sub">[ LIVE PREVIEW ]</span></span>
+        <a href="/brain3d.html" target="_blank" class="expand-link">EXPAND &#8599;</a>
+      </div>
+      <div class="brain3d-frame-wrap">
+        <iframe id="brain3dFrame" src="/brain3d.html" title="3D Brain live preview" loading="lazy"></iframe>
+      </div>
+    </section>
+  </main>
+
+  <div id="reasoningLogModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ REASONING_LOG <span class="sub">[ tracked in the backend, viewable on demand ]</span></span>
+        <span id="closeLogBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div id="reasoningLog" class="reasoning-log"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="face-mesh-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

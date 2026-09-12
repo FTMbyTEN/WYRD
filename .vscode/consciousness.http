@@ -1,0 +1,69 @@
+### Requires the "REST Client" VS Code extension (humao.rest-client)
+### Click "Send Request" above any block below. Server must be running on port 4477.
+
+@baseUrl = http://localhost:4477
+
+### Mind state (mood, curiosity, confidence, focus, digest)
+GET {{baseUrl}}/api/mind
+
+### Full memory (all blocks: chat / net / self)
+GET {{baseUrl}}/api/memory
+
+### Recent autonomous reasoning notes (markdown, up to 50)
+GET {{baseUrl}}/api/reasoning
+
+### Force an autonomous reasoning tick right now
+POST {{baseUrl}}/api/reasoning/trigger
+
+### When the next scheduled reasoning tick will fire
+GET {{baseUrl}}/api/reasoning/next
+
+### Force a self-questioning tick right now
+POST {{baseUrl}}/api/self/trigger
+
+### When the next scheduled self-questioning tick will fire
+GET {{baseUrl}}/api/self/next
+
+### Force a net-feed ingest (Wikipedia / Hacker News) right now
+POST {{baseUrl}}/api/feed/trigger
+
+### Recently ingested net items
+GET {{baseUrl}}/api/feed/recent
+
+### When the next scheduled feed ingest will fire
+GET {{baseUrl}}/api/feed/next
+
+### Lexicon stats (words learned from a real dictionary)
+GET {{baseUrl}}/api/lexicon/stats
+
+### Force a lexicon learning tick right now
+POST {{baseUrl}}/api/lexicon/trigger
+
+### Look up a specific learned word
+GET {{baseUrl}}/api/lexicon/word/consciousness
+
+### Chat with it directly
+# @name chat
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "text": "What have you learned about drawing so far?"
+}
+
+### Check access passcode
+POST {{baseUrl}}/api/access/check
+Content-Type: application/json
+
+{
+  "passcode": "0000"
+}
+
+### Change access passcode
+# POST {{baseUrl}}/api/access/change
+# Content-Type: application/json
+#
+# {
+#   "current": "0000",
+#   "next": "newpass"
+# }

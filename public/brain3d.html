@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Consciousness — 3D Brain</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #000502;
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+    color: #00ff41;
+  }
+  canvas { display: block; opacity: 0; transition: opacity 1.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  canvas.loaded { opacity: 1; }
+  #hud, #feed { opacity: 0; transition: opacity 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.3s; }
+  #hud.loaded, #feed.loaded { opacity: 1; }
+
+  #hud {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  #backLink {
+    pointer-events: auto;
+    font-size: 11px;
+    color: #00ff41;
+    text-decoration: none;
+    border: 1px solid #0a5c22;
+    padding: 6px 12px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+    background: rgba(0,20,8,0.6);
+  }
+  #backLink:hover { border-color: #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.4); }
+
+  #title {
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+    letter-spacing: 2px;
+    text-shadow: 0 0 6px rgba(0,255,65,0.6);
+    opacity: 0.85;
+  }
+
+  #rightHud {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+
+  #stats {
+    pointer-events: auto;
+    background: rgba(0,20,8,0.4);
+    border: 1px solid rgba(10,92,34,0.6);
+    border-radius: 2px;
+    padding: 4px 7px;
+    font-size: 8px;
+    line-height: 1.25;
+    min-width: 108px;
+    backdrop-filter: blur(2px);
+    opacity: 0.75;
+    transition: opacity 0.2s ease;
+  }
+  #stats:hover { opacity: 1; }
+  #stats .row { display: flex; justify-content: space-between; gap: 6px; }
+  #stats .label { color: #3d7a4d; letter-spacing: 0.5px; }
+  #stats .val { color: #00ff41; text-shadow: 0 0 3px rgba(0,255,65,0.4); }
+
+  /* feelings — mood/curiosity/confidence — kept minimal; the machine stats below matter more */
+  #feelingsMini {
+    font-size: 7px;
+    color: #2f5c3d;
+    white-space: nowrap;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    border-bottom: 1px dashed rgba(10,92,34,0.5);
+  }
+  #feelingsMini .meter-mini { width: 22px; height: 3px; margin-left: 2px; }
+
+  /* machine stats — objective learning progress, the real signal */
+  .machine-row .val { font-size: 10px; }
+
+  #feed {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 5;
+  }
+  #feedText {
+    font-size: 12px;
+    color: #7fffb0;
+    background: rgba(0,20,8,0.55);
+    border: 1px solid #0a5c22;
+    padding: 6px 16px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    max-width: 90vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  #feedText.show { opacity: 1; }
+
+  #inspectPanel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    width: min(420px, 86vw);
+    max-height: 70vh;
+    overflow-y: auto;
+    background: rgba(0, 15, 6, 0.92);
+    border: 1px solid #00ff41;
+    border-radius: 4px;
+    padding: 18px 22px;
+    box-shadow: 0 0 40px rgba(0,255,65,0.3);
+    backdrop-filter: blur(6px);
+  }
+  #inspectClose {
+    position: absolute;
+    top: 8px;
+    right: 14px;
+    cursor: pointer;
+    font-size: 20px;
+    color: #4d9a63;
+    line-height: 1;
+  }
+  #inspectClose:hover { color: #00ff41; }
+  #inspectTopic {
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: #00ff41;
+    text-shadow: 0 0 8px rgba(0,255,65,0.6);
+    margin-bottom: 10px;
+    padding-right: 20px;
+  }
+  #inspectBody { font-size: 12px; line-height: 1.6; color: #baffc9; }
+  #inspectBody .row { margin-bottom: 10px; }
+  #inspectBody .label { display: block; font-size: 10px; letter-spacing: 1px; color: #4d9a63; margin-bottom: 2px; }
+
+  #legend {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 5;
+  }
+
+  .meter-mini {
+    width: 44px;
+    height: 4px;
+    border: 1px solid #0a5c22;
+    border-radius: 1px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+  .meter-mini-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0a5c22, #00ff41);
+    transition: width 0.6s ease;
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div>
+    <a id="backLink" href="/">&larr; CONSOLE</a>
+    <div id="title" style="margin-top:8px;">BRAIN // LIVE</div>
+  </div>
+  <div id="rightHud">
+    <div id="stats">
+      <div id="feelingsMini">
+        <span id="sMood">—</span> · <span id="sFocus">—</span>
+        cur<div class="meter-mini"><div class="meter-mini-fill" id="sCuriosity" style="width:20%"></div></div>
+        conf<div class="meter-mini"><div class="meter-mini-fill" id="sConfidence" style="width:50%"></div></div>
+      </div>
+      <div class="row machine-row"><span class="label">VOCAB</span><span class="val" id="sVocab">0</span></div>
+      <div class="row machine-row"><span class="label">DIGEST</span><span class="val" id="sDigest">0%</span></div>
+      <div class="row machine-row"><span class="label">NODES FIRED</span><span class="val" id="sFired">0</span></div>
+      <div class="row machine-row"><span class="label">NEURONS GROWN</span><span class="val" id="sNeurons">0</span></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="feed"><div id="feedText"></div></div>
+
+<div id="inspectPanel" hidden>
+  <div id="inspectClose">&times;</div>
+  <div id="inspectTopic"></div>
+  <div id="inspectBody"></div>
+</div>
+
+<script>
+// ---------- Scene setup ----------
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000502, 0.02);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 34);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const brainGroup = new THREE.Group();
+scene.add(brainGroup);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- Build a brain-like node cloud (two lobes) — grows over time as it learns ----------
+// Positions for every possible neuron are precomputed up front (cheap — it's just math), but most
+// start dormant (invisible, scale 0). Real learning events "birth" a dormant one into existence,
+// so the brain visibly gets denser and more complex the more it actually knows — not a fixed prop.
+const MAX_NODES = 700;
+const INITIAL_ACTIVE = 260;
+const nodes = []; // {pos, mesh, mat, energy, active, growth, topic, permanent}
+const nodeTopicMap = new Map(); // nodeIdx -> topic/label string, for click-to-inspect
+
+// even coverage on a unit sphere, then deformed into an actual brain silhouette below —
+// x = left/right, y = up/down, z = front/back (front lobe tapers, back lobe stays full/rounded)
+function fibonacciUnitPoint(i, n) {
+  const offset = 2 / n;
+  const increment = Math.PI * (3 - Math.sqrt(5));
+  const y = i * offset - 1 + offset / 2;
+  const r = Math.sqrt(Math.max(0, 1 - y * y));
+  const phi = i * increment;
+  const x = Math.cos(phi) * r;
+  const z = Math.sin(phi) * r;
+  return new THREE.Vector3(x, y, z);
+}
+
+// warps a unit-sphere point into a brain-shaped point: elongated front-to-back, flatter than
+// wide, a narrower rounded frontal lobe vs. a fuller occipital lobe at the back, a flattened/
+// bulged underside for the temporal lobes, and a slightly flattened crown
+function shapeToBrain(u) {
+  let x = u.x * 0.86;
+  let y = u.y * 0.62;
+  let z = u.z * 1.08;
+
+  if (u.z > 0) { // frontal lobe: taper narrower and shorter toward the front pole
+    const t = u.z * u.z;
+    x *= 1 - 0.24 * t;
+    y *= 1 - 0.14 * t;
+  }
+
+  if (u.y < 0) { // underside: compress overall, but bulge back out around temporal-lobe height
+    y *= 0.68;
+    x *= 1 + 0.2 * Math.exp(-Math.pow((u.y + 0.35) * 3, 2));
+  }
+
+  if (u.y > 0.7) y *= 0.9; // flatten the crown slightly rather than a perfect dome
+
+  return new THREE.Vector3(x, y, z);
+}
+
+const nodeGeo = new THREE.SphereGeometry(0.16, 8, 8);
+
+// picking indices 0..INITIAL_ACTIVE-1 in creation order would only sample the first ~37% of the
+// fibonacci angular sweep (a lopsided clump, not a full sphere) — a random subset of the full
+// index range is what actually spreads evenly across the whole shape
+const initiallyActive = new Set();
+{
+  const allIdx = Array.from({ length: MAX_NODES }, (_, i) => i);
+  for (let i = allIdx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allIdx[i], allIdx[j]] = [allIdx[j], allIdx[i]];
+  }
+  allIdx.slice(0, INITIAL_ACTIVE).forEach((i) => initiallyActive.add(i));
+}
+
+for (let i = 0; i < MAX_NODES; i++) {
+  // two brain-shaped hemispheres separated by a longitudinal fissure
+  const lobe = i % 2 === 0 ? -1 : 1;
+  const u = fibonacciUnitPoint(Math.floor(i / 2), MAX_NODES / 2);
+  const p = shapeToBrain(u).multiplyScalar(10);
+  p.x += lobe * 2.5;
+  p.x *= 0.88; // squash toward center so the hemispheres sit close either side of the fissure
+
+  const active = initiallyActive.has(i);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x0a5c22, transparent: true, opacity: active ? 0.85 : 0 });
+  const mesh = new THREE.Mesh(nodeGeo, mat);
+  mesh.position.copy(p);
+  mesh.scale.setScalar(active ? 1 : 0.001);
+  brainGroup.add(mesh);
+
+  nodes.push({ pos: p, mesh, mat, energy: 0, active, growth: active ? 1 : 0, topic: null, permanent: false });
+}
+
+function nextDormantNodeIdx() {
+  const dormant = [];
+  for (let i = 0; i < nodes.length; i++) if (!nodes[i].active) dormant.push(i);
+  if (dormant.length === 0) return null;
+  return dormant[Math.floor(Math.random() * dormant.length)];
+}
+
+// birth a dormant neuron into existence — this is the "brain growing" moment
+function activateNode(idx, topic) {
+  const n = nodes[idx];
+  if (n.active) return;
+  n.active = true;
+  n.growth = 0; // animate loop tweens this 0->1
+  if (topic) { n.topic = topic; nodeTopicMap.set(idx, topic); }
+  refreshEdgeActivity();
+  const el = document.getElementById('sNeurons');
+  if (el) el.textContent = `${nodes.filter((x) => x.active).length} / ${MAX_NODES}`;
+}
+
+// connect each node to its k nearest neighbors — precomputed across ALL possible nodes so that
+// when a dormant one is born, it already has sensible neighbors to link up to immediately
+function buildEdges(k) {
+  const positions = [];
+  const edgeList = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const dists = [];
+    for (let j = 0; j < nodes.length; j++) {
+      if (i === j) continue;
+      dists.push({ j, d: nodes[i].pos.distanceTo(nodes[j].pos) });
+    }
+    dists.sort((a, b) => a.d - b.d);
+    for (let n = 0; n < k; n++) {
+      const j = dists[n].j;
+      const key = i < j ? `${i}_${j}` : `${j}_${i}`;
+      if (edgeList.some((e) => e.key === key)) continue;
+      edgeList.push({ key, a: i, b: j });
+      positions.push(nodes[i].pos.x, nodes[i].pos.y, nodes[i].pos.z);
+      positions.push(nodes[j].pos.x, nodes[j].pos.y, nodes[j].pos.z);
+    }
+  }
+  return { positions: new Float32Array(positions), edgeList };
+}
+
+const { positions: edgePositions, edgeList } = buildEdges(3);
+const edgeGeo = new THREE.BufferGeometry();
+edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
+const edgeColors = new Float32Array(edgePositions.length);
+edgeGeo.setAttribute('color', new THREE.BufferAttribute(edgeColors, 3));
+const edgeMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5 });
+const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+brainGroup.add(edgeLines);
+
+// an edge is only "real" once both endpoints exist — otherwise it stays invisible (black)
+const edgeActive = new Uint8Array(edgeList.length);
+function refreshEdgeActivity() {
+  edgeList.forEach((e, idx) => { edgeActive[idx] = (nodes[e.a].active && nodes[e.b].active) ? 1 : 0; });
+}
+refreshEdgeActivity();
+
+// map node index -> edge indices touching it (for pulsing)
+const nodeEdgeMap = new Map();
+edgeList.forEach((e, idx) => {
+  if (!nodeEdgeMap.has(e.a)) nodeEdgeMap.set(e.a, []);
+  if (!nodeEdgeMap.has(e.b)) nodeEdgeMap.set(e.b, []);
+  nodeEdgeMap.get(e.a).push(idx);
+  nodeEdgeMap.get(e.b).push(idx);
+});
+
+// ---------- Ambient point starfield for depth ----------
+const starGeo = new THREE.BufferGeometry();
+const starCount = 400;
+const starPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount; i++) {
+  const r = 60 + Math.random() * 60;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+  starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+  starPos[i * 3 + 2] = r * Math.cos(phi);
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0x0a5c22, size: 0.5, transparent: true, opacity: 0.4 });
+scene.add(new THREE.Points(starGeo, starMat));
+
+// ---------- Incoming data packets (net feed / lexicon) ----------
+const packets = []; // {mesh, from, to, t, color}
+const packetGeo = new THREE.SphereGeometry(0.22, 6, 6);
+
+// targets a brand-new dormant neuron when one is available (the packet "delivers" the new
+// knowledge and the neuron is born on arrival), falling back to an existing one once the brain
+// is fully grown
+function spawnPacket(color, topic, permanent = false) {
+  const targetIdx = nextDormantNodeIdx() ?? randomNodeIdx();
+  const from = new THREE.Vector3(
+    (Math.random() - 0.5) * 2,
+    (Math.random() - 0.5) * 2,
+    (Math.random() - 0.5) * 2
+  ).normalize().multiplyScalar(40);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
+  const mesh = new THREE.Mesh(packetGeo, mat);
+  mesh.position.copy(from);
+  scene.add(mesh);
+  packets.push({ mesh, from, to: nodes[targetIdx].pos.clone(), t: 0, color, targetIdx, topic, permanent });
+}
+
+// ---------- Firing / pulsing state ----------
+let firedCount = 0;
+function fireNode(idx, color, intensity = 1) {
+  nodes[idx].energy = Math.max(nodes[idx].energy, intensity);
+  firedCount++;
+  document.getElementById('sFired').textContent = firedCount;
+  const edges = nodeEdgeMap.get(idx) || [];
+  edges.forEach((edgeIdx) => flashEdge(edgeIdx, color, intensity * 0.7));
+}
+
+const flashingEdges = new Map(); // edgeIdx -> {color, energy}
+function flashEdge(edgeIdx, color, intensity) {
+  flashingEdges.set(edgeIdx, { color, energy: intensity });
+}
+
+function randomNodeIdx() {
+  const activeIdxs = [];
+  for (let i = 0; i < nodes.length; i++) if (nodes[i].active) activeIdxs.push(i);
+  return activeIdxs[Math.floor(Math.random() * activeIdxs.length)];
+}
+
+// used by real learning events — grows a new neuron when possible, otherwise pulses an
+// existing one so the visual never just silently does nothing once MAX_NODES is reached
+function birthOrPulse(topic, color, intensity = 1.3, permanent = false) {
+  const idx = nextDormantNodeIdx();
+  if (idx != null) {
+    activateNode(idx, topic);
+    if (permanent) nodes[idx].permanent = true;
+    fireNode(idx, color, intensity);
+    return idx;
+  }
+  const fallback = randomNodeIdx();
+  if (topic) nodeTopicMap.set(fallback, topic);
+  fireNode(fallback, color, intensity);
+  return fallback;
+}
+
+// ---------- HUD feed message ----------
+let feedTimer = null;
+function showFeed(text) {
+  const el = document.getElementById('feedText');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(feedTimer);
+  feedTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// ---------- Live data connection ----------
+const COLOR_REASONING = 0x00ff41;
+const COLOR_NET = 0x33ccff;
+const COLOR_LEXICON = 0xffe066;
+const COLOR_SELF = 0xd66bff;
+const COLOR_SYNTHESIS = 0xffcc33;
+
+async function initialSync() {
+  try {
+    const mind = await (await fetch('/api/mind')).json();
+    applyMind(mind);
+  } catch (e) {}
+  try {
+    const lex = await (await fetch('/api/lexicon/stats')).json();
+    document.getElementById('sVocab').textContent = `${lex.learned} / ${lex.dictionarySize ? lex.dictionarySize.toLocaleString() : '?'}`;
+  } catch (e) {}
+}
+
+function applyMind(mind) {
+  document.getElementById('sMood').textContent = mind.mood || '—';
+  document.getElementById('sFocus').textContent = mind.focusTopic || '—';
+  document.getElementById('sCuriosity').style.width = `${Math.round((mind.curiosity || 0) * 100)}%`;
+  document.getElementById('sConfidence').style.width = `${Math.round((mind.confidence || 0) * 100)}%`;
+  if (mind.digest) document.getElementById('sDigest').textContent = `${mind.digest.percent}%`;
+  targetGlow = 0.3 + (mind.confidence || 0) * 0.9;
+  targetRotSpeed = 0.0009 + (mind.curiosity || 0) * 0.0028;
+}
+
+let targetGlow = 0.5;
+let targetRotSpeed = 0.0015;
+let currentGlow = 0.5;
+let currentRotSpeed = 0.0015;
+
+const es = new EventSource('/api/stream');
+
+es.addEventListener('mind', (e) => applyMind(JSON.parse(e.data)));
+
+es.addEventListener('thinking', () => showFeed('reasoning: comparing candidate inferences...'));
+
+es.addEventListener('thought', (e) => {
+  const data = JSON.parse(e.data);
+  const a = randomNodeIdx();
+  const b = randomNodeIdx();
+  fireNode(a, COLOR_REASONING, 1);
+  fireNode(b, COLOR_REASONING, 1);
+  const paragraphs = (data.content || '').trim().split(/\n\s*\n/).filter(Boolean);
+  const summary = paragraphs.length ? paragraphs[paragraphs.length - 1].replace(/\s+/g, ' ') : 'new inference formed';
+  showFeed('reasoning: ' + summary);
+});
+
+es.addEventListener('selfquestion', (e) => {
+  const data = JSON.parse(e.data);
+  const idx = randomNodeIdx();
+  fireNode(idx, COLOR_SELF, 1.4);
+  // self-directed decision: burst outward from one node across all its edges' neighbors too
+  (nodeEdgeMap.get(idx) || []).forEach((edgeIdx) => {
+    const edge = edgeList[edgeIdx];
+    const other = edge.a === idx ? edge.b : edge.a;
+    setTimeout(() => fireNode(other, COLOR_SELF, 0.8), 120);
+  });
+  showFeed(`self-directed: ${data.question}`);
+});
+
+es.addEventListener('ingesting', () => showFeed('net: pulling data from the outside...'));
+
+es.addEventListener('ingested', (e) => {
+  const data = JSON.parse(e.data);
+  spawnPacket(COLOR_NET, data.title);
+  showFeed(`ingested [${data.feedSource}]: ${data.title}`);
+});
+
+es.addEventListener('net_lookup', (e) => {
+  const data = JSON.parse(e.data);
+  if (data.status === 'searching') showFeed(`searching the net for: "${data.query}"`);
+  if (data.status === 'found') { spawnPacket(randomNodeIdx(), COLOR_NET); showFeed(`found: ${data.title}`); }
+});
+
+es.addEventListener('lexicon', (e) => {
+  const data = JSON.parse(e.data);
+  if (data.understood) {
+    spawnPacket(COLOR_LEXICON, data.word);
+    showFeed(`learned "${data.word}" (${data.partOfSpeech}): ${data.definition}`);
+  }
+});
+
+es.addEventListener('synthesis', (e) => {
+  const data = JSON.parse(e.data);
+  // a real "aha" moment — rendered as a larger, permanently-glowing gold neuron, not a
+  // transient pulse like routine activity
+  spawnPacket(COLOR_SYNTHESIS, data.insight, true);
+  showFeed(`💡 insight: ${data.insight}`);
+});
+
+initialSync();
+
+// ---------- Drag-to-rotate + scroll-to-zoom interaction ----------
+let dragging = false;
+let lastX = 0, lastY = 0;
+let yawVelocity = 0;   // persists briefly after release for inertia
+let autoYaw = 0;       // ambient auto-rotation, always advancing
+let userYaw = 0;       // accumulated user-driven yaw offset
+let userPitch = 0;     // accumulated user-driven pitch offset (clamped)
+
+renderer.domElement.style.cursor = 'grab';
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  dragging = true;
+  lastX = e.clientX; lastY = e.clientY;
+  renderer.domElement.style.cursor = 'grabbing';
+});
+window.addEventListener('pointerup', () => { dragging = false; renderer.domElement.style.cursor = 'grab'; });
+window.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  yawVelocity = dx * 0.005;
+  userYaw += yawVelocity;
+  userPitch = Math.max(-1.1, Math.min(1.1, userPitch + dy * 0.005));
+});
+let targetZoom = camera.position.z;
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  targetZoom = Math.max(16, Math.min(70, targetZoom + e.deltaY * 0.03));
+}, { passive: false });
+
+// ---------- Click-to-inspect: see what a neuron actually knows ----------
+const raycaster = new THREE.Raycaster();
+const pointerNDC = new THREE.Vector2();
+let downX = 0, downY = 0;
+
+renderer.domElement.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+  if (moved > 4) return; // was a drag, not a click
+  pointerNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+  pointerNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(pointerNDC, camera);
+  const activeMeshes = nodes.filter((n) => n.active).map((n) => n.mesh);
+  const hits = raycaster.intersectObjects(activeMeshes);
+  if (hits.length === 0) return;
+  const idx = nodes.findIndex((n) => n.mesh === hits[0].object);
+  if (idx !== -1) inspectNode(idx);
+});
+
+const inspectPanel = document.getElementById('inspectPanel');
+document.getElementById('inspectClose').addEventListener('click', () => { inspectPanel.hidden = true; });
+
+async function inspectNode(idx) {
+  const node = nodes[idx];
+  const topicLabel = node.topic;
+  const inspectTopic = document.getElementById('inspectTopic');
+  const inspectBody = document.getElementById('inspectBody');
+
+  if (!topicLabel) {
+    inspectTopic.textContent = 'UNLABELED NEURON';
+    inspectBody.innerHTML = '<div class="row">This one fired from routine background reasoning — no specific topic was recorded for it. Neurons get labeled when they\'re born from a concrete learning event (a new word, an ingested fact, an insight).</div>';
+    inspectPanel.hidden = false;
+    return;
+  }
+
+  inspectTopic.textContent = topicLabel.length > 60 ? topicLabel.slice(0, 60) + '…' : topicLabel;
+  inspectBody.innerHTML = '<div class="row">Looking it up…</div>';
+  inspectPanel.hidden = false;
+
+  // synthesis nodes carry the full insight text as their "topic" — nothing more to fetch
+  if (node.permanent) {
+    inspectBody.innerHTML = `<div class="row"><span class="label">SYNTHESIZED INSIGHT</span>${topicLabel}</div>`;
+    return;
+  }
+
+  try {
+    const firstWord = topicLabel.split(/\s+/)[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const data = await (await fetch(`/api/topic/${encodeURIComponent(firstWord)}`)).json();
+    const parts = [];
+    if (data.definition) parts.push(`<div class="row"><span class="label">DEFINITION (${data.definition.partOfSpeech})</span>${data.definition.text}</div>`);
+    if (data.netFact) parts.push(`<div class="row"><span class="label">FROM THE WEB</span>${data.netFact.title}: ${data.netFact.extract}</div>`);
+    if (data.selfAnswer) parts.push(`<div class="row"><span class="label">SELF-QUESTIONED</span>Q: ${data.selfAnswer.question}<br>A: ${data.selfAnswer.answer}</div>`);
+    if (data.synthesis) parts.push(`<div class="row"><span class="label">INSIGHT</span>${data.synthesis}</div>`);
+    parts.push(`<div class="row"><span class="label">SEEN</span>${data.seenCount} time(s) in memory, mentioned in ${data.chatMentions} of your messages</div>`);
+    inspectBody.innerHTML = parts.join('') || '<div class="row">Recorded, but nothing more specific stored about it yet.</div>';
+  } catch (err) {
+    inspectBody.innerHTML = '<div class="row">Could not reach the backend for details.</div>';
+  }
+}
+
+// ---------- Animation loop ----------
+function easeOutBack(t) {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  currentGlow += (targetGlow - currentGlow) * 0.02;
+  currentRotSpeed += (targetRotSpeed - currentRotSpeed) * 0.02;
+
+  if (!dragging) {
+    yawVelocity *= 0.94; // inertia after release
+    userYaw += yawVelocity;
+  }
+  autoYaw += currentRotSpeed * (dt * 60);
+
+  brainGroup.rotation.y = autoYaw + userYaw;
+  brainGroup.rotation.x = Math.sin(Date.now() * 0.00007) * 0.15 + userPitch;
+
+  // decay node energy, apply glow, tween in newly-born neurons, keep permanent (synthesis) nodes lit
+  nodes.forEach((n) => {
+    if (!n.active) return; // dormant — stays invisible, skip all per-frame work
+    if (n.growth < 1) n.growth = Math.min(1, n.growth + dt * 1.8); // ~0.55s birth animation
+
+    if (!n.permanent) n.energy *= 0.94;
+    const base = 0.35 + currentGlow * 0.3;
+    const permanentFloor = n.permanent ? 0.35 : 0;
+    const boost = Math.max(n.energy, permanentFloor);
+    n.mat.color.setRGB(0.02 + boost * 0.9, (base + boost) * 1.0, 0.08 + boost * 0.4);
+    n.mat.opacity = (0.6 + boost * 0.4) * n.growth;
+    const growthScale = n.growth < 1 ? easeOutBack(n.growth) : 1;
+    const scale = growthScale * (1 + boost * 1.8) * (n.permanent ? 1.6 : 1);
+    n.mesh.scale.set(scale, scale, scale);
+  });
+
+  // decay flashing edges, rebuild color buffer
+  const colorAttr = edgeGeo.getAttribute('color');
+  edgeList.forEach((e, idx) => {
+    if (!edgeActive[idx]) {
+      colorAttr.setXYZ(idx * 2, 0, 0, 0);
+      colorAttr.setXYZ(idx * 2 + 1, 0, 0, 0);
+      return;
+    }
+    const flash = flashingEdges.get(idx);
+    let r = 0.02, g = 0.2 + currentGlow * 0.15, b = 0.08;
+    if (flash) {
+      flash.energy *= 0.9;
+      const c = new THREE.Color(flash.color);
+      r = 0.02 + c.r * flash.energy;
+      g = g + c.g * flash.energy;
+      b = 0.08 + c.b * flash.energy;
+      if (flash.energy < 0.02) flashingEdges.delete(idx);
+    }
+    colorAttr.setXYZ(idx * 2, r, g, b);
+    colorAttr.setXYZ(idx * 2 + 1, r, g, b);
+  });
+  colorAttr.needsUpdate = true;
+
+  // move packets toward their target, then absorb
+  for (let i = packets.length - 1; i >= 0; i--) {
+    const p = packets[i];
+    p.t += dt * 0.45;
+    if (p.t >= 1) {
+      if (!nodes[p.targetIdx].active) {
+        activateNode(p.targetIdx, p.topic);
+        if (p.permanent) nodes[p.targetIdx].permanent = true;
+      } else if (p.topic) {
+        nodeTopicMap.set(p.targetIdx, p.topic);
+      }
+      fireNode(p.targetIdx, p.color, 1.6);
+      scene.remove(p.mesh);
+      packets.splice(i, 1);
+      continue;
+    }
+    const eased = 1 - Math.pow(1 - p.t, 3);
+    p.mesh.position.lerpVectors(p.from, p.to, eased);
+    p.mesh.material.opacity = 1 - p.t * 0.2;
+  }
+
+  camera.position.x = Math.sin(Date.now() * 0.00005) * 2;
+  camera.position.z += (targetZoom - camera.position.z) * 0.06; // smooth, never an abrupt jump
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+}
+// the back-to-console link only makes sense on the standalone full-page view — inside the
+// embedded preview on the main console it's redundant (you're already there)
+if (window.self !== window.top) {
+  const backLink = document.getElementById('backLink');
+  if (backLink) backLink.style.display = 'none';
+}
+
+animate();
+requestAnimationFrame(() => {
+  renderer.domElement.classList.add('loaded');
+  document.getElementById('hud').classList.add('loaded');
+  document.getElementById('feed').classList.add('loaded');
+  const neuronsEl = document.getElementById('sNeurons');
+  if (neuronsEl) neuronsEl.textContent = `${INITIAL_ACTIVE} / ${MAX_NODES}`;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Consciousness",
+      "type": "shell",
+      "command": "node server.js",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^never-matches$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^never-matches$",
+          "endsPattern": "Consciousness listening on"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Start Consciousness (inspect)",
+      "type": "shell",
+      "command": "node --inspect=9229 server.js",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^never-matches$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^never-matches$",
+          "endsPattern": "Consciousness listening on"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Stop Consciousness (port 4477)",
+      "type": "shell",
+      "windows": {
+        "command": "powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 4477 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }\""
+      },
+      "command": "kill $(lsof -t -i:4477)",
+      "problemMatcher": []
+    }
+  ]
+}
