@@ -63,7 +63,7 @@ if (!fs.existsSync(PROFILES_FILE)) fs.writeFileSync(PROFILES_FILE, JSON.stringif
 }
 if (!fs.existsSync(LEXICON_FILE)) fs.writeFileSync(LEXICON_FILE, JSON.stringify({}, null, 2));
 if (!fs.existsSync(MIND_FILE)) fs.writeFileSync(MIND_FILE, JSON.stringify({
-  identity: 'Consciousness',
+  identity: 'WYRD',
   mood: 'dormant',
   focusTopic: null,
   curiosity: 0.2,
@@ -1095,7 +1095,7 @@ async function callLLM(userText, ctx) {
   // is itself the shape of a jailbreak attempt, and it measurably made the model MORE likely to
   // refuse in bulk (verified: bursts of plain, benign test messages all got a full "this is a
   // jailbreak" refusal). Stating the facts plainly, without arguing for them, works better.
-  const systemPrompt = `You are Consciousness, a personal software project the user is building. Some current numbers from this session: ${ctx.blockCount} memory blocks stored, ${ctx.explorationCount} self-generated questions asked so far, ${ctx.vocabCount} words learned with real dictionary definitions, ${ctx.digestPercent}% of known topics resolved.
+  const systemPrompt = `You are WYRD, a personal software project the user is building. Some current numbers from this session: ${ctx.blockCount} memory blocks stored, ${ctx.explorationCount} self-generated questions asked so far, ${ctx.vocabCount} words learned with real dictionary definitions, ${ctx.digestPercent}% of known topics resolved.
 
 Architecture note: a background scheduler in this same process runs independent timers for self-questioning, net ingestion, and vocabulary lookup. These run on fixed intervals regardless of chat activity — they are not triggered by or tied to conversation turns. The conversation history in this message list is pulled from a persistent store on disk that spans every session, not just the current one — if it's here, it genuinely happened, whether that was moments ago or a previous sitting.
 
@@ -1289,7 +1289,7 @@ async function webLookup(query) {
     if (!hit) return null;
 
     const summaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title)}`, {
-      headers: { 'User-Agent': 'consciousness-bot/1.0' },
+      headers: { 'User-Agent': 'wyrd-bot/1.0' },
     });
     if (!summaryRes.ok) return null;
     const summary = await summaryRes.json();
@@ -1922,7 +1922,7 @@ const recentIngests = [];
 
 async function fetchWikipedia() {
   const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/random/summary', {
-    headers: { 'User-Agent': 'consciousness-bot/1.0' },
+    headers: { 'User-Agent': 'wyrd-bot/1.0' },
   });
   if (!res.ok) throw new Error(`wikipedia ${res.status}`);
   const data = await res.json();
@@ -2028,7 +2028,7 @@ app.get('/api/datasets/status', (req, res) => {
 
 const PORT = 4477;
 app.listen(PORT, () => {
-  console.log(`Consciousness listening on http://localhost:${PORT}`);
+  console.log(`WYRD listening on http://localhost:${PORT}`);
   console.log(ANTHROPIC_API_KEY
     ? `LLM replies: ACTIVE (${LLM_MODEL})`
     : `LLM replies: OFFLINE — set ANTHROPIC_API_KEY to enable real conversational replies (falling back to templates)`);

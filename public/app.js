@@ -352,7 +352,7 @@ const MAX_LOG_NODES = 150; // unbounded DOM growth over a long session is real, 
 function addChatMsg(who, text) {
   const div = document.createElement('div');
   div.className = `msg ${who}`;
-  const label = who === 'user' ? 'you' : who === 'sys' ? 'compare_log' : who === 'self' ? 'self_inquiry' : 'consciousness';
+  const label = who === 'user' ? 'you' : who === 'sys' ? 'compare_log' : who === 'self' ? 'self_inquiry' : 'wyrd';
   div.innerHTML = `<div class="who">${label}</div><div class="text"></div>`;
   div.querySelector('.text').textContent = text;
   chatLog.appendChild(div);
@@ -403,7 +403,7 @@ setInterval(() => {
 function addTypingIndicator() {
   const div = document.createElement('div');
   div.className = 'msg bot typing-indicator';
-  div.innerHTML = `<div class="who">consciousness</div><div class="text"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
+  div.innerHTML = `<div class="who">wyrd</div><div class="text"><span class="typing-dots"><span></span><span></span><span></span></span></div>`;
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
   return div;
