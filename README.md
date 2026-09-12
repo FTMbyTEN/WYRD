@@ -102,7 +102,13 @@ node scripts/build-dialogue-datasets.js
 
 These expect the raw source corpora under `data/datasets/` (not included — several hundred MB, downloaded separately).
 
+## Deployment status
+
+- Not hosted yet — this currently only runs as a local dev server (`node server.js`), not a public service.
+- The domain **wyrd.com.ng** is already registered (via WhoGoHost) and reserved for this project, but its DNS isn't pointed anywhere yet since there's no server for it to point *to*.
+- Next step is standing up a small always-on VPS (DigitalOcean, or a Naira-billed Nigerian host like Smartweb/telaHosting/AbollyHost) to run this permanently, then pointing `wyrd.com.ng`'s DNS at it and putting it behind nginx + a real TLS certificate.
+
 ## Notes
 
-- Nothing here is deployed anywhere yet — this is a local dev server (`node server.js`), not a hosted service. See the project's other docs/notes if you're picking up the 24/7-hosting work.
 - `data/` (besides the two dataset files) holds real account passwords (hashed), sessions, and everyone's private chat history — treat it like any other secrets/user-data directory, never commit it.
+- The owner-only browsing feature is tied to *your own local machine's* Chrome (`127.0.0.1:9222`) — moving the server to a VPS does not move that capability with it; it stays a local-only feature unless separately reconfigured to reach your home machine.
