@@ -4,7 +4,18 @@ node_modules/
 
 # runtime state — user accounts, sessions, memory, chat history, learned data.
 # not source code, and some of it is sensitive (password hashes, session tokens).
-data/
+# qa_datasets.json/dialogue_datasets.json are tracked on purpose (see below) — everything
+# else in data/ is excluded individually so new runtime files stay ignored by default.
+data/access.json
+data/conversations.json
+data/lexicon.json
+data/memory.json
+data/mind.json
+data/sessions.json
+data/user_profiles.json
+data/users.json
+data/wordlist.txt
+data/datasets/
 
 # generated reasoning trace files (thousands of small .md files)
 reasoning/
