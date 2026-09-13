@@ -824,6 +824,27 @@ function initReasoningControls() {
     closeDiaryBtn.addEventListener('click', () => diaryModal.classList.add('hidden'));
     diaryModal.addEventListener('click', (e) => { if (e.target === diaryModal) diaryModal.classList.add('hidden'); });
   }
+
+  const viewDreamsBtn = document.getElementById('viewDreamsBtn');
+  const closeDreamsBtn = document.getElementById('closeDreamsBtn');
+  const dreamsModal = document.getElementById('dreamsModal');
+  const dreamsLog = document.getElementById('dreamsLog');
+  async function loadDreamEntries() {
+    if (!dreamsLog) return;
+    try {
+      const entries = await (await fetch('/api/dreams')).json();
+      dreamsLog.innerHTML = entries.length
+        ? entries.map((e) => `<div class="thought"><div class="thought-time">${relativeTime(e.timestamp)}</div><div>${e.content}</div></div>`).join('')
+        : '<div class="thought">nothing yet — dreams only surface after a real idle stretch with no chat activity.</div>';
+    } catch (e) {}
+  }
+  if (viewDreamsBtn && dreamsModal) {
+    viewDreamsBtn.addEventListener('click', () => { dreamsModal.classList.remove('hidden'); loadDreamEntries(); });
+  }
+  if (closeDreamsBtn && dreamsModal) {
+    closeDreamsBtn.addEventListener('click', () => dreamsModal.classList.add('hidden'));
+    dreamsModal.addEventListener('click', (e) => { if (e.target === dreamsModal) dreamsModal.classList.add('hidden'); });
+  }
 }
 
 // ---------- Voice command layer ----------

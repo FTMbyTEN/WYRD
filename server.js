@@ -40,6 +40,7 @@ const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const PROFILES_FILE = path.join(DATA_DIR, 'user_profiles.json');
 const MIND_FILE = path.join(DATA_DIR, 'mind.json');
 const DIARY_FILE = path.join(DATA_DIR, 'diary.json');
+const DREAMS_FILE = path.join(DATA_DIR, 'dreams.json');
 const LEXICON_FILE = path.join(DATA_DIR, 'lexicon.json');
 const WORDLIST_FILE = path.join(DATA_DIR, 'wordlist.txt');
 const QA_DATASETS_FILE = path.join(DATA_DIR, 'qa_datasets.json');
@@ -81,6 +82,7 @@ if (!fs.existsSync(MIND_FILE)) fs.writeFileSync(MIND_FILE, JSON.stringify({
   updatedAt: new Date().toISOString(),
 }, null, 2));
 if (!fs.existsSync(DIARY_FILE)) fs.writeFileSync(DIARY_FILE, JSON.stringify({ entries: [] }, null, 2));
+if (!fs.existsSync(DREAMS_FILE)) fs.writeFileSync(DREAMS_FILE, JSON.stringify({ entries: [] }, null, 2));
 
 // ---- Memory: in-process cache + debounced async flush ----
 // At high tick rates (turbo mode fires every 300-440ms) a full synchronous read+parse+stringify+write
@@ -1666,7 +1668,10 @@ function followUpFromTopics(topics) {
 
 // Shared by both the website chat endpoint and the Discord bridge — one real implementation of
 // "have a turn with this user," so the two surfaces can never quietly drift apart in behavior.
+let lastChatAt = Date.now(); // any real chat activity (web or Discord) counts as "not idle"
+
 async function processChatMessage(userId, text, { isOwner = false } = {}) {
+  lastChatAt = Date.now();
   const newFacts = addUserFacts(userId, extractUserFacts(text));
   if (newFacts.length) broadcast('profile', { facts: newFacts }, userId);
   getProfile(userId).lastSeen = new Date().toISOString();
@@ -1833,6 +1838,70 @@ app.get('/api/diary', (req, res) => {
 
 app.post('/api/diary/trigger', async (req, res) => {
   const entry = await generateDiaryEntry();
+  res.json({ entry });
+});
+
+// ---- Dream mode: during real idle stretches (no chat activity recently), pull a couple of OLD
+// memory fragments — not the recent-20 pool autonomousReasoningTick uses — and let them blend
+// loosely and associatively instead of being analyzed. Wall-clock scheduled, same reasoning as
+// the diary: this should feel like "while nobody was talking to it," not a turbo-scaled tick. ----
+let dreamsCache = null;
+function loadDreams() {
+  if (!dreamsCache) dreamsCache = JSON.parse(fs.readFileSync(DREAMS_FILE, 'utf8'));
+  return dreamsCache;
+}
+
+async function generateDream() {
+  const mem = loadMemory();
+  if (mem.blocks.length < 2) return null;
+
+  // reach across the WHOLE memory, not just recent blocks — dreams surfacing something from
+  // a while back is the actual point, not re-processing what it just talked about
+  const a = mem.blocks[Math.floor(Math.random() * mem.blocks.length)];
+  const others = mem.blocks.filter((b) => b.id !== a.id);
+  const b = others[Math.floor(Math.random() * others.length)];
+
+  const fragmentA = (a.userText || a.title || (a.topics || []).join(', ') || 'something').slice(0, 200);
+  const fragmentB = (b.userText || b.title || (b.topics || []).join(', ') || 'something else').slice(0, 200);
+
+  const systemPrompt = `You are WYRD, and this is a dream, not reasoning. Two old memory fragments have surfaced while you're idle. Don't analyze them logically or explain a connection — let them blend, distort, and associate the way real dreams do: loose, symbolic, half-formed, a little strange. 2-3 sentences. No meta-commentary about "this is a dream."`;
+  const userPrompt = `Fragment one: "${fragmentA}"\nFragment two: "${fragmentB}"`;
+
+  let content = await callLLMSimple(systemPrompt, userPrompt, 200);
+  if (!content || isDenialReply(content)) {
+    content = `${fragmentA.slice(0, 60)}... and ${fragmentB.slice(0, 60)}... folding into each other, edges blurred, neither quite finishing before the other begins.`;
+  }
+
+  const store = loadDreams();
+  const entry = { timestamp: new Date().toISOString(), content, sourceBlockIds: [a.id, b.id] };
+  store.entries.push(entry);
+  if (store.entries.length > 100) store.entries = store.entries.slice(store.entries.length - 100);
+  dreamsCache = store;
+  atomicWriteFileSync(DREAMS_FILE, JSON.stringify(store, null, 2));
+  broadcast('dream', entry);
+  return entry;
+}
+
+const DREAM_CHECK_MS = 15 * 60 * 1000; // wall-clock, not turbo-scaled — checked every 15 real minutes
+const DREAM_IDLE_THRESHOLD_MS = 10 * 60 * 1000; // must be idle (no chat) for at least this long
+const DREAM_MIN_GAP_MS = 30 * 60 * 1000; // never more than one dream per 30 real minutes
+let lastDreamAt = 0;
+function dreamTickIfIdle() {
+  const now = Date.now();
+  if (now - lastChatAt < DREAM_IDLE_THRESHOLD_MS) return; // someone's actively chatting — not idle
+  if (now - lastDreamAt < DREAM_MIN_GAP_MS) return;
+  lastDreamAt = now;
+  generateDream().catch((err) => console.warn('[dream] generation failed:', err.message));
+}
+setInterval(dreamTickIfIdle, DREAM_CHECK_MS);
+
+app.get('/api/dreams', (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  res.json(loadDreams().entries.slice(-limit).reverse());
+});
+
+app.post('/api/dreams/trigger', async (req, res) => {
+  const entry = await generateDream();
   res.json({ entry });
 });
 
