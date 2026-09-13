@@ -75,6 +75,18 @@ One specific account can ask it to actually open and read real web pages in your
    This reopens your normal profile — logins intact — just with that port available. Leave it open while chatting.
 3. Ask it something like *"can you check what's on [url] right now?"* or *"search the web for X"* — only works from the owner's account; every other account never even sees this capability mentioned.
 
+## Discord bridge (optional)
+
+WYRD can live in Discord too — same reply logic, same per-user memory, just a different door in.
+
+1. Create an application at [discord.com/developers/applications](https://discord.com/developers/applications) → **Bot** tab → **Reset Token** → copy it.
+2. Under **Privileged Gateway Intents**, enable **Message Content Intent** (required — without it the bot can't read what anyone actually typed).
+3. Add `DISCORD_BOT_TOKEN=your-token-here` to `.env`.
+4. Invite the bot to a server (OAuth2 → URL Generator → `bot` scope, `Send Messages` + `Read Message History` permissions), or just DM it directly.
+5. It only replies to **DMs** or messages that **@mention it** in a server — never to every message in a channel it's sitting in.
+
+If `DISCORD_BOT_TOKEN` isn't set, the bridge simply doesn't start — everything else runs normally.
+
 ## Project structure
 
 ```
