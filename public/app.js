@@ -678,15 +678,25 @@ function formatEta(digest) {
   return `ETA: ${Math.round((digest.etaMinutes / 60) * 10) / 10}h`;
 }
 
+// brief brighten/scale pulse on an element whose text just genuinely changed — makes live
+// updates read as "something happened" instead of silently snapping to a new value
+function flashIfChanged(el, newText) {
+  if (!el || el.textContent === newText) { if (el) el.textContent = newText; return; }
+  el.textContent = newText;
+  el.classList.remove('value-flash'); // restart the animation if it's still mid-flash
+  void el.offsetWidth;
+  el.classList.add('value-flash');
+}
+
 function renderMind(mind) {
   const moodEl = document.getElementById('mindMood');
   const focusEl = document.getElementById('mindFocus');
   const goalEl = document.getElementById('mindGoal');
   const curiosityBar = document.getElementById('curiosityBar');
   const confidenceBar = document.getElementById('confidenceBar');
-  if (moodEl) moodEl.textContent = mind.mood;
-  if (focusEl) focusEl.textContent = mind.focusTopic || '—';
-  if (goalEl) goalEl.textContent = mind.activeGoal || '—';
+  flashIfChanged(moodEl, mind.mood);
+  flashIfChanged(focusEl, mind.focusTopic || '—');
+  flashIfChanged(goalEl, mind.activeGoal || '—');
   if (curiosityBar) curiosityBar.style.width = `${Math.round((mind.curiosity || 0) * 100)}%`;
   if (confidenceBar) confidenceBar.style.width = `${Math.round((mind.confidence || 0) * 100)}%`;
 

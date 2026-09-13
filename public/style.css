@@ -24,6 +24,34 @@
 
 * { box-sizing: border-box; }
 
+/* thin, glowing, on-theme scrollbars everywhere instead of the default browser chrome —
+   Chromium/Edge (webkit) get the full treatment; Firefox gets the standard-property fallback */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--green-dim) rgba(0,0,0,0.3);
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+*::-webkit-scrollbar-thumb {
+  background: var(--green-dim);
+  border-radius: 4px;
+  box-shadow: 0 0 4px rgba(0,255,65,0.3);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--green); }
+
+/* ---------- Universal interactive feedback — every clickable control in the app gets the same
+   subtle lift-on-hover / press-down-on-click language, instead of each button defining its own
+   ad-hoc feel. Covers every <button> (mini-btn, logout-btn, gate-tab, SEND, MIC, all modal
+   triggers) plus the modal close glyphs, which are <span>s, not <button>s. ---------- */
+button, .reasoning-log-close {
+  transition: transform var(--dur-fast) var(--ease-soft), border-color var(--dur-fast) var(--ease-soft),
+              color var(--dur-fast) var(--ease-soft), box-shadow var(--dur-fast) var(--ease-soft),
+              background-color var(--dur-fast) var(--ease-soft), opacity var(--dur-fast) var(--ease-soft);
+}
+button:not(:disabled):hover, .reasoning-log-close:hover { transform: translateY(-1px); }
+button:not(:disabled):active, .reasoning-log-close:active { transform: translateY(0) scale(0.96); }
+button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
+
 html, body {
   margin: 0;
   height: 100%;
@@ -349,7 +377,14 @@ main {
   opacity: 1;
   transition: opacity var(--dur-fast) var(--ease-soft);
 }
-.reasoning-log-modal.hidden { display: none; }
+/* overrides the global .hidden{display:none!important} for these overlays specifically — keeps
+   them in the layout (display:flex) so opacity/transform can actually transition, instead of
+   vanishing instantly the way display:none would. Higher specificity + !important both win here. */
+.reasoning-log-modal.hidden {
+  display: flex !important;
+  opacity: 0;
+  pointer-events: none;
+}
 .concept-map-box { width: min(720px, 92vw) !important; }
 .concept-map-wrap { flex: 1; min-height: 0; padding: 10px; display: flex; align-items: center; justify-content: center; }
 .concept-map-wrap svg { width: 100%; height: min(70vh, 640px); }
@@ -366,7 +401,10 @@ main {
   border: 1px solid var(--green);
   border-radius: 4px;
   box-shadow: 0 0 40px rgba(0,255,65,0.25);
+  transform: scale(1);
+  transition: transform var(--dur-fast) var(--ease-cinematic);
 }
+.reasoning-log-modal.hidden .reasoning-log-box { transform: scale(0.94); }
 .reasoning-log-header {
   display: flex;
   align-items: center;
@@ -500,6 +538,12 @@ main {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color var(--dur-fast) var(--ease-soft), text-shadow var(--dur-fast) var(--ease-soft);
+}
+.value-flash { animation: valueFlash var(--dur-med) var(--ease-cinematic); }
+@keyframes valueFlash {
+  0% { color: #d4ffe0; text-shadow: 0 0 14px rgba(0,255,65,0.9); }
+  100% { color: var(--green); text-shadow: 0 0 6px rgba(0,255,65,0.4); }
 }
 
 .meter {
@@ -555,6 +599,7 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-soft);
 }
 .mini-btn-row { display: flex; gap: 6px; }
 .mini-btn {
