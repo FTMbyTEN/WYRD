@@ -16,6 +16,7 @@ data/user_profiles.json
 data/users.json
 data/wordlist.txt
 data/datasets/
+data/*.tmp
 
 # generated reasoning trace files (thousands of small .md files)
 reasoning/

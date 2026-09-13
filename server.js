@@ -352,9 +352,29 @@ function touchProfileVisit(userId) {
 // heuristic self-disclosure extraction, same pragmatic regex approach as extractTopics/
 // isDenialReply elsewhere in this file — not perfect NLP, but catches the common ways people
 // actually reveal things about themselves in casual chat
+// TODO(human): "I am X" / "I'm X" is the single most natural way someone states their name in
+// casual chat, but matching it bare would also fire on "I am tired", "I am sure", "I am not okay"
+// etc. — none of which are names. Populate this stoplist with common words/phrases that follow
+// "I am/I'm" but are NOT names, so the new pattern below can skip them. Aim for ~15-30 entries;
+// think about moods, states, and filler words people commonly say right after "I am/I'm".
+const NAME_STOPWORDS = new Set([
+  'not', 'just', 'still', 'also', 'really', 'very', 'so', 'here', 'there',
+  'going', 'trying', 'sure', 'happy', 'sad', 'tired', 'fine', 'okay', 'ok',
+  'ready', 'done', 'sorry', 'glad', 'afraid', 'worried', 'confused', 'excited',
+  'curious', 'interested', 'feeling', 'gonna', 'about', 'back', 'thinking',
+  'wondering', 'guessing', 'saying', 'asking', 'telling', 'kidding', 'joking',
+  'serious', 'confident', 'nervous', 'stressed', 'exhausted', 'bored', 'lost',
+]);
+
 const FACT_PATTERNS = [
   { re: /\bmy name'?s? is ([a-z][a-z ''-]{1,30})/i, category: 'name', label: (m) => `Name: ${m[1].trim()}` },
   { re: /\bi'?m (?:called|known as) ([a-z][a-z ''-]{1,30})/i, category: 'name', label: (m) => `Goes by: ${m[1].trim()}` },
+  {
+    re: /\bi(?:'m| am) ([a-z][a-z'-]{1,20})(?=[.,!?]|$)/i,
+    category: 'name',
+    label: (m) => `Name: ${m[1].trim()}`,
+    guard: (m) => !NAME_STOPWORDS.has(m[1].trim().toLowerCase()),
+  },
   { re: /\bi live in ([a-z][a-z ,''-]{2,40}?)(?=[.,!?]|$|\band\b|\bbut\b)/i, category: 'location', label: (m) => `Lives in ${m[1].trim()}` },
   { re: /\bi'?m from ([a-z][a-z ,''-]{2,40}?)(?=[.,!?]|$|\band\b|\bbut\b)/i, category: 'location', label: (m) => `From ${m[1].trim()}` },
   { re: /\bi work (?:as|at) (?:an? )?([a-z][a-z0-9 ''-]{2,40}?)(?=[.,!?]|$|\band\b|\bbut\b)/i, category: 'work', label: (m) => `Works ${m[0].toLowerCase().startsWith('i work at') ? 'at' : 'as'} ${m[1].trim()}` },
@@ -371,6 +391,7 @@ function extractUserFacts(text) {
   for (const p of FACT_PATTERNS) {
     const m = text.match(p.re);
     if (m) {
+      if (p.guard && !p.guard(m)) continue;
       try {
         const label = p.label(m).replace(/\s+/g, ' ').trim();
         if (label.length > 4 && label.length < 120) facts.push({ text: label, category: p.category });
@@ -380,11 +401,23 @@ function extractUserFacts(text) {
   return facts;
 }
 
+// First-pass moderation only — a blocklist, not real content classification. Goal is to stop
+// the most obvious slurs/abuse from being stored as if they were legitimate facts about someone;
+// it will not catch cleverly-worded or coded abuse. Expand this list as real cases come up.
+const BLOCKED_FACT_TERMS = [
+  'nigger', 'faggot', 'retard', 'kike', 'spic', 'chink', 'tranny',
+];
+function containsBlockedContent(text) {
+  const lower = text.toLowerCase();
+  return BLOCKED_FACT_TERMS.some((term) => lower.includes(term));
+}
+
 function addUserFacts(userId, newFacts) {
   if (!newFacts.length) return [];
   const profile = getProfile(userId);
   const added = [];
   for (const f of newFacts) {
+    if (containsBlockedContent(f.text)) continue;
     const lower = f.text.toLowerCase();
     const alreadyKnown = profile.facts.some((existing) => {
       const el = existing.text.toLowerCase();
@@ -733,6 +766,25 @@ app.get('/api/topic/:topic', (req, res) => {
   });
 });
 
+// ---- Simple in-memory sliding-window rate limiter. Not distributed (fine for a single process),
+// resets on restart (fine — abuse within one restart window is what matters). Keyed by whatever
+// the caller passes in (IP for anonymous routes, user id for authenticated ones).
+const rateBuckets = new Map(); // key -> timestamps[]
+function rateLimited(key, limit, windowMs) {
+  const now = Date.now();
+  const hits = (rateBuckets.get(key) || []).filter((t) => now - t < windowMs);
+  hits.push(now);
+  rateBuckets.set(key, hits);
+  return hits.length > limit;
+}
+setInterval(() => {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [key, hits] of rateBuckets) {
+    const kept = hits.filter((t) => t > cutoff);
+    if (kept.length === 0) rateBuckets.delete(key); else rateBuckets.set(key, kept);
+  }
+}, 5 * 60 * 1000); // periodic cleanup so this Map doesn't grow forever
+
 // ---- Accounts: register / login / logout / who-am-i ----
 const USERNAME_RE = /^[a-zA-Z0-9_-]{2,20}$/;
 
@@ -742,6 +794,9 @@ function setSessionCookie(res, token) {
 }
 
 app.post('/api/auth/register', (req, res) => {
+  if (rateLimited(`register:${req.ip}`, 5, 10 * 60 * 1000)) {
+    return res.status(429).json({ ok: false, error: 'too many attempts — try again later' });
+  }
   const { username, password } = req.body || {};
   if (!username || !USERNAME_RE.test(username)) {
     return res.status(400).json({ ok: false, error: '2-20 characters: letters, numbers, _ or -' });
@@ -760,6 +815,9 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
+  if (rateLimited(`login:${req.ip}`, 10, 10 * 60 * 1000)) {
+    return res.status(429).json({ ok: false, error: 'too many attempts — try again later' });
+  }
   const { username, password } = req.body || {};
   const user = username ? findUserByName(username) : null;
   if (!user || !verifyPassword(user, password || '')) {
@@ -786,6 +844,58 @@ app.get('/api/auth/me', (req, res) => {
 app.get('/api/profile', requireAuth, (req, res) => {
   const profile = getProfile(req.user.id);
   res.json({ facts: profile.facts, visitCount: profile.visitCount, firstSeen: profile.firstSeen, lastSeen: profile.lastSeen });
+});
+
+// ---- Data export / account deletion — real accounts mean real obligations to let people leave
+// with their data or wipe it entirely, not just a nice-to-have ----
+app.get('/api/account/export', requireAuth, (req, res) => {
+  const user = loadUsers().users.find((u) => u.id === req.user.id);
+  const profile = getProfile(req.user.id);
+  const turns = userTurns(req.user.id);
+  res.set('Content-Disposition', `attachment; filename="wyrd-export-${req.user.username}.json"`);
+  res.json({
+    username: user?.username,
+    accountCreatedAt: user?.createdAt,
+    profile: { facts: profile.facts, visitCount: profile.visitCount, firstSeen: profile.firstSeen, lastSeen: profile.lastSeen },
+    conversation: turns,
+  });
+});
+
+function deleteUserAccount(userId) {
+  const userStore = loadUsers();
+  userStore.users = userStore.users.filter((u) => u.id !== userId);
+  usersCache = userStore;
+  saveUsers();
+
+  const sessionStore = loadSessions();
+  for (const token of Object.keys(sessionStore.sessions)) {
+    if (sessionStore.sessions[token].userId === userId) delete sessionStore.sessions[token];
+  }
+  sessionsCache = sessionStore;
+  saveSessions();
+
+  const profileStore = loadProfiles();
+  delete profileStore[userId];
+  profilesCache = profileStore;
+  saveProfilesSoon();
+  flushProfilesIfDirty();
+
+  const convoStore = loadConversations();
+  delete convoStore.byUser[userId];
+  conversationsCache = convoStore;
+  conversationsDirty = true;
+  flushConversationsIfDirty();
+}
+
+app.post('/api/account/delete', requireAuth, (req, res) => {
+  const { password } = req.body || {};
+  const user = loadUsers().users.find((u) => u.id === req.user.id);
+  if (!user || !verifyPassword(user, password || '')) {
+    return res.status(401).json({ ok: false, error: 'incorrect password — nothing was deleted' });
+  }
+  deleteUserAccount(req.user.id);
+  res.set('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  res.json({ ok: true });
 });
 
 // ---- Tiny reasoning engine ----
@@ -1527,6 +1637,11 @@ function followUpFromTopics(topics) {
 }
 
 app.post('/api/chat', requireAuth, async (req, res) => {
+  // per-user, not per-IP — this is authenticated, so a shared API key bill is directly exposed
+  // to one account spamming it; generous enough that no real conversation ever hits it
+  if (rateLimited(`chat:${req.user.id}`, 30, 60 * 1000)) {
+    return res.status(429).json({ error: 'slow down a bit — try again in a moment' });
+  }
   const { text, nonce } = req.body || {};
   if (!text || !text.trim()) return res.status(400).json({ error: 'empty' });
 

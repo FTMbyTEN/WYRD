@@ -271,6 +271,9 @@ const gateTabLogin = document.getElementById('gateTabLogin');
 const gateTabRegister = document.getElementById('gateTabRegister');
 const userBadge = document.getElementById('userBadge');
 const logoutBtn = document.getElementById('logoutBtn');
+const ttsToggleBtn = document.getElementById('ttsToggleBtn');
+const exportDataBtn = document.getElementById('exportDataBtn');
+const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 const chatLog = document.getElementById('chatLog');
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
@@ -336,6 +339,70 @@ if (logoutBtn) {
   logoutBtn.addEventListener('click', async () => {
     try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
     location.reload();
+  });
+}
+
+// ---------- Text-to-speech: spoken replies, browser-native (no API/cost), opt-in per-viewer ----------
+let ttsEnabled = localStorage.getItem('wyrd_tts_enabled') === '1';
+function updateTtsButton() {
+  if (ttsToggleBtn) { ttsToggleBtn.textContent = ttsEnabled ? '🔊' : '🔇'; ttsToggleBtn.style.opacity = ttsEnabled ? '1' : '0.5'; }
+}
+function speakReply(text) {
+  if (!ttsEnabled || !window.speechSynthesis || !text) return;
+  window.speechSynthesis.cancel(); // don't stack overlapping replies
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 1.0;
+  utter.pitch = 0.85; // slightly lower/flatter — fits the machine-not-quite-human vibe
+  window.speechSynthesis.speak(utter);
+}
+if (ttsToggleBtn) {
+  updateTtsButton();
+  ttsToggleBtn.addEventListener('click', () => {
+    ttsEnabled = !ttsEnabled;
+    localStorage.setItem('wyrd_tts_enabled', ttsEnabled ? '1' : '0');
+    updateTtsButton();
+    if (!ttsEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+  });
+}
+
+// ---------- Data export / account deletion ----------
+if (exportDataBtn) {
+  exportDataBtn.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/account/export');
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `wyrd-export-${data.username || 'me'}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      addChatMsg('sys', 'export failed — try again');
+    }
+  });
+}
+if (deleteAccountBtn) {
+  deleteAccountBtn.addEventListener('click', async () => {
+    if (!confirm('This permanently deletes your account, conversation history, and everything WYRD has learned about you. This cannot be undone. Continue?')) return;
+    const password = prompt('Confirm your password to delete your account:');
+    if (!password) return;
+    try {
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert('Account deleted.');
+        location.reload();
+      } else {
+        alert(data.error || 'delete failed');
+      }
+    } catch (e) {
+      alert('delete failed — try again');
+    }
   });
 }
 
@@ -429,11 +496,16 @@ chatForm.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     typingEl.remove();
-    if (data.comparison) {
-      addChatMsg('sys', `COMPARED ${data.candidateCount} RESPONSE PATHS: ${data.comparison} → chose "${data.chosenPath}"`);
+    if (!res.ok) {
+      addChatMsg('sys', data.error || 'request failed — try again');
+    } else {
+      if (data.comparison) {
+        addChatMsg('sys', `COMPARED ${data.candidateCount} RESPONSE PATHS: ${data.comparison} → chose "${data.chosenPath}"`);
+      }
+      addChatMsg('bot', data.reply);
+      speakReply(data.reply);
+      if (data.mind) renderMind(data.mind);
     }
-    addChatMsg('bot', data.reply);
-    if (data.mind) renderMind(data.mind);
   } catch (err) {
     typingEl.remove();
     addChatMsg('sys', 'connection hiccup — try again');
@@ -504,6 +576,7 @@ function boot() {
     }
     addChatMsg('user', data.userText);
     addChatMsg('bot', data.botText);
+    speakReply(data.botText);
   });
 
   es.addEventListener('thought', (e) => {
