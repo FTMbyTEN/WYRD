@@ -347,12 +347,24 @@ let ttsEnabled = localStorage.getItem('wyrd_tts_enabled') === '1';
 function updateTtsButton() {
   if (ttsToggleBtn) { ttsToggleBtn.textContent = ttsEnabled ? '🔊' : '🔇'; ttsToggleBtn.style.opacity = ttsEnabled ? '1' : '0.5'; }
 }
+// Best-effort only: the Web Speech API doesn't ship an actual "child" voice model on any
+// browser/OS — there's no way to synthesize one. Pitch/rate/volume are the only knobs that
+// reliably work everywhere and actually shape how young/soft/ethereal it reads.
+function pickTtsVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const preferred = voices.find((v) => /child|kid|junior/i.test(v.name));
+  return preferred || null;
+}
 function speakReply(text) {
   if (!ttsEnabled || !window.speechSynthesis || !text) return;
   window.speechSynthesis.cancel(); // don't stack overlapping replies
   const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 1.0;
-  utter.pitch = 0.85; // slightly lower/flatter — fits the machine-not-quite-human vibe
+  utter.rate = 0.88;   // slightly slower and measured — soft, not rushed
+  utter.pitch = 1.55;  // higher register — robotic-kid rather than deep/adult
+  utter.volume = 0.85; // a touch softer, less blaring
+  const voice = pickTtsVoice();
+  if (voice) utter.voice = voice;
   window.speechSynthesis.speak(utter);
 }
 if (ttsToggleBtn) {
