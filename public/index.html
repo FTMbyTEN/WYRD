@@ -107,6 +107,7 @@
           <div class="brain-label">VOCABULARY <span id="vocabNext" class="vocab-next"></span></div>
           <div id="vocabCount" class="brain-value">0 words understood</div>
           <div id="vocabRecent" class="digest-detail">—</div>
+          <button id="viewConceptMapBtn" type="button" class="mini-btn" style="margin-top:6px;">CONCEPT MAP</button>
         </div>
       </div>
     </div>
@@ -163,6 +164,18 @@
         <span id="closeDreamsBtn" class="reasoning-log-close">&times;</span>
       </div>
       <div id="dreamsLog" class="reasoning-log"></div>
+    </div>
+  </div>
+
+  <div id="conceptMapModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box concept-map-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ CONCEPT_MAP <span class="sub">[ topics that actually co-occur in real memory ]</span></span>
+        <span id="closeConceptMapBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div id="conceptMapWrap" class="concept-map-wrap">
+        <svg id="conceptMapSvg" viewBox="0 0 600 600"></svg>
+      </div>
     </div>
   </div>
 

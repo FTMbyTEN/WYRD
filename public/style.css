@@ -350,6 +350,13 @@ main {
   transition: opacity var(--dur-fast) var(--ease-soft);
 }
 .reasoning-log-modal.hidden { display: none; }
+.concept-map-box { width: min(720px, 92vw) !important; }
+.concept-map-wrap { flex: 1; min-height: 0; padding: 10px; display: flex; align-items: center; justify-content: center; }
+.concept-map-wrap svg { width: 100%; height: min(70vh, 640px); }
+.concept-map-wrap .cm-edge { stroke: rgba(0,255,65,0.25); }
+.concept-map-wrap .cm-node { fill: #00ff41; cursor: default; }
+.concept-map-wrap .cm-label { fill: #7fffb0; font-size: 9px; font-family: 'Share Tech Mono', monospace; }
+
 .reasoning-log-box {
   width: min(700px, 90vw);
   max-height: 78vh;

@@ -832,6 +832,61 @@ function initReasoningControls() {
     closeDreamsBtn.addEventListener('click', () => dreamsModal.classList.add('hidden'));
     dreamsModal.addEventListener('click', (e) => { if (e.target === dreamsModal) dreamsModal.classList.add('hidden'); });
   }
+
+  const viewConceptMapBtn = document.getElementById('viewConceptMapBtn');
+  const closeConceptMapBtn = document.getElementById('closeConceptMapBtn');
+  const conceptMapModal = document.getElementById('conceptMapModal');
+  const conceptMapSvg = document.getElementById('conceptMapSvg');
+
+  // Deliberately a simple radial layout, not a physics/force simulation — nodes placed evenly
+  // around a circle by frequency rank, edges drawn straight between them. Far less code than a
+  // real force-directed graph, and reads just as clearly for a few dozen nodes.
+  async function loadConceptMap() {
+    if (!conceptMapSvg) return;
+    conceptMapSvg.innerHTML = '';
+    try {
+      const { nodes, edges } = await (await fetch('/api/concepts')).json();
+      if (!nodes.length) {
+        conceptMapSvg.innerHTML = '<text x="300" y="300" fill="#3d7a4d" font-size="12" text-anchor="middle">not enough memory yet to map connections</text>';
+        return;
+      }
+      const cx = 300, cy = 300, R = 240;
+      const pos = {};
+      nodes.forEach((n, i) => {
+        const angle = (i / nodes.length) * Math.PI * 2 - Math.PI / 2;
+        pos[n.id] = { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) };
+      });
+      const maxWeight = Math.max(1, ...edges.map((e) => e.weight));
+      const maxCount = Math.max(1, ...nodes.map((n) => n.count));
+
+      let svg = '';
+      edges.forEach((e) => {
+        const a = pos[e.a], b = pos[e.b];
+        if (!a || !b) return;
+        const opacity = 0.12 + 0.5 * (e.weight / maxWeight);
+        svg += `<line class="cm-edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${1 + 2 * (e.weight / maxWeight)}" opacity="${opacity.toFixed(2)}" />`;
+      });
+      nodes.forEach((n) => {
+        const p = pos[n.id];
+        const r = 3 + 7 * (n.count / maxCount);
+        svg += `<circle class="cm-node" cx="${p.x}" cy="${p.y}" r="${r.toFixed(1)}" opacity="${(0.5 + 0.5 * (n.count / maxCount)).toFixed(2)}" />`;
+        const labelX = cx + (R + 14) * Math.cos(Math.atan2(p.y - cy, p.x - cx));
+        const labelY = cy + (R + 14) * Math.sin(Math.atan2(p.y - cy, p.x - cx));
+        const anchor = labelX > cx + 5 ? 'start' : labelX < cx - 5 ? 'end' : 'middle';
+        svg += `<text class="cm-label" x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${anchor}">${n.id}</text>`;
+      });
+      conceptMapSvg.innerHTML = svg;
+    } catch (e) {
+      conceptMapSvg.innerHTML = '<text x="300" y="300" fill="#3d7a4d" font-size="12" text-anchor="middle">failed to load — try again</text>';
+    }
+  }
+  if (viewConceptMapBtn && conceptMapModal) {
+    viewConceptMapBtn.addEventListener('click', () => { conceptMapModal.classList.remove('hidden'); loadConceptMap(); });
+  }
+  if (closeConceptMapBtn && conceptMapModal) {
+    closeConceptMapBtn.addEventListener('click', () => conceptMapModal.classList.add('hidden'));
+    conceptMapModal.addEventListener('click', (e) => { if (e.target === conceptMapModal) conceptMapModal.classList.add('hidden'); });
+  }
 }
 
 // ---------- Voice command layer ----------

@@ -1745,6 +1745,39 @@ app.get('/api/memory', (req, res) => {
   res.json(loadMemory());
 });
 
+// ---- Concept map: a second visual graph, but of TOPICS/WORDS and how they co-occur, distinct
+// from BRAIN_3D's raw memory-block graph. Two topics get an edge when they show up together in
+// the same block — the same real signal already used for BRAIN_3D's edges and Jaccard similarity,
+// just aggregated at the topic level instead of the block level. ----
+app.get('/api/concepts', (req, res) => {
+  const mem = loadMemory();
+  const freq = {};
+  const cooccur = {}; // "topicA|||topicB" (sorted) -> count
+
+  for (const block of mem.blocks) {
+    const topics = [...new Set(block.topics || [])];
+    topics.forEach((t) => { freq[t] = (freq[t] || 0) + 1; });
+    for (let i = 0; i < topics.length; i++) {
+      for (let j = i + 1; j < topics.length; j++) {
+        const key = [topics[i], topics[j]].sort().join('|||');
+        cooccur[key] = (cooccur[key] || 0) + 1;
+      }
+    }
+  }
+
+  const topTopics = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 40).map(([t]) => t);
+  const topSet = new Set(topTopics);
+
+  const nodes = topTopics.map((t) => ({ id: t, count: freq[t] }));
+  const edges = Object.entries(cooccur)
+    .map(([key, weight]) => { const [a, b] = key.split('|||'); return { a, b, weight }; })
+    .filter((e) => topSet.has(e.a) && topSet.has(e.b))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 120); // cap edge count so the map stays readable, not a solid mesh
+
+  res.json({ nodes, edges });
+});
+
 app.get('/api/conversations', requireAuth, (req, res) => {
   const turns = userTurns(req.user.id);
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 50));
