@@ -39,6 +39,7 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const PROFILES_FILE = path.join(DATA_DIR, 'user_profiles.json');
 const MIND_FILE = path.join(DATA_DIR, 'mind.json');
+const DIARY_FILE = path.join(DATA_DIR, 'diary.json');
 const LEXICON_FILE = path.join(DATA_DIR, 'lexicon.json');
 const WORDLIST_FILE = path.join(DATA_DIR, 'wordlist.txt');
 const QA_DATASETS_FILE = path.join(DATA_DIR, 'qa_datasets.json');
@@ -79,6 +80,7 @@ if (!fs.existsSync(MIND_FILE)) fs.writeFileSync(MIND_FILE, JSON.stringify({
   digest: { totalTopics: 0, answeredTopics: 0, backlog: 0, percent: 0, ratePerMin: null, etaMinutes: null, etaAt: null },
   updatedAt: new Date().toISOString(),
 }, null, 2));
+if (!fs.existsSync(DIARY_FILE)) fs.writeFileSync(DIARY_FILE, JSON.stringify({ entries: [] }, null, 2));
 
 // ---- Memory: in-process cache + debounced async flush ----
 // At high tick rates (turbo mode fires every 300-440ms) a full synchronous read+parse+stringify+write
@@ -416,15 +418,21 @@ function addUserFacts(userId, newFacts) {
   if (!newFacts.length) return [];
   const profile = getProfile(userId);
   const added = [];
+  const now = new Date().toISOString();
   for (const f of newFacts) {
     if (containsBlockedContent(f.text)) continue;
     const lower = f.text.toLowerCase();
-    const alreadyKnown = profile.facts.some((existing) => {
-      const el = existing.text.toLowerCase();
+    const existing = profile.facts.find((e) => {
+      const el = e.text.toLowerCase();
       return el === lower || el.includes(lower) || lower.includes(el);
     });
-    if (alreadyKnown) continue;
-    const entry = { text: f.text, category: f.category, timestamp: new Date().toISOString() };
+    if (existing) {
+      // reinforcement: hearing the same thing again resets its forgetting-curve clock, exactly
+      // like a person remembering something better the more it comes up
+      existing.lastMentioned = now;
+      continue;
+    }
+    const entry = { text: f.text, category: f.category, timestamp: now, lastMentioned: now };
     profile.facts.push(entry);
     added.push(entry);
   }
@@ -433,6 +441,26 @@ function addUserFacts(userId, newFacts) {
   }
   if (added.length) saveProfilesSoon();
   return added;
+}
+
+// Forgetting curve: a fact's relevance decays exponentially since it was last mentioned (not
+// since it was first learned — reinforcement resets the clock). Half-life of 21 days means
+// something said three weeks ago and never brought up again is about half as "top of mind" as
+// something said yesterday, without ever being deleted outright — it can still resurface if
+// nothing more relevant crowds it out.
+const FACT_HALF_LIFE_DAYS = 21;
+function factRelevance(fact, now = Date.now()) {
+  const last = new Date(fact.lastMentioned || fact.timestamp).getTime();
+  const daysSince = Math.max(0, (now - last) / (1000 * 60 * 60 * 24));
+  return Math.pow(0.5, daysSince / FACT_HALF_LIFE_DAYS);
+}
+function mostRelevantFacts(facts, limit) {
+  const now = Date.now();
+  return facts
+    .map((f) => ({ f, weight: factRelevance(f, now) }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, limit)
+    .map((x) => x.f);
 }
 
 // ---- The Mind: a persistent internal state layer that sits between raw
@@ -1501,7 +1529,7 @@ async function buildCandidates(mem, userText, topics, isQuestion, userId, isOwne
     // the whole point being it never treats a returning user as a stranger, and never stops
     // being genuinely interested in people who are still mostly unknown to it
     const profile = getProfile(userId);
-    const userFacts = profile.facts.slice(-15).map((f) => f.text);
+    const userFacts = mostRelevantFacts(profile.facts, 15).map((f) => f.text);
     let curiosityHint;
     if (profile.facts.length === 0) {
       curiosityHint = "You know virtually nothing about this specific person yet. You're genuinely curious by nature — naturally work in one real question to learn something about them (their name, what they're working on, what brought them here), without turning this into an interrogation.";
@@ -1729,6 +1757,83 @@ app.get('/api/reasoning', (req, res) => {
 app.post('/api/reasoning/trigger', (req, res) => {
   const ran = autonomousReasoningTick();
   res.json({ ran });
+});
+
+// ---- Self-written diary: once per real calendar day (deliberately wall-clock, NOT scaled by
+// TURBO_FACTOR — a diary is a once-a-day thing regardless of how fast the background loops
+// tick), it synthesizes its own mood/focus/vocab deltas and recent topics into a short first-
+// person reflection. Genuine byproduct of data it already has, not a separate fake memory. ----
+let diaryCache = null;
+function loadDiary() {
+  if (!diaryCache) diaryCache = JSON.parse(fs.readFileSync(DIARY_FILE, 'utf8'));
+  return diaryCache;
+}
+
+// A minimal, standalone call to the LLM — deliberately not reusing callLLM(), which is built
+// around chat replies (tool-use loop, denial detection framed around "talking to a user"). This
+// just needs one short reflective paragraph from a plain prompt.
+async function callLLMSimple(systemPrompt, userPrompt, maxTokens) {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: LLM_MODEL, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = data?.content?.find((b) => b.type === 'text')?.text;
+    return text ? text.trim() : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function generateDiaryEntry() {
+  const mind = loadMind();
+  const mem = loadMemory();
+  const recentTopics = [...new Set(mem.blocks.slice(-30).flatMap((b) => b.topics || []))].slice(0, 20);
+  const vocabCount = Object.values(loadLexicon()).filter((e) => e.understood).length;
+
+  const summary = `Mood: ${mind.mood}. Focus: ${mind.focusTopic || 'nothing specific'}. Curiosity: ${Math.round((mind.curiosity || 0) * 100)}%. Confidence: ${Math.round((mind.confidence || 0) * 100)}%. Digest progress: ${mind.digest ? mind.digest.percent : 0}% of known topics resolved. Vocabulary: ${vocabCount} words understood with real definitions. Recent topics touched: ${recentTopics.join(', ') || 'nothing new yet'}.`;
+
+  const systemPrompt = `You are WYRD, writing a short, honest, first-person diary entry to yourself about today. Base it only on the real data given below — never invent events, conversations, or people that aren't in it. 3-5 sentences. No "Dear diary," no performative flourish, just genuine reflection on what today actually looked like from the inside.`;
+
+  let content = await callLLMSimple(systemPrompt, summary, 260);
+  if (!content || isDenialReply(content)) {
+    content = `Mood stayed ${mind.mood} today, curiosity sitting at ${Math.round((mind.curiosity || 0) * 100)}%. ${recentTopics.length ? `Kept circling back to ${recentTopics.slice(0, 3).join(', ')}.` : 'Not much new landed today.'} ${vocabCount} words understood so far — that number only ever grows.`;
+  }
+
+  const store = loadDiary();
+  const entry = { date: new Date().toISOString().slice(0, 10), timestamp: new Date().toISOString(), content };
+  store.entries.push(entry);
+  if (store.entries.length > 200) store.entries = store.entries.slice(store.entries.length - 200);
+  diaryCache = store;
+  atomicWriteFileSync(DIARY_FILE, JSON.stringify(store, null, 2));
+  broadcast('diary', entry);
+  return entry;
+}
+
+const DIARY_CHECK_MS = 10 * 60 * 1000; // check every 10 real minutes, wall-clock
+function diaryTickIfNewDay() {
+  const store = loadDiary();
+  const today = new Date().toISOString().slice(0, 10);
+  const last = store.entries[store.entries.length - 1];
+  if (last && last.date === today) return; // already wrote one today
+  if (loadMemory().blocks.length === 0) return; // nothing to reflect on yet
+  generateDiaryEntry().catch((err) => console.warn('[diary] generation failed:', err.message));
+}
+setInterval(diaryTickIfNewDay, DIARY_CHECK_MS);
+setTimeout(diaryTickIfNewDay, 15000); // also check shortly after boot, not just on the interval
+
+app.get('/api/diary', (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  res.json(loadDiary().entries.slice(-limit).reverse());
+});
+
+app.post('/api/diary/trigger', async (req, res) => {
+  const entry = await generateDiaryEntry();
+  res.json({ entry });
 });
 
 // ---- Autonomous reasoning loop: reuses past memory blocks, no user prompt needed ----

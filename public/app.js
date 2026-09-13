@@ -803,6 +803,27 @@ function initReasoningControls() {
     closeLogBtn.addEventListener('click', () => modal.classList.add('hidden'));
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
   }
+
+  const viewDiaryBtn = document.getElementById('viewDiaryBtn');
+  const closeDiaryBtn = document.getElementById('closeDiaryBtn');
+  const diaryModal = document.getElementById('diaryModal');
+  const diaryLog = document.getElementById('diaryLog');
+  async function loadDiaryEntries() {
+    if (!diaryLog) return;
+    try {
+      const entries = await (await fetch('/api/diary')).json();
+      diaryLog.innerHTML = entries.length
+        ? entries.map((e) => `<div class="thought"><div class="thought-time">${e.date}</div><div>${e.content}</div></div>`).join('')
+        : '<div class="thought">no entries yet — check back after WYRD has had a full day to reflect on.</div>';
+    } catch (e) {}
+  }
+  if (viewDiaryBtn && diaryModal) {
+    viewDiaryBtn.addEventListener('click', () => { diaryModal.classList.remove('hidden'); loadDiaryEntries(); });
+  }
+  if (closeDiaryBtn && diaryModal) {
+    closeDiaryBtn.addEventListener('click', () => diaryModal.classList.add('hidden'));
+    diaryModal.addEventListener('click', (e) => { if (e.target === diaryModal) diaryModal.classList.add('hidden'); });
+  }
 }
 
 // ---------- Voice command layer ----------
