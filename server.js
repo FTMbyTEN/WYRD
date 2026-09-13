@@ -1636,26 +1636,18 @@ function followUpFromTopics(topics) {
   return templates[Math.floor(Math.random() * templates.length)];
 }
 
-app.post('/api/chat', requireAuth, async (req, res) => {
-  // per-user, not per-IP — this is authenticated, so a shared API key bill is directly exposed
-  // to one account spamming it; generous enough that no real conversation ever hits it
-  if (rateLimited(`chat:${req.user.id}`, 30, 60 * 1000)) {
-    return res.status(429).json({ error: 'slow down a bit — try again in a moment' });
-  }
-  const { text, nonce } = req.body || {};
-  if (!text || !text.trim()) return res.status(400).json({ error: 'empty' });
-
-  // learn from what this specific person just said before composing a reply, so the reply
-  // itself can already draw on anything new learned this very turn
-  const newFacts = addUserFacts(req.user.id, extractUserFacts(text));
-  if (newFacts.length) broadcast('profile', { facts: newFacts }, req.user.id);
-  getProfile(req.user.id).lastSeen = new Date().toISOString();
+// Shared by both the website chat endpoint and the Discord bridge — one real implementation of
+// "have a turn with this user," so the two surfaces can never quietly drift apart in behavior.
+async function processChatMessage(userId, text, { isOwner = false } = {}) {
+  const newFacts = addUserFacts(userId, extractUserFacts(text));
+  if (newFacts.length) broadcast('profile', { facts: newFacts }, userId);
+  getProfile(userId).lastSeen = new Date().toISOString();
   saveProfilesSoon();
 
   const mem = loadMemory();
   const idSet = knownIdSet(mem);
   const topics = extractTopics(text, idSet);
-  const { reply, comparison, candidateCount, chosenPath, scoreGap, netFetched } = await composeReply(mem, text, req.user.id, isOwnerAccount(req.user));
+  const { reply, comparison, candidateCount, chosenPath, scoreGap, netFetched } = await composeReply(mem, text, userId, isOwner);
 
   const block = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -1667,10 +1659,7 @@ app.post('/api/chat', requireAuth, async (req, res) => {
     chosenPath,
   };
   mem.blocks.push(block);
-  appendConversationTurn(req.user.id, text, reply);
-  // only this user's own other tabs/devices see this exchange live — DIALOGUE_LINK is now a
-  // private per-account conversation, not a shared scratchpad
-  broadcast('chat', { userText: text, botText: reply, timestamp: block.timestamp, nonce: nonce || null }, req.user.id);
+  appendConversationTurn(userId, text, reply);
 
   // what it fetched from the net to answer becomes real memory, reusable in future replies
   if (netFetched) {
@@ -1689,15 +1678,32 @@ app.post('/api/chat', requireAuth, async (req, res) => {
   }
 
   saveMemory(mem);
-
   const mind = updateMind(mem, { type: 'chat', topics, scoreGap });
-
-  res.json({ reply, block, comparison, candidateCount, chosenPath, mind: publicMind(mind), netFetched: !!netFetched });
 
   setTimeout(() => {
     autonomousReasoningTick();
     nextTickAt = Date.now() + CYCLE_MS;
   }, 1500);
+
+  return { reply, block, comparison, candidateCount, chosenPath, mind: publicMind(mind), netFetched: !!netFetched };
+}
+
+app.post('/api/chat', requireAuth, async (req, res) => {
+  // per-user, not per-IP — this is authenticated, so a shared API key bill is directly exposed
+  // to one account spamming it; generous enough that no real conversation ever hits it
+  if (rateLimited(`chat:${req.user.id}`, 30, 60 * 1000)) {
+    return res.status(429).json({ error: 'slow down a bit — try again in a moment' });
+  }
+  const { text, nonce } = req.body || {};
+  if (!text || !text.trim()) return res.status(400).json({ error: 'empty' });
+
+  const result = await processChatMessage(req.user.id, text, { isOwner: isOwnerAccount(req.user) });
+
+  // only this user's own other tabs/devices see this exchange live — DIALOGUE_LINK is a
+  // private per-account conversation, not a shared scratchpad
+  broadcast('chat', { userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: nonce || null }, req.user.id);
+
+  res.json(result);
 });
 
 app.get('/api/memory', (req, res) => {
@@ -2140,6 +2146,57 @@ app.get('/api/datasets/status', (req, res) => {
     dialogue: { loaded: dialogueDatasetEntries.length, uniqueTopicsIndexed: dialogueDatasetIndex.size },
   });
 });
+
+// ---- Discord bridge: WYRD lives in a Discord server too, not just the website. Each Discord
+// user gets their own private thread (same per-user storage as the web accounts, keyed by
+// "discord:<id>"), and shares the exact same reply logic via processChatMessage — no separate,
+// drifting implementation of "how to talk to someone." Never treated as the owner account: that
+// capability stays scoped to the website login flow only.
+const DISCORD_BOT_TOKEN = (process.env.DISCORD_BOT_TOKEN || '').trim();
+if (DISCORD_BOT_TOKEN) {
+  const { Client, GatewayIntentBits, Partials } = require('discord.js');
+  const discordClient = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+    partials: [Partials.Channel], // required for DM messages to actually fire messageCreate
+  });
+
+  discordClient.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    const isDM = !message.guild;
+    const mentioned = message.mentions.has(discordClient.user);
+    if (!isDM && !mentioned) return; // don't reply to every message in a shared server, only DMs or @mentions
+
+    const text = message.content.replace(/<@!?\d+>/g, '').trim();
+    if (!text) return;
+
+    const userId = `discord:${message.author.id}`;
+    if (rateLimited(`discord-chat:${message.author.id}`, 20, 60 * 1000)) {
+      message.reply("slow down a bit — let's not blow through the API budget.").catch(() => {});
+      return;
+    }
+    if (!rateBuckets.has(`discord-seen:${userId}`)) touchProfileVisit(userId); // first-ever message from this Discord user
+    rateBuckets.set(`discord-seen:${userId}`, [Date.now()]); // reuses the rate-limit Map purely as a "have we seen them" marker
+
+    try {
+      await message.channel.sendTyping();
+      const result = await processChatMessage(userId, text, { isOwner: false });
+      // Discord hard-caps messages at 2000 chars — this app's replies are meant to be short anyway
+      message.reply(result.reply.slice(0, 1900)).catch((err) => console.warn('[discord] reply failed:', err.message));
+    } catch (err) {
+      console.warn('[discord] message handling failed:', err.message);
+      message.reply("hit a snag processing that — try again?").catch(() => {});
+    }
+  });
+
+  discordClient.once('clientReady', () => console.log(`Discord bridge: ACTIVE (logged in as ${discordClient.user.tag})`));
+  discordClient.on('error', (err) => console.warn('[discord] client error:', err.message));
+  discordClient.login(DISCORD_BOT_TOKEN).catch((err) => console.warn('[discord] login failed:', err.message));
+}
 
 const PORT = 4477;
 app.listen(PORT, () => {
