@@ -101,6 +101,7 @@
             <button id="viewLogBtn" type="button" class="mini-btn">VIEW LOG</button>
             <button id="viewDiaryBtn" type="button" class="mini-btn">DIARY</button>
             <button id="viewDreamsBtn" type="button" class="mini-btn">DREAMS</button>
+            <button id="viewCopBtn" type="button" class="mini-btn">COP</button>
           </div>
         </div>
         <div class="brain-cell wide">
@@ -170,6 +171,17 @@
     </div>
   </div>
 
+  <div id="copModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ COP <span class="sub">[ an independent overseer reviewing WYRD's self-modifications, not WYRD itself ]</span></span>
+        <span id="closeCopBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div id="copCurrentConfig" class="cop-config"></div>
+      <div id="copLog" class="reasoning-log"></div>
+    </div>
+  </div>
+
   <div id="conceptMapModal" class="reasoning-log-modal hidden">
     <div class="reasoning-log-box concept-map-box">
       <div class="reasoning-log-header">
@@ -194,10 +206,42 @@
     </div>
   </div>
 
+  <div id="worldMapModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box world-map-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ WORLD_MAP <span class="sub">[ WYRD's own view of its environment — drag to rotate, scroll to zoom, click a marker ]</span></span>
+        <span id="closeWorldMapBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div class="world-map-body">
+        <div id="worldMapCanvasWrap" class="world-map-canvas-wrap">
+          <canvas id="worldMapCanvas"></canvas>
+          <div id="worldMapHint" class="world-map-hint">drag to spin the globe &middot; scroll to zoom &middot; click a marker</div>
+        </div>
+        <div id="worldMapInfo" class="world-map-info">
+          <div class="world-map-info-empty">click a country marker to read what WYRD knows about it</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="appPreviewModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box app-preview-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ APP_PREVIEW <span class="sub">[ a real app WYRD built, running live — sandboxed, can't touch this page or your data ]</span></span>
+        <span id="closeAppPreviewBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div class="app-preview-wrap">
+        <iframe id="appPreviewFrame" class="app-preview-frame" sandbox="allow-scripts" title="WYRD-built app preview"></iframe>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="face-mesh-data.js"></script>
+<script src="world-map.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

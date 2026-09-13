@@ -403,12 +403,35 @@ if (exportDataBtn) {
 
 const MAX_LOG_NODES = 150; // unbounded DOM growth over a long session is real, measurable lag
 
+// Splits on ``` fences and renders each piece as its own text node — never via innerHTML with
+// live content, so a code reply can't smuggle in markup. Plain messages (no fences) render exactly
+// as before; this only changes anything for replies that actually contain a code block.
+function renderMsgBody(container, text) {
+  const parts = text.split(/```/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      const firstNewline = part.indexOf('\n');
+      const code = firstNewline === -1 ? part : part.slice(firstNewline + 1);
+      const pre = document.createElement('pre');
+      pre.className = 'msg-code';
+      const codeEl = document.createElement('code');
+      codeEl.textContent = code.replace(/\n$/, '');
+      pre.appendChild(codeEl);
+      container.appendChild(pre);
+    } else if (part) {
+      const span = document.createElement('span');
+      span.textContent = part;
+      container.appendChild(span);
+    }
+  });
+}
+
 function addChatMsg(who, text) {
   const div = document.createElement('div');
   div.className = `msg ${who}`;
   const label = who === 'user' ? 'you' : who === 'sys' ? 'compare_log' : who === 'self' ? 'self_inquiry' : 'wyrd';
   div.innerHTML = `<div class="who">${label}</div><div class="text"></div>`;
-  div.querySelector('.text').textContent = text;
+  renderMsgBody(div.querySelector('.text'), text);
   chatLog.appendChild(div);
   while (chatLog.children.length > MAX_LOG_NODES) chatLog.removeChild(chatLog.firstChild);
   chatLog.scrollTop = chatLog.scrollHeight;
@@ -465,6 +488,23 @@ function addTypingIndicator() {
 
 const pendingChatNonces = new Set(); // suppresses the echo of our own message coming back over SSE
 
+// ---------- App preview: a real, live app WYRD builds (calculator, game, small tool) rendered in
+// a sandboxed iframe. `sandbox="allow-scripts"` with no `allow-same-origin` means the iframe runs
+// as an opaque origin — its scripts can't read this page's cookies/storage or reach the parent.
+const appPreviewModal = document.getElementById('appPreviewModal');
+const closeAppPreviewBtn = document.getElementById('closeAppPreviewBtn');
+const appPreviewFrame = document.getElementById('appPreviewFrame');
+
+function openAppPreview(html) {
+  if (!appPreviewModal || !appPreviewFrame) return;
+  appPreviewFrame.srcdoc = html || '<p style="font-family:sans-serif">nothing to show</p>';
+  appPreviewModal.classList.remove('hidden');
+}
+if (closeAppPreviewBtn && appPreviewModal) {
+  closeAppPreviewBtn.addEventListener('click', () => { appPreviewModal.classList.add('hidden'); appPreviewFrame.srcdoc = ''; });
+  appPreviewModal.addEventListener('click', (e) => { if (e.target === appPreviewModal) { appPreviewModal.classList.add('hidden'); appPreviewFrame.srcdoc = ''; } });
+}
+
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
@@ -492,6 +532,8 @@ chatForm.addEventListener('submit', async (e) => {
       addChatMsg('bot', data.reply);
       speakReply(data.reply);
       if (data.mind) renderMind(data.mind);
+      if (data.action?.type === 'open_world_map' && window.WorldMap) window.WorldMap.open(data.action.country);
+      if (data.action?.type === 'preview_app') openAppPreview(data.action.html);
     }
   } catch (err) {
     typingEl.remove();
@@ -841,6 +883,34 @@ function initReasoningControls() {
   if (closeDreamsBtn && dreamsModal) {
     closeDreamsBtn.addEventListener('click', () => dreamsModal.classList.add('hidden'));
     dreamsModal.addEventListener('click', (e) => { if (e.target === dreamsModal) dreamsModal.classList.add('hidden'); });
+  }
+
+  const viewCopBtn = document.getElementById('viewCopBtn');
+  const closeCopBtn = document.getElementById('closeCopBtn');
+  const copModal = document.getElementById('copModal');
+  const copLog = document.getElementById('copLog');
+  const copCurrentConfig = document.getElementById('copCurrentConfig');
+  async function loadCopPanel() {
+    if (!copLog) return;
+    try {
+      const [config, entries] = await Promise.all([
+        (await fetch('/api/self-config')).json(),
+        (await fetch('/api/cop-log')).json(),
+      ]);
+      if (copCurrentConfig) {
+        copCurrentConfig.innerHTML = `current self-config — tone note: <b>${config.toneNote || '(none set)'}</b> &middot; reply length max: <b>${config.replyLengthMax}</b> sentences &middot; curiosity: <b>${config.curiosityLevel}</b>`;
+      }
+      copLog.innerHTML = entries.length
+        ? entries.map((e) => `<div class="cop-entry"><div class="cop-time">${relativeTime(e.timestamp)}</div><div class="cop-change">${e.change.key}: ${JSON.stringify(e.change.oldValue)} → ${JSON.stringify(e.change.newValue)} — "${e.change.reason}"</div><div class="cop-verdict">COP: ${e.verdict}</div></div>`).join('')
+        : '<div class="thought">no self-modifications reviewed yet — WYRD checks every 2 real hours whether anything about its own config genuinely warrants changing.</div>';
+    } catch (e) {}
+  }
+  if (viewCopBtn && copModal) {
+    viewCopBtn.addEventListener('click', () => { copModal.classList.remove('hidden'); loadCopPanel(); });
+  }
+  if (closeCopBtn && copModal) {
+    closeCopBtn.addEventListener('click', () => copModal.classList.add('hidden'));
+    copModal.addEventListener('click', (e) => { if (e.target === copModal) copModal.classList.add('hidden'); });
   }
 
   const viewConceptMapBtn = document.getElementById('viewConceptMapBtn');

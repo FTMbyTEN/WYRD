@@ -18,6 +18,8 @@ data/wordlist.txt
 data/diary.json
 data/dreams.json
 data/growth_history.json
+data/self_config.json
+data/cop_log.json
 data/datasets/
 data/*.tmp
 
