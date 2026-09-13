@@ -17,6 +17,7 @@ data/users.json
 data/wordlist.txt
 data/diary.json
 data/dreams.json
+data/growth_history.json
 data/datasets/
 data/*.tmp
 

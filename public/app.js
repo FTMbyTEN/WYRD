@@ -887,6 +887,56 @@ function initReasoningControls() {
     closeConceptMapBtn.addEventListener('click', () => conceptMapModal.classList.add('hidden'));
     conceptMapModal.addEventListener('click', (e) => { if (e.target === conceptMapModal) conceptMapModal.classList.add('hidden'); });
   }
+
+  const viewGrowthBtn = document.getElementById('viewGrowthBtn');
+  const closeGrowthBtn = document.getElementById('closeGrowthBtn');
+  const growthModal = document.getElementById('growthModal');
+  const growthSvg = document.getElementById('growthSvg');
+
+  // Two series on very different scales (vocab count in the thousands, digest in 0-100) — each
+  // is normalized to its own 0-1 range so both are visible as shape/trend on one chart, with a
+  // legend making clear neither line's height is directly comparable to the other's.
+  function polylinePoints(values, w, h, pad) {
+    if (values.length < 2) return '';
+    const min = Math.min(...values), max = Math.max(...values);
+    const span = max - min || 1;
+    return values.map((v, i) => {
+      const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((v - min) / span) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+  }
+  async function loadGrowthChart() {
+    if (!growthSvg) return;
+    growthSvg.innerHTML = '';
+    try {
+      const snaps = await (await fetch('/api/growth')).json();
+      if (snaps.length < 2) {
+        growthSvg.innerHTML = '<text x="300" y="150" fill="#3d7a4d" font-size="12" text-anchor="middle">not enough snapshots yet — one is taken automatically every 30 minutes</text>';
+        return;
+      }
+      const w = 600, h = 300, pad = 20;
+      const vocabLine = polylinePoints(snaps.map((s) => s.vocabCount), w, h, pad);
+      const digestLine = polylinePoints(snaps.map((s) => s.digestPercent), w, h, pad);
+      growthSvg.innerHTML = `
+        <polyline points="${vocabLine}" fill="none" stroke="#00ff41" stroke-width="2" />
+        <polyline points="${digestLine}" fill="none" stroke="#33ccff" stroke-width="2" opacity="0.8" />
+        <text x="10" y="16" fill="#00ff41" font-size="10" font-family="'Share Tech Mono', monospace">— vocabulary</text>
+        <text x="120" y="16" fill="#33ccff" font-size="10" font-family="'Share Tech Mono', monospace">— digest %</text>
+        <text x="10" y="${h - 6}" fill="#3d7a4d" font-size="9" font-family="'Share Tech Mono', monospace">${new Date(snaps[0].timestamp).toLocaleString()}</text>
+        <text x="${w - 10}" y="${h - 6}" fill="#3d7a4d" font-size="9" font-family="'Share Tech Mono', monospace" text-anchor="end">${new Date(snaps[snaps.length - 1].timestamp).toLocaleString()}</text>
+      `;
+    } catch (e) {
+      growthSvg.innerHTML = '<text x="300" y="150" fill="#3d7a4d" font-size="12" text-anchor="middle">failed to load — try again</text>';
+    }
+  }
+  if (viewGrowthBtn && growthModal) {
+    viewGrowthBtn.addEventListener('click', () => { growthModal.classList.remove('hidden'); loadGrowthChart(); });
+  }
+  if (closeGrowthBtn && growthModal) {
+    closeGrowthBtn.addEventListener('click', () => growthModal.classList.add('hidden'));
+    growthModal.addEventListener('click', (e) => { if (e.target === growthModal) growthModal.classList.add('hidden'); });
+  }
 }
 
 // ---------- Voice command layer ----------

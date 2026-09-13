@@ -107,7 +107,10 @@
           <div class="brain-label">VOCABULARY <span id="vocabNext" class="vocab-next"></span></div>
           <div id="vocabCount" class="brain-value">0 words understood</div>
           <div id="vocabRecent" class="digest-detail">—</div>
-          <button id="viewConceptMapBtn" type="button" class="mini-btn" style="margin-top:6px;">CONCEPT MAP</button>
+          <div class="mini-btn-row" style="margin-top:6px;">
+            <button id="viewConceptMapBtn" type="button" class="mini-btn">CONCEPT MAP</button>
+            <button id="viewGrowthBtn" type="button" class="mini-btn">GROWTH</button>
+          </div>
         </div>
       </div>
     </div>
@@ -175,6 +178,18 @@
       </div>
       <div id="conceptMapWrap" class="concept-map-wrap">
         <svg id="conceptMapSvg" viewBox="0 0 600 600"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div id="growthModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box concept-map-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ GROWTH <span class="sub" id="growthSub">[ tracked from when this feature was added — no back-filled history ]</span></span>
+        <span id="closeGrowthBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div class="concept-map-wrap">
+        <svg id="growthSvg" viewBox="0 0 600 300"></svg>
       </div>
     </div>
   </div>

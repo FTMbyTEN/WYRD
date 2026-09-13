@@ -41,6 +41,7 @@ const PROFILES_FILE = path.join(DATA_DIR, 'user_profiles.json');
 const MIND_FILE = path.join(DATA_DIR, 'mind.json');
 const DIARY_FILE = path.join(DATA_DIR, 'diary.json');
 const DREAMS_FILE = path.join(DATA_DIR, 'dreams.json');
+const GROWTH_FILE = path.join(DATA_DIR, 'growth_history.json');
 const LEXICON_FILE = path.join(DATA_DIR, 'lexicon.json');
 const WORDLIST_FILE = path.join(DATA_DIR, 'wordlist.txt');
 const QA_DATASETS_FILE = path.join(DATA_DIR, 'qa_datasets.json');
@@ -83,6 +84,7 @@ if (!fs.existsSync(MIND_FILE)) fs.writeFileSync(MIND_FILE, JSON.stringify({
 }, null, 2));
 if (!fs.existsSync(DIARY_FILE)) fs.writeFileSync(DIARY_FILE, JSON.stringify({ entries: [] }, null, 2));
 if (!fs.existsSync(DREAMS_FILE)) fs.writeFileSync(DREAMS_FILE, JSON.stringify({ entries: [] }, null, 2));
+if (!fs.existsSync(GROWTH_FILE)) fs.writeFileSync(GROWTH_FILE, JSON.stringify({ snapshots: [] }, null, 2));
 
 // ---- Memory: in-process cache + debounced async flush ----
 // At high tick rates (turbo mode fires every 300-440ms) a full synchronous read+parse+stringify+write
@@ -1938,6 +1940,48 @@ app.get('/api/dreams', (req, res) => {
 app.post('/api/dreams/trigger', async (req, res) => {
   const entry = await generateDream();
   res.json({ entry });
+});
+
+// ---- Growth history: periodic snapshots of vocab/blocks/digest/mood-stats over real wall-clock
+// time, so growth is actually visible as a trend rather than just felt in the moment. Genuinely
+// starts empty — there was no snapshot mechanism before this, so it can't back-fill history that
+// was never recorded; the chart is honest about only showing what's tracked from here forward. ----
+let growthCache = null;
+function loadGrowth() {
+  if (!growthCache) growthCache = JSON.parse(fs.readFileSync(GROWTH_FILE, 'utf8'));
+  return growthCache;
+}
+function takeGrowthSnapshot() {
+  const mind = loadMind();
+  const mem = loadMemory();
+  const vocabCount = Object.values(loadLexicon()).filter((e) => e.understood).length;
+  const snapshot = {
+    timestamp: new Date().toISOString(),
+    vocabCount,
+    blockCount: mem.blocks.length,
+    digestPercent: mind.digest ? mind.digest.percent : 0,
+    curiosity: mind.curiosity || 0,
+    confidence: mind.confidence || 0,
+  };
+  const store = loadGrowth();
+  store.snapshots.push(snapshot);
+  if (store.snapshots.length > 2000) store.snapshots = store.snapshots.slice(store.snapshots.length - 2000);
+  growthCache = store;
+  atomicWriteFileSync(GROWTH_FILE, JSON.stringify(store, null, 2));
+  return snapshot;
+}
+const GROWTH_SNAPSHOT_MS = 30 * 60 * 1000; // wall-clock, not turbo-scaled — a growth trend is measured in real hours/days, not ticks
+setInterval(takeGrowthSnapshot, GROWTH_SNAPSHOT_MS);
+setTimeout(takeGrowthSnapshot, 10000); // first snapshot shortly after boot, not just after a 30-min wait
+
+app.get('/api/growth', (req, res) => {
+  const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 500));
+  const snaps = loadGrowth().snapshots;
+  res.json(snaps.slice(-limit));
+});
+
+app.post('/api/growth/trigger', (req, res) => {
+  res.json(takeGrowthSnapshot());
 });
 
 // ---- Autonomous reasoning loop: reuses past memory blocks, no user prompt needed ----
