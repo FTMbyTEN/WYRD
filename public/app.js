@@ -273,7 +273,6 @@ const userBadge = document.getElementById('userBadge');
 const logoutBtn = document.getElementById('logoutBtn');
 const ttsToggleBtn = document.getElementById('ttsToggleBtn');
 const exportDataBtn = document.getElementById('exportDataBtn');
-const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 const chatLog = document.getElementById('chatLog');
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
@@ -394,30 +393,6 @@ if (exportDataBtn) {
     }
   });
 }
-if (deleteAccountBtn) {
-  deleteAccountBtn.addEventListener('click', async () => {
-    if (!confirm('This permanently deletes your account, conversation history, and everything WYRD has learned about you. This cannot be undone. Continue?')) return;
-    const password = prompt('Confirm your password to delete your account:');
-    if (!password) return;
-    try {
-      const res = await fetch('/api/account/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        alert('Account deleted.');
-        location.reload();
-      } else {
-        alert(data.error || 'delete failed');
-      }
-    } catch (e) {
-      alert('delete failed — try again');
-    }
-  });
-}
-
 // already-logged-in users (valid session cookie from a previous visit) skip the gate entirely
 (async function checkExistingSession() {
   try {
