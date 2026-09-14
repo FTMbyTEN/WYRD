@@ -123,14 +123,89 @@ a {
   pointer-events: none;
 }
 
+#gateVortex {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.gate-enter-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  z-index: 2;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 1px solid var(--green);
+  background: rgba(0, 20, 8, 0.55);
+  color: var(--green);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  animation: gateEnterPulse 2.4s ease-in-out infinite;
+  transition: opacity var(--dur-med) var(--ease-cinematic),
+              transform var(--dur-med) var(--ease-cinematic);
+}
+.gate-enter-btn:hover {
+  background: rgba(0, 255, 65, 0.12);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+.gate-enter-btn:active { transform: translate(-50%, -50%) scale(0.94); }
+@keyframes gateEnterPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0,255,65,0.45), 0 0 0 0 rgba(0,255,65,0.35); }
+  50% { box-shadow: 0 0 34px rgba(0,255,65,0.85), 0 0 0 16px rgba(0,255,65,0); }
+}
+#gate.unlocked .gate-enter-btn {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.6);
+  pointer-events: none;
+}
+
+.gate-vortex-caption {
+  position: absolute;
+  top: calc(50% + 70px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--green-dim);
+  text-shadow: 0 0 6px rgba(0,255,65,0.5);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.8s var(--ease-cinematic);
+}
+.gate-vortex-caption.show { opacity: 0.9; }
+#gate.unlocked .gate-vortex-caption { opacity: 0 !important; }
+
 .gate-box {
   position: relative;
-  background: var(--panel);
+  z-index: 1;
+  background: rgba(2, 10, 5, 0.82);
+  backdrop-filter: blur(2px);
   border: 1px solid var(--green-dim);
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease-cinematic),
+              transform var(--dur-slow) var(--ease-cinematic);
   border-radius: 4px;
   padding: 40px 50px;
   text-align: center;
   box-shadow: 0 0 40px rgba(0, 255, 65, 0.25), inset 0 0 30px rgba(0, 255, 65, 0.05);
+}
+#gate.unlocked .gate-box {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
 }
 
 .gate-title {

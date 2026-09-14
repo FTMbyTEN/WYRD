@@ -297,7 +297,7 @@ function enterApp(username) {
   app.classList.remove('hidden');
   app.classList.add('app-enter');
   requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('app-enter')));
-  setTimeout(() => gate.classList.add('hidden'), 1100);
+  setTimeout(() => { gate.classList.add('hidden'); window.GateVortex && window.GateVortex.stop(); }, 1100);
   if (userBadge) userBadge.textContent = username ? `// ${username}` : '';
   boot();
 }
@@ -331,6 +331,17 @@ async function tryAuth() {
 }
 
 unlockBtn.addEventListener('click', tryAuth);
+
+const gateEnterBtn = document.getElementById('gateEnterBtn');
+if (gateEnterBtn) {
+  gateEnterBtn.addEventListener('click', () => {
+    gate.classList.add('unlocked');
+    window.GateVortex && window.GateVortex.burst();
+    setTimeout(() => usernameInput.focus(), 500);
+  });
+  gateEnterBtn.addEventListener('mouseenter', () => window.GateVortex && window.GateVortex.setIntensity(1));
+  gateEnterBtn.addEventListener('mouseleave', () => window.GateVortex && window.GateVortex.setIntensity(0));
+}
 passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryAuth(); });
 usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') passwordInput.focus(); });
 
@@ -1037,7 +1048,7 @@ const VOICE_COMMANDS = [
       addChatMsg('bot', 'STATUS OK.');
     }
   } },
-  { pattern: /^lock( system)?$/i, action: () => { app.classList.add('hidden'); gate.classList.remove('hidden'); passwordInput.value=''; } },
+  { pattern: /^lock( system)?$/i, action: () => { app.classList.add('hidden'); gate.classList.remove('hidden'); gate.classList.remove('gate-exit'); gate.classList.remove('unlocked'); passwordInput.value=''; window.GateVortex && window.GateVortex.start(); } },
 ];
 
 function resolveVoiceCommand(transcript) {

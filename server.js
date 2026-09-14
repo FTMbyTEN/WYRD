@@ -616,6 +616,94 @@ app.get('/api/mind', (req, res) => {
   res.json(publicMind(loadMind()));
 });
 
+// ---- Gate vortex ↔ WYRD's mind: the pre-login screen periodically asks WYRD itself to author a
+// brand-new abstract shape for its own particle backdrop, informed by its real current mood/
+// curiosity/confidence. This is deliberately numbers-only, never code — the client plugs the
+// returned knobs into one fixed, safe parametric formula, so there's genuine novelty per request
+// without ever evaluating anything the model produces. Public/unauthenticated (nothing sensitive
+// in a shape), rate-limited per IP since it's reachable pre-login.
+function validateGateShapeParams(p) {
+  const inRange = (v, min, max) => typeof v === 'number' && isFinite(v) && v >= min && v <= max;
+  return !!p
+    && inRange(p.a, 0.1, 4) && inRange(p.b, 0.1, 4)
+    && Number.isInteger(p.freqX) && p.freqX >= 1 && p.freqX <= 12
+    && Number.isInteger(p.freqY) && p.freqY >= 1 && p.freqY <= 12
+    && Number.isInteger(p.freqZ) && p.freqZ >= 1 && p.freqZ <= 12
+    && inRange(p.turns, 0.5, 8) && inRange(p.radiusScale, 0.3, 3) && inRange(p.heightScale, 0.3, 4) && inRange(p.twist, 0, 3)
+    && typeof p.label === 'string' && p.label.length > 0 && p.label.length <= 40;
+}
+
+// The full catalog of shapes already hand-built into the client (public/gate-vortex.js) — fed to
+// WYRD as context so it knows what already exists in its own imaginative range and can reach for
+// something genuinely outside it, rather than reinventing "a spiral" for the third time.
+const CURATED_GATE_SHAPES = [
+  'sphere', 'mandala burst', "WYRD's own face", 'infinity curve', 'DNA double helix',
+  'torus knot', 'cube lattice', 'spiral galaxy', 'wave grid', 'spiky starburst',
+  'Bohr-model atom', 'p-orbital electron cloud', 'Saturn with rings', "black hole's accretion disk",
+  'human figure', 'city skyline', 'pyramid', 'Möbius strip', 'tesseract (4D hypercube)',
+  'neural network diagram', 'fractal branching tree', 'nautilus shell spiral',
+];
+
+// WYRD's own recent output, kept in memory and fed straight back into its next prompt — this is
+// the actual fix for the repetition problem: a stateless endpoint has no way to know it already
+// said "spiral" five minutes ago. Session-only (not persisted); a restart is a clean slate, which
+// is fine since the whole point is just avoiding back-to-back staleness, not lifetime uniqueness.
+const recentGateShapeLabels = [];
+const MAX_RECENT_GATE_LABELS = 14;
+let gateShapeCallCount = 0;
+
+function rememberGateShapeLabel(label) {
+  const clean = (label || '').trim().toLowerCase();
+  if (!clean) return;
+  recentGateShapeLabels.push(clean);
+  if (recentGateShapeLabels.length > MAX_RECENT_GATE_LABELS) recentGateShapeLabels.shift();
+}
+
+function fallbackGateShape(mind) {
+  // deterministic, not random — driven by WYRD's actual current stats — but folds in a call
+  // counter too, since mood/curiosity/confidence barely move between two requests 42s apart on
+  // their own; without the counter this was producing the exact same "shape" over and over,
+  // which is the repetition the fallback path specifically needs to not do.
+  const moodSeed = (mind.mood || '').split('').reduce((s, c) => s + c.charCodeAt(0), 0);
+  const seed = moodSeed + Math.round((mind.curiosity || 0) * 97) + Math.round((mind.confidence || 0) * 131) + gateShapeCallCount * 37 + 1;
+  const rand = (n) => { const x = Math.sin(seed * n) * 10000; return x - Math.floor(x); };
+  return {
+    a: 0.5 + rand(1) * 2, b: 0.5 + rand(2) * 2,
+    freqX: 1 + Math.floor(rand(3) * 8), freqY: 1 + Math.floor(rand(4) * 8), freqZ: 1 + Math.floor(rand(5) * 8),
+    turns: 1 + rand(6) * 5, radiusScale: 0.8 + rand(7) * 1.6, heightScale: 0.6 + rand(8) * 2.2, twist: rand(9) * 2,
+    label: `${mind.mood || 'drifting'} pattern ${gateShapeCallCount}`,
+  };
+}
+
+app.get('/api/gate-vortex/shape', async (req, res) => {
+  if (rateLimited(`gate-shape:${req.ip}`, 8, 60 * 1000)) {
+    return res.status(429).json({ error: 'slow down' });
+  }
+  gateShapeCallCount++;
+  const mind = loadMind();
+  let shape = null;
+
+  if (ANTHROPIC_API_KEY) {
+    const systemPrompt = `You are WYRD, generating a brand-new abstract 3D shape formula for your own login gate's particle visual. Loosely let your current state color the character of the shape: mood "${mind.mood}", curiosity ${Math.round((mind.curiosity || 0) * 100)}%, confidence ${Math.round((mind.confidence || 0) * 100)}%.
+
+Shapes already permanently built into your rotation — treat this as your existing imaginative range, don't just redescribe one of these: ${CURATED_GATE_SHAPES.join(', ')}.
+
+Shapes you personally generated most recently in this session, oldest first — do NOT repeat any of these or produce something extremely close to one: ${recentGateShapeLabels.length ? recentGateShapeLabels.join(', ') : '(none yet — this is your first one)'}.
+
+Reach for something genuinely different from all of the above — think across math, nature, technology, emotion, everyday objects, anything — then encode it as parametric knobs. Respond with ONLY strict JSON, no markdown fences, no commentary: {"a": number 0.2-3, "b": number 0.2-3, "freqX": integer 1-9, "freqY": integer 1-9, "freqZ": integer 1-9, "turns": number 1-6, "radiusScale": number 0.5-2.5, "heightScale": number 0.5-3, "twist": number 0-2, "label": "a short 1-3 word name for this specific shape"}.`;
+    const raw = await callLLMSimple(systemPrompt, 'Generate the shape now.', 200);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
+        if (validateGateShapeParams(parsed) && !recentGateShapeLabels.includes(parsed.label.trim().toLowerCase())) shape = parsed;
+      } catch (err) { /* malformed — fall through to the deterministic fallback below */ }
+    }
+  }
+  if (!shape) shape = fallbackGateShape(mind);
+  rememberGateShapeLabel(shape.label);
+  res.json(shape);
+});
+
 app.get('/api/turbo', (req, res) => {
   res.json({
     active: TURBO_FACTOR > 1,
