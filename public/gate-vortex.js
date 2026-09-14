@@ -1,10 +1,13 @@
 // The gate/login screen's cinematic backdrop — a generative particle structure that morphs
-// between 22 curated wireframe-ish forms spanning geometry, physics, the quantum realm, the
-// cosmos, nature, humans, architecture, and WYRD's own likeness — plus new shapes WYRD itself
-// authors on a live timer via /api/gate-vortex/shape (see fetchShapeFromMind below), all in
-// WYRD's own terminal green, plus a dim starfield for depth. Same particle-count-preserving
-// morph technique across every shape (curated or generated) so a plain per-vertex lerp animates
-// smoothly between any two of them — no shape-specific transition logic needed.
+// between 26 curated wireframe-ish forms spanning geometry, physics, the quantum realm, the
+// cosmos, nature, the classical elements (fire/water/air), technology, architecture, and two
+// takes on WYRD's own likeness (clean and dreaming) — plus new shapes WYRD itself authors on a
+// live timer via /api/gate-vortex/shape (see fetchShapeFromMind below), all in WYRD's own
+// terminal green, plus a dim starfield for depth. Deliberately kept light on pure spirals (one
+// galaxy, one black hole, one knot) so the set doesn't read as "everything is a spiral wound
+// differently." Same particle-count-preserving morph technique across every shape (curated or
+// generated) so a plain per-vertex lerp animates smoothly between any two of them — no
+// shape-specific transition logic needed.
 (function initGateVortex() {
   const canvas = document.getElementById('gateVortex');
   const gate = document.getElementById('gate');
@@ -290,78 +293,24 @@
     return arr;
   }
 
-  // ---- Humans: a stick-figure silhouette — a head plus five straight limb/spine segments,
-  // each walked linearly by an even share of the points. ----
-  // ---- Humans, v2: real volumetric limbs (tapered tube-of-rings around each bone axis, not a
-  // single flat line per limb) with actual elbow/knee bends — reads as a body, not a wireframe
-  // skeleton. Shares the same ring-stacking idea as the vortex/funnel shapes, just walked along
-  // an arbitrary 3D axis instead of a straight vertical one. ----
-  function vSub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
-  function vLen(a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); }
-  function vNorm(a) { const l = vLen(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
-  function vCross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
-
-  function shapeHuman() {
+  // ---- WYRD's face, dreaming — the same real 468-point mesh as shapeFace() above, but warped
+  // by a standing wave across the surface instead of rendered clean. Reads as the face mid-morph,
+  // unsettled/glitching, which fits a login gate that's meant to feel alive rather than static —
+  // a second, genuinely different take on the same identity rather than a duplicate of shapeFace.
+  function shapeFaceDream() {
     const arr = new Float32Array(N * 3);
-    let idx = 0;
-    const headCount = Math.round(N * 0.09);
-    const golden = Math.PI * (3 - Math.sqrt(5));
-    for (let i = 0; i < headCount; i++) {
-      const yv = 1 - (i / (headCount - 1)) * 2;
-      const rY = Math.sqrt(Math.max(0, 1 - yv * yv));
-      const theta = golden * i;
-      const R = 0.42;
-      arr[idx * 3] = Math.cos(theta) * rY * R;
-      arr[idx * 3 + 1] = 2.55 + yv * R;
-      arr[idx * 3 + 2] = Math.sin(theta) * rY * R;
-      idx++;
+    if (typeof FACE_VERTS === 'undefined' || !FACE_VERTS.length) return shapeSphere();
+    const total = FACE_VERTS.length;
+    const scale = 2.7;
+    for (let i = 0; i < N; i++) {
+      const v = FACE_VERTS[i % total];
+      const pass = Math.floor(i / total);
+      const wobbleX = Math.sin(v[1] * 4 + pass * 0.6) * 0.18;
+      const wobbleY = Math.cos(v[0] * 5 + pass * 0.4) * 0.12;
+      arr[i * 3] = v[0] * scale + wobbleX;
+      arr[i * 3 + 1] = v[1] * scale + wobbleY;
+      arr[i * 3 + 2] = v[2] * scale;
     }
-
-    function addLimb(from, to, rStart, rEnd, ringsAlong, perRing, budget) {
-      const dir = vNorm(vSub(to, from));
-      const up = Math.abs(dir[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0];
-      const right = vNorm(vCross(up, dir));
-      const trueUp = vCross(dir, right);
-      let written = 0;
-      for (let r = 0; r < ringsAlong && written < budget; r++) {
-        const t = r / (ringsAlong - 1);
-        const cx = from[0] + (to[0] - from[0]) * t;
-        const cy = from[1] + (to[1] - from[1]) * t;
-        const cz = from[2] + (to[2] - from[2]) * t;
-        const radius = rStart + (rEnd - rStart) * t;
-        for (let p = 0; p < perRing && written < budget; p++) {
-          const a = (p / perRing) * Math.PI * 2;
-          const ox = (right[0] * Math.cos(a) + trueUp[0] * Math.sin(a)) * radius;
-          const oy = (right[1] * Math.cos(a) + trueUp[1] * Math.sin(a)) * radius;
-          const oz = (right[2] * Math.cos(a) + trueUp[2] * Math.sin(a)) * radius;
-          arr[idx * 3] = cx + ox; arr[idx * 3 + 1] = cy + oy; arr[idx * 3 + 2] = cz + oz;
-          idx++; written++;
-        }
-      }
-    }
-
-    // real anatomy: shoulders → elbows → hands, hips → knees → feet, plus a tapered torso —
-    // the elbow/knee bends are what actually sell it as a figure instead of an X shape
-    const limbs = [
-      { from: [0, 2.1, 0], to: [0, 0.25, 0], r0: 0.5, r1: 0.4, weight: 2.1 },
-      { from: [-0.35, 1.95, 0], to: [-1.1, 1.2, 0.15], r0: 0.22, r1: 0.15, weight: 1 },
-      { from: [-1.1, 1.2, 0.15], to: [-1.25, 0.2, 0.3], r0: 0.15, r1: 0.1, weight: 1 },
-      { from: [0.35, 1.95, 0], to: [1.1, 1.2, 0.15], r0: 0.22, r1: 0.15, weight: 1 },
-      { from: [1.1, 1.2, 0.15], to: [1.25, 0.2, 0.3], r0: 0.15, r1: 0.1, weight: 1 },
-      { from: [-0.2, 0.25, 0], to: [-0.3, -1.25, 0.15], r0: 0.26, r1: 0.18, weight: 1.3 },
-      { from: [-0.3, -1.25, 0.15], to: [-0.34, -2.6, 0.25], r0: 0.18, r1: 0.1, weight: 1.3 },
-      { from: [0.2, 0.25, 0], to: [0.3, -1.25, 0.15], r0: 0.26, r1: 0.18, weight: 1.3 },
-      { from: [0.3, -1.25, 0.15], to: [0.34, -2.6, 0.25], r0: 0.18, r1: 0.1, weight: 1.3 },
-    ];
-    const remaining = N - headCount;
-    const totalWeight = limbs.reduce((s, l) => s + l.weight, 0);
-    for (const limb of limbs) {
-      const budget = Math.max(8, Math.round(remaining * (limb.weight / totalWeight)));
-      const ringsAlong = Math.max(4, Math.round(Math.sqrt(budget * 1.4)));
-      const perRing = Math.max(4, Math.round(budget / ringsAlong));
-      addLimb(limb.from, limb.to, limb.r0, limb.r1, ringsAlong, perRing, budget);
-    }
-    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = -3; arr[idx * 3 + 2] = 0; idx++; }
     return arr;
   }
 
@@ -545,28 +494,136 @@
 
   // ---- Nature/math: a nautilus shell — a logarithmic (golden) spiral winding outward with a
   // slight vertical rise so it reads as a real 3D coil instead of a flat spiral. ----
-  function shapeNautilus() {
+  // ---- An atomic explosion — a dense core plus a jagged, uneven shockwave of debris flung
+  // outward at varying distances (not a clean sphere), so it reads as a blast, not a starburst. ----
+  function shapeExplosion() {
     const arr = new Float32Array(N * 3);
-    const turns = 4, b = 0.18, totalT = turns * Math.PI * 2;
-    let maxR = 0;
-    for (let i = 0; i < N; i++) {
-      const t = (i / N) * totalT;
-      const r = 0.15 * Math.exp(b * t);
-      arr[i * 3] = Math.cos(t) * r;
-      arr[i * 3 + 1] = Math.sin(t) * r;
-      arr[i * 3 + 2] = (t / totalT - 0.5) * 1.2;
-      maxR = Math.max(maxR, r);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const coreCount = Math.round(N * 0.1);
+    let idx = 0;
+    for (let i = 0; i < coreCount; i++) {
+      const yv = 1 - (i / (coreCount - 1)) * 2;
+      const rY = Math.sqrt(Math.max(0, 1 - yv * yv));
+      const theta = golden * i;
+      const R = 0.25;
+      arr[idx * 3] = Math.cos(theta) * rY * R; arr[idx * 3 + 1] = yv * R; arr[idx * 3 + 2] = Math.sin(theta) * rY * R;
+      idx++;
     }
-    const norm = 2.3 / maxR;
-    for (let i = 0; i < arr.length; i++) arr[i] *= norm;
+    const rayCount = N - coreCount;
+    for (let i = 0; i < rayCount; i++) {
+      const yv = 1 - (i / (rayCount - 1)) * 2;
+      const rY = Math.sqrt(Math.max(0, 1 - yv * yv));
+      const theta = golden * i;
+      const jag = 0.6 + 0.4 * Math.abs(Math.sin(theta * 7 + yv * 5));
+      const R = 2.6 * jag;
+      arr[idx * 3] = Math.cos(theta) * rY * R; arr[idx * 3 + 1] = yv * R; arr[idx * 3 + 2] = Math.sin(theta) * rY * R;
+      idx++;
+    }
+    return arr;
+  }
+
+  // ---- Fire — several tapering flame tongues arranged around a base ring, each swaying more
+  // as it rises, narrowing to nothing near the tip. ----
+  function shapeFire() {
+    const arr = new Float32Array(N * 3);
+    const tongues = 7;
+    const perTongue = Math.floor(N / tongues);
+    let idx = 0;
+    for (let f = 0; f < tongues; f++) {
+      const baseAngle = (f / tongues) * Math.PI * 2;
+      for (let p = 0; p < perTongue; p++) {
+        const t = p / perTongue;
+        const height = -2.2 + t * 4.6;
+        const sway = Math.sin(t * Math.PI * 2.2 + f * 1.3) * 0.35 * t;
+        const r = 0.9 * (1 - t * 0.7);
+        const angle = baseAngle + sway * 0.4;
+        arr[idx * 3] = Math.cos(angle) * r + sway;
+        arr[idx * 3 + 1] = height;
+        arr[idx * 3 + 2] = Math.sin(angle) * r;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = -2.2; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+
+  // ---- Water — a single droplet: a surface of revolution with a rounded belly tapering to a
+  // point, not a spiral or a lobe pair. ----
+  function shapeWaterDrop() {
+    const arr = new Float32Array(N * 3);
+    const ringsCount = 24, perRing = Math.floor(N / ringsCount);
+    let idx = 0;
+    for (let r = 0; r < ringsCount; r++) {
+      const t = r / (ringsCount - 1);
+      const y = -1.6 + t * 3.4;
+      const radius = 1.5 * Math.sin(Math.PI * t * 0.85) * (1 - t * 0.3);
+      for (let p = 0; p < perRing; p++) {
+        const a = (p / perRing) * Math.PI * 2;
+        arr[idx * 3] = Math.cos(a) * radius; arr[idx * 3 + 1] = y; arr[idx * 3 + 2] = Math.sin(a) * radius;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = 1.8; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+
+  // ---- Air — parallel wavy streamlines sweeping across at different heights, like visualized
+  // wind gusts, not a wound curve. ----
+  function shapeWindStreams() {
+    const arr = new Float32Array(N * 3);
+    const streams = 9;
+    const perStream = Math.floor(N / streams);
+    let idx = 0;
+    for (let s = 0; s < streams; s++) {
+      const yBase = -2 + (s / (streams - 1)) * 4;
+      const phase = s * 0.9;
+      for (let p = 0; p < perStream; p++) {
+        const t = p / perStream;
+        arr[idx * 3] = (t - 0.5) * 5.2;
+        arr[idx * 3 + 1] = yBase + Math.sin(t * Math.PI * 3 + phase) * 0.35;
+        arr[idx * 3 + 2] = Math.cos(t * Math.PI * 2 + phase) * 0.4;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = 0; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+
+  // ---- Technology — a CPU/circuit board: a square outline plus Manhattan-routed (right-angle)
+  // internal traces, deliberately blocky and geometric, the opposite of every curved shape here. ----
+  function shapeCircuit() {
+    const arr = new Float32Array(N * 3);
+    const S = 2.0;
+    const segments = [
+      [[-S, -S, 0], [S, -S, 0]], [[S, -S, 0], [S, S, 0]], [[S, S, 0], [-S, S, 0]], [[-S, S, 0], [-S, -S, 0]],
+    ];
+    const lines = 5;
+    for (let i = 1; i < lines; i++) {
+      const p = -S + (i / lines) * 2 * S;
+      if (i % 2 === 0) segments.push([[p, -S * 0.6, 0], [p, S * 0.6, 0]]);
+      else segments.push([[-S * 0.6, p, 0], [S * 0.6, p, 0]]);
+    }
+    const perSeg = Math.floor(N / segments.length);
+    let idx = 0;
+    for (const [a, b] of segments) {
+      for (let p = 0; p < perSeg; p++) {
+        const t = p / perSeg;
+        arr[idx * 3] = a[0] + (b[0] - a[0]) * t;
+        arr[idx * 3 + 1] = a[1] + (b[1] - a[1]) * t;
+        arr[idx * 3 + 2] = a[2] + (b[2] - a[2]) * t;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = 0; arr[idx * 3 + 2] = 0; idx++; }
     return arr;
   }
 
   const shapes = [
     shapeSphere(), shapeMandala(), shapeFace(), shapeInfinity(),
     shapeHelixDNA(), shapeTorusKnot(), shapeCubeGrid(), shapeGalaxy(), shapeWaveGrid(), shapeStarBurst(),
-    shapeAtom(), shapeOrbital(), shapeSaturn(), shapeBlackHole(), shapeHuman(), shapeCityscape(), shapePyramid(),
-    shapeMobius(), shapeTesseract(), shapeNeuralNetwork(), shapeFractalTree(), shapeNautilus(),
+    shapeAtom(), shapeOrbital(), shapeSaturn(), shapeBlackHole(), shapeFaceDream(), shapeCityscape(), shapePyramid(),
+    shapeMobius(), shapeTesseract(), shapeNeuralNetwork(), shapeFractalTree(),
+    shapeExplosion(), shapeFire(), shapeWaterDrop(), shapeWindStreams(), shapeCircuit(),
   ];
   const curatedShapeCount = shapes.length; // generative shapes (added later, from WYRD's mind) get
                                             // appended after this point and capped separately
@@ -714,7 +771,10 @@
   // plugs them into one fixed, safe parametric formula, so there's real novelty without ever
   // evaluating anything WYRD sends. Falls back to a deterministic, mind-state-derived shape
   // if the LLM is unavailable, so this still feels "alive" even with no API key configured.
-  function shapeGenerative(p) {
+  // Five genuinely different geometric families WYRD can choose between (via params.type) —
+  // not just different numbers fed through one fixed curve. All take the same knob set so the
+  // server-side schema stays simple, but each interprets those knobs completely differently.
+  function genLissajous(p) {
     const arr = new Float32Array(N * 3);
     const totalT = p.turns * Math.PI * 2;
     for (let i = 0; i < N; i++) {
@@ -725,6 +785,139 @@
       arr[i * 3 + 2] = r * Math.sin((p.freqY * t) / p.turns);
     }
     return arr;
+  }
+
+  // Rhodonea (rose) curve — petals, not a spiral: radius oscillates with angle instead of
+  // growing/shrinking monotonically, so it reads as a flower/gear shape.
+  function genRose(p) {
+    const arr = new Float32Array(N * 3);
+    const k = Math.max(1, p.freqX) / Math.max(1, p.freqY);
+    for (let i = 0; i < N; i++) {
+      const theta = (i / N) * p.turns * Math.PI * 2;
+      const r = p.radiusScale * Math.cos(k * theta + p.twist);
+      arr[i * 3] = r * Math.cos(theta);
+      arr[i * 3 + 1] = p.heightScale * Math.sin(p.freqZ * theta * 0.3) * 0.4;
+      arr[i * 3 + 2] = r * Math.sin(theta);
+    }
+    return arr;
+  }
+
+  // Braid — 2-5 separate strands winding around a shared vertical axis, like rope or a friendship
+  // bracelet, not one single curve.
+  function genBraid(p) {
+    const arr = new Float32Array(N * 3);
+    const strands = Math.max(2, Math.min(5, Math.round(p.freqZ / 2) + 2));
+    const perStrand = Math.floor(N / strands);
+    let idx = 0;
+    for (let s = 0; s < strands; s++) {
+      const phase = (s / strands) * Math.PI * 2;
+      for (let i = 0; i < perStrand; i++) {
+        const t = i / perStrand;
+        const angle = t * p.turns * Math.PI * 2 * Math.max(1, p.freqX * 0.4) + phase + p.twist;
+        const r = p.radiusScale * (0.6 + 0.4 * Math.sin(t * Math.PI * p.freqY * 0.5));
+        arr[idx * 3] = Math.cos(angle) * r;
+        arr[idx * 3 + 1] = p.heightScale * (t - 0.5) * 2;
+        arr[idx * 3 + 2] = Math.sin(angle) * r;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = 0; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+
+  // Rippling lattice — a flat grid distorted by a 2D standing wave, like fabric or water, not
+  // a curve at all.
+  function genLatticeWave(p) {
+    const arr = new Float32Array(N * 3);
+    const gridSize = Math.round(Math.sqrt(N));
+    let idx = 0;
+    for (let gx = 0; gx < gridSize; gx++) {
+      for (let gz = 0; gz < gridSize; gz++) {
+        if (idx >= N) break;
+        const x = (gx / (gridSize - 1) - 0.5) * p.radiusScale * 2.4;
+        const z = (gz / (gridSize - 1) - 0.5) * p.radiusScale * 2.4;
+        const y = Math.sin(x * p.freqX * 0.5 + p.twist) * Math.cos(z * p.freqY * 0.5) * p.heightScale * 0.5;
+        arr[idx * 3] = x; arr[idx * 3 + 1] = y; arr[idx * 3 + 2] = z;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = 0; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+
+  // Spiky shell — a sphere whose surface radius oscillates in two directions at once, like a
+  // sea urchin or virus model, not a wound line.
+  function genBurstShell(p) {
+    const arr = new Float32Array(N * 3);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < N; i++) {
+      const yv = 1 - (i / (N - 1)) * 2;
+      const rY = Math.sqrt(Math.max(0, 1 - yv * yv));
+      const theta = golden * i;
+      const spike = 1 + 0.6 * Math.abs(Math.sin(theta * p.freqX) * Math.cos(yv * p.freqY + p.twist));
+      const R = p.radiusScale * spike;
+      arr[i * 3] = Math.cos(theta) * rY * R;
+      arr[i * 3 + 1] = yv * R * (p.heightScale / 2);
+      arr[i * 3 + 2] = Math.sin(theta) * rY * R;
+    }
+    return arr;
+  }
+
+  // Radial burst — points flung outward from a small core at jagged, uneven distances (echoes
+  // shapeExplosion above), not wound around an axis at all.
+  function genExplosionBurst(p) {
+    const arr = new Float32Array(N * 3);
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < N; i++) {
+      const yv = 1 - (i / (N - 1)) * 2;
+      const rY = Math.sqrt(Math.max(0, 1 - yv * yv));
+      const theta = golden * i;
+      const jag = 0.5 + 0.5 * Math.abs(Math.sin(theta * p.freqX + p.twist) * Math.cos(yv * p.freqY));
+      const R = p.radiusScale * (1 + jag * p.b);
+      arr[i * 3] = Math.cos(theta) * rY * R;
+      arr[i * 3 + 1] = yv * R * (p.heightScale / 2);
+      arr[i * 3 + 2] = Math.sin(theta) * rY * R;
+    }
+    return arr;
+  }
+
+  // Circuit grid — a blocky, right-angle Manhattan-routed lattice (echoes shapeCircuit above),
+  // deliberately geometric rather than curved.
+  function genCircuitGrid(p) {
+    const arr = new Float32Array(N * 3);
+    const S = p.radiusScale;
+    const lines = Math.max(3, Math.min(9, p.freqX));
+    const segments = [[[-S, -S, 0], [S, -S, 0]], [[S, -S, 0], [S, S, 0]], [[S, S, 0], [-S, S, 0]], [[-S, S, 0], [-S, -S, 0]]];
+    for (let i = 1; i < lines; i++) {
+      const pos = -S + (i / lines) * 2 * S;
+      if (i % 2 === 0) segments.push([[pos, -S * 0.6, 0], [pos, S * 0.6, 0]]);
+      else segments.push([[-S * 0.6, pos, 0], [S * 0.6, pos, 0]]);
+    }
+    const perSeg = Math.floor(N / segments.length);
+    let idx = 0;
+    for (const [a, b] of segments) {
+      for (let i = 0; i < perSeg; i++) {
+        const t = i / perSeg;
+        arr[idx * 3] = a[0] + (b[0] - a[0]) * t;
+        arr[idx * 3 + 1] = a[1] + (b[1] - a[1]) * t + Math.sin(t * p.freqY + p.twist) * p.heightScale * 0.05;
+        arr[idx * 3 + 2] = a[2] + (b[2] - a[2]) * t;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = 0; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+
+  function shapeGenerative(p) {
+    switch (p.type) {
+      case 'rose': return genRose(p);
+      case 'braid': return genBraid(p);
+      case 'latticeWave': return genLatticeWave(p);
+      case 'burstShell': return genBurstShell(p);
+      case 'explosionBurst': return genExplosionBurst(p);
+      case 'circuitGrid': return genCircuitGrid(p);
+      case 'lissajous': default: return genLissajous(p);
+    }
   }
 
   const MAX_GENERATED_SHAPES = 8; // keeps the rotation from growing forever over a long session

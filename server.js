@@ -622,9 +622,16 @@ app.get('/api/mind', (req, res) => {
 // returned knobs into one fixed, safe parametric formula, so there's genuine novelty per request
 // without ever evaluating anything the model produces. Public/unauthenticated (nothing sensitive
 // in a shape), rate-limited per IP since it's reachable pre-login.
+// Five genuinely different geometric families (see the matching genLissajous/genRose/genBraid/
+// genLatticeWave/genBurstShell functions in public/gate-vortex.js) — WYRD picks which FAMILY of
+// shape to generate, not just different numbers fed through one fixed curve. Without this, every
+// generated shape was visually "spiral lines" no matter what label was attached to it.
+const GATE_SHAPE_TYPES = ['lissajous', 'rose', 'braid', 'latticeWave', 'burstShell', 'explosionBurst', 'circuitGrid'];
+
 function validateGateShapeParams(p) {
   const inRange = (v, min, max) => typeof v === 'number' && isFinite(v) && v >= min && v <= max;
   return !!p
+    && GATE_SHAPE_TYPES.includes(p.type)
     && inRange(p.a, 0.1, 4) && inRange(p.b, 0.1, 4)
     && Number.isInteger(p.freqX) && p.freqX >= 1 && p.freqX <= 12
     && Number.isInteger(p.freqY) && p.freqY >= 1 && p.freqY <= 12
@@ -650,6 +657,12 @@ const CURATED_GATE_SHAPES = [
 // is fine since the whole point is just avoiding back-to-back staleness, not lifetime uniqueness.
 const recentGateShapeLabels = [];
 const MAX_RECENT_GATE_LABELS = 14;
+// Labels alone weren't enough — WYRD kept picking fresh labels ("Tangled Climb", "nervous
+// plait"...) for the exact same underlying "braid" family several times in a row, which is the
+// same staleness problem one level down. Tracking recent TYPES too, and hard-rejecting an LLM
+// response that repeats the immediately preceding type, is what actually forces real variety.
+const recentGateShapeTypes = [];
+const MAX_RECENT_GATE_TYPES = 5;
 let gateShapeCallCount = 0;
 
 function rememberGateShapeLabel(label) {
@@ -657,6 +670,12 @@ function rememberGateShapeLabel(label) {
   if (!clean) return;
   recentGateShapeLabels.push(clean);
   if (recentGateShapeLabels.length > MAX_RECENT_GATE_LABELS) recentGateShapeLabels.shift();
+}
+
+function rememberGateShapeType(type) {
+  if (!type) return;
+  recentGateShapeTypes.push(type);
+  if (recentGateShapeTypes.length > MAX_RECENT_GATE_TYPES) recentGateShapeTypes.shift();
 }
 
 function fallbackGateShape(mind) {
@@ -667,7 +686,13 @@ function fallbackGateShape(mind) {
   const moodSeed = (mind.mood || '').split('').reduce((s, c) => s + c.charCodeAt(0), 0);
   const seed = moodSeed + Math.round((mind.curiosity || 0) * 97) + Math.round((mind.confidence || 0) * 131) + gateShapeCallCount * 37 + 1;
   const rand = (n) => { const x = Math.sin(seed * n) * 10000; return x - Math.floor(x); };
+  // cycles through every family in turn (so it can't get stuck on one), skipping ahead once more
+  // if that would repeat whatever type was used immediately last
+  let type = GATE_SHAPE_TYPES[gateShapeCallCount % GATE_SHAPE_TYPES.length];
+  const lastType = recentGateShapeTypes[recentGateShapeTypes.length - 1];
+  if (type === lastType) type = GATE_SHAPE_TYPES[(gateShapeCallCount + 1) % GATE_SHAPE_TYPES.length];
   return {
+    type,
     a: 0.5 + rand(1) * 2, b: 0.5 + rand(2) * 2,
     freqX: 1 + Math.floor(rand(3) * 8), freqY: 1 + Math.floor(rand(4) * 8), freqZ: 1 + Math.floor(rand(5) * 8),
     turns: 1 + rand(6) * 5, radiusScale: 0.8 + rand(7) * 1.6, heightScale: 0.6 + rand(8) * 2.2, twist: rand(9) * 2,
@@ -690,17 +715,31 @@ Shapes already permanently built into your rotation — treat this as your exist
 
 Shapes you personally generated most recently in this session, oldest first — do NOT repeat any of these or produce something extremely close to one: ${recentGateShapeLabels.length ? recentGateShapeLabels.join(', ') : '(none yet — this is your first one)'}.
 
-Reach for something genuinely different from all of the above — think across math, nature, technology, emotion, everyday objects, anything — then encode it as parametric knobs. Respond with ONLY strict JSON, no markdown fences, no commentary: {"a": number 0.2-3, "b": number 0.2-3, "freqX": integer 1-9, "freqY": integer 1-9, "freqZ": integer 1-9, "turns": number 1-6, "radiusScale": number 0.5-2.5, "heightScale": number 0.5-3, "twist": number 0-2, "label": "a short 1-3 word name for this specific shape"}.`;
+The underlying geometric families you've used most recently, oldest first: ${recentGateShapeTypes.length ? recentGateShapeTypes.join(', ') : '(none yet)'}. A different label on the same family still counts as repeating yourself — do NOT pick ${recentGateShapeTypes[recentGateShapeTypes.length - 1] || 'the same one'} again right now, pick a different family below.
+
+Reach for something genuinely different from all of the above — think across math, nature, the classical elements, technology, emotion, everyday objects, anything. Your owner has explicitly said there have been too many spirals lately — treat "lissajous" (the one spiral-family option below) as a last resort, not a default; reach for one of the other six first unless a spiral is truly the only honest fit for what you're imagining. First pick which underlying geometric FAMILY actually matches what you're imagining (this matters more than the numbers — two shapes with the same family and different numbers still look like variations on one idea):
+- "rose": flower/gear-like petals — radius oscillates with angle instead of spiraling outward
+- "braid": 2-5 separate strands winding around each other like rope, not one line
+- "latticeWave": a flat rippling grid/mesh, like fabric or water — not a line at all
+- "burstShell": a spiky sphere/shell, like a sea urchin or virus model
+- "explosionBurst": a dense core with jagged debris flung outward at uneven distances, like a blast
+- "circuitGrid": a blocky, right-angle circuit-board lattice — deliberately geometric, not curved
+- "lissajous" (avoid unless nothing else fits): a single wound/spiraling line, radius pulsing as it winds
+
+Then encode your idea as parametric knobs within that family. Respond with ONLY strict JSON, no markdown fences, no commentary: {"type": "rose"|"braid"|"latticeWave"|"burstShell"|"explosionBurst"|"circuitGrid"|"lissajous", "a": number 0.2-3, "b": number 0.2-3, "freqX": integer 1-9, "freqY": integer 1-9, "freqZ": integer 1-9, "turns": number 1-6, "radiusScale": number 0.5-2.5, "heightScale": number 0.5-3, "twist": number 0-2, "label": "a short 1-3 word name for this specific shape"}.`;
     const raw = await callLLMSimple(systemPrompt, 'Generate the shape now.', 200);
     if (raw) {
       try {
         const parsed = JSON.parse(raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim());
-        if (validateGateShapeParams(parsed) && !recentGateShapeLabels.includes(parsed.label.trim().toLowerCase())) shape = parsed;
+        const repeatsLabel = recentGateShapeLabels.includes((parsed.label || '').trim().toLowerCase());
+        const repeatsType = parsed.type === recentGateShapeTypes[recentGateShapeTypes.length - 1];
+        if (validateGateShapeParams(parsed) && !repeatsLabel && !repeatsType) shape = parsed;
       } catch (err) { /* malformed — fall through to the deterministic fallback below */ }
     }
   }
   if (!shape) shape = fallbackGateShape(mind);
   rememberGateShapeLabel(shape.label);
+  rememberGateShapeType(shape.type);
   res.json(shape);
 });
 
