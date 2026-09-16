@@ -9,6 +9,9 @@ dist/
 web-build/
 expo-env.d.ts
 
+# copied by scripts/copy-canvaskit.js postinstall (web target only) — regenerated, not source
+/public/canvaskit.wasm
+
 # Native
 .kotlin/
 *.orig.*

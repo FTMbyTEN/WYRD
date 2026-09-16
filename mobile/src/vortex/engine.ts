@@ -23,6 +23,9 @@ export interface VortexEngine {
   goTo: (i: number) => void;
   setIntensity: (v: number) => void;
   togglePause: () => boolean;
+  /** Name of the shape it starts on — announce this yourself via an effect, not during render;
+   *  the engine no longer calls `onShape` synchronously at construction time (see VortexCanvas). */
+  initialShapeName: string;
 }
 
 export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine {
@@ -38,8 +41,6 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
   let intensityTarget = 0;
   let paused = false;
   const stars = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() }));
-
-  onShape?.(shapes[0].name);
 
   function jump(next: number) {
     from = pos.slice();
@@ -69,6 +70,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
   const bucketPoints: { x: number; y: number }[][] = Array.from({ length: BUCKETS }, () => []);
 
   return {
+    initialShapeName: shapes[0].name,
     burst() { burstStart = performance.now(); jump(rand()); },
     next() { jump((idx + 1) % shapes.length); },
     prev() { jump((idx - 1 + shapes.length) % shapes.length); },

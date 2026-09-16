@@ -21,6 +21,31 @@ try {
 } catch (err) {}
 
 const app = express();
+
+// The website (public/) is same-origin and never needed this — added for the mobile client
+// (mobile/), whose web target runs on its own dev-server port (e.g. localhost:8081/19006) while
+// this API stays on :4477, which is cross-origin as far as the browser is concerned. Scoped to
+// localhost/127.0.0.1 origins only: a real deployment is never accessed via a "localhost" Origin
+// header from an outside browser, so this doesn't relax anything for production — it only
+// unblocks the exact case of running the API and a web dev server on two local ports. Reflects
+// the origin (required for Access-Control-Allow-Credentials with a non-wildcard origin) rather
+// than allowing '*', since these endpoints are cookie-authenticated.
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && LOCAL_ORIGIN_RE.test(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Access-Control-Allow-Credentials', 'true');
+    res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    // Reflect whatever the preflight actually asked for (e.g. the SSE client's Cache-Control)
+    // instead of a fixed list — this is request-scoped, not a real relaxation, since it only
+    // ever echoes back what the browser itself already decided this specific request needs.
+    res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 

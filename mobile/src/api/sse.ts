@@ -29,6 +29,9 @@ class WyrdStream {
 
     this.es = new EventSource<EventName>(`${BASE_URL}/api/stream`, {
       headers,
+      withCredentials: true, // required on web for the browser to attach the session cookie
+      // to a cross-origin request at all (separate from the CORS headers on the server side);
+      // harmless no-op on native, where the manual Cookie header above already covers it.
       pollingInterval: 0, // no auto-reconnect polling — we drive our own backoff below
     });
 
