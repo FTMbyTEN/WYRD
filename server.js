@@ -22,18 +22,26 @@ try {
 
 const app = express();
 
+// Trusts the first hop's X-Forwarded-* headers — required for req.secure (the session cookie's
+// Secure flag) and req.ip (rate limiting) to reflect reality once this sits behind a hosting
+// platform's TLS-terminating reverse proxy (Render, Railway, Fly, Heroku, ...); a no-op for
+// direct localhost access, which has no proxy in front of it to lie about the protocol.
+app.set('trust proxy', 1);
+
 // The website (public/) is same-origin and never needed this — added for the mobile client
 // (mobile/), whose web target runs on its own dev-server port (e.g. localhost:8081/19006) while
 // this API stays on :4477, which is cross-origin as far as the browser is concerned. Scoped to
-// localhost/127.0.0.1 origins only: a real deployment is never accessed via a "localhost" Origin
-// header from an outside browser, so this doesn't relax anything for production — it only
-// unblocks the exact case of running the API and a web dev server on two local ports. Reflects
-// the origin (required for Access-Control-Allow-Credentials with a non-wildcard origin) rather
-// than allowing '*', since these endpoints are cookie-authenticated.
+// localhost/127.0.0.1 origins by default — a real deployment is never accessed via a "localhost"
+// Origin header from an outside browser, so this doesn't relax anything on its own. If the mobile
+// web build ends up on a different origin than this API in production (e.g. a separate static
+// host), list it in ALLOWED_ORIGINS (comma-separated) rather than editing this file. Reflects the
+// origin (required for Access-Control-Allow-Credentials with a non-wildcard origin) rather than
+// allowing '*', since these endpoints are cookie-authenticated.
 const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const EXTRA_ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && LOCAL_ORIGIN_RE.test(origin)) {
+  if (origin && (LOCAL_ORIGIN_RE.test(origin) || EXTRA_ALLOWED_ORIGINS.includes(origin))) {
     res.set('Access-Control-Allow-Origin', origin);
     res.set('Access-Control-Allow-Credentials', 'true');
     res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -1002,9 +1010,16 @@ setInterval(() => {
 // ---- Accounts: register / login / logout / who-am-i ----
 const USERNAME_RE = /^[a-zA-Z0-9_-]{2,20}$/;
 
-function setSessionCookie(res, token) {
-  // no Secure flag: this runs over plain http on localhost/LAN by default
-  res.set('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
+// `req.secure` reflects the real scheme even behind a TLS-terminating reverse proxy (Render,
+// Railway, Fly, etc. all forward plain HTTP internally) because of `app.set('trust proxy', 1)`
+// below — so this adds Secure automatically in production without breaking local http dev.
+function setSessionCookie(req, res, token) {
+  const secure = req.secure ? ' Secure;' : '';
+  res.set('Set-Cookie', `sid=${token}; HttpOnly;${secure} SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
+}
+function clearSessionCookie(req, res) {
+  const secure = req.secure ? ' Secure;' : '';
+  res.set('Set-Cookie', `sid=; HttpOnly;${secure} SameSite=Lax; Path=/; Max-Age=0`);
 }
 
 app.post('/api/auth/register', (req, res) => {
@@ -1023,7 +1038,7 @@ app.post('/api/auth/register', (req, res) => {
   }
   const user = createUser(username, password);
   const token = createSession(user.id);
-  setSessionCookie(res, token);
+  setSessionCookie(req, res, token);
   touchProfileVisit(user.id); // first-ever visit — the mind starts genuinely curious about them
   res.json({ ok: true, username: user.username });
 });
@@ -1038,7 +1053,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ ok: false, error: 'unrecognized designation or key' });
   }
   const token = createSession(user.id);
-  setSessionCookie(res, token);
+  setSessionCookie(req, res, token);
   touchProfileVisit(user.id);
   res.json({ ok: true, username: user.username });
 });
@@ -1046,7 +1061,7 @@ app.post('/api/auth/login', (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   const token = parseCookies(req).sid;
   if (token) destroySession(token);
-  res.set('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
@@ -1108,7 +1123,7 @@ app.post('/api/account/delete', requireAuth, (req, res) => {
     return res.status(401).json({ ok: false, error: 'incorrect password — nothing was deleted' });
   }
   deleteUserAccount(req.user.id);
-  res.set('Set-Cookie', 'sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+  clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
@@ -3747,7 +3762,22 @@ if (DISCORD_BOT_TOKEN) {
   discordClient.login(DISCORD_BOT_TOKEN).catch((err) => console.warn('[discord] login failed:', err.message));
 }
 
-const PORT = 4477;
+// Almost every host (Render, Railway, Fly, Heroku, ...) assigns the port at runtime via $PORT
+// and expects the app to bind to it — 4477 stays the local-dev default so nothing changes here.
+// Without these, a crash on a hosting platform just shows as the process silently exiting in the
+// logs with no indication why. Logging clearly and then exiting (rather than trying to limp on)
+// lets the platform's own restart policy do its job predictably instead of running on in a
+// possibly-corrupted state.
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaught exception:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandled rejection:', reason);
+  process.exit(1);
+});
+
+const PORT = process.env.PORT || 4477;
 app.listen(PORT, () => {
   console.log(`WYRD listening on http://localhost:${PORT}`);
   console.log(ANTHROPIC_API_KEY
