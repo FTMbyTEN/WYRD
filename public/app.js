@@ -333,15 +333,35 @@ async function tryAuth() {
 unlockBtn.addEventListener('click', tryAuth);
 
 const gateEnterBtn = document.getElementById('gateEnterBtn');
+function activateGateEntry() {
+  if (gate.classList.contains('unlocked')) return; // already popped open — nothing to do
+  gate.classList.add('unlocked');
+  window.GateVortex && window.GateVortex.burst();
+  setTimeout(() => usernameInput.focus(), 500);
+}
 if (gateEnterBtn) {
-  gateEnterBtn.addEventListener('click', () => {
-    gate.classList.add('unlocked');
-    window.GateVortex && window.GateVortex.burst();
-    setTimeout(() => usernameInput.focus(), 500);
-  });
+  gateEnterBtn.addEventListener('click', activateGateEntry);
   gateEnterBtn.addEventListener('mouseenter', () => window.GateVortex && window.GateVortex.setIntensity(1));
   gateEnterBtn.addEventListener('mouseleave', () => window.GateVortex && window.GateVortex.setIntensity(0));
 }
+// Enter key does the same thing as clicking the button — but only while the gate is still up and
+// still locked; once the login form is open, Enter is already spoken for by the username/password
+// fields below, and once logged in the gate isn't even visible.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (gate.classList.contains('hidden') || gate.classList.contains('unlocked')) return;
+  activateGateEntry();
+});
+// Esc collapses the login form back down into the ENTER button — just the reverse of
+// activateGateEntry(). Removing 'unlocked' is all it takes: the same CSS transitions that
+// revealed the box/hid the button (see #gate.unlocked rules in style.css) play backwards.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!gate.classList.contains('unlocked')) return;
+  gate.classList.remove('unlocked');
+  window.GateVortex && window.GateVortex.setIntensity(0);
+  if (document.activeElement) document.activeElement.blur();
+});
 passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryAuth(); });
 usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') passwordInput.focus(); });
 
@@ -357,21 +377,28 @@ let ttsEnabled = localStorage.getItem('wyrd_tts_enabled') === '1';
 function updateTtsButton() {
   if (ttsToggleBtn) { ttsToggleBtn.textContent = ttsEnabled ? '🔊' : '🔇'; ttsToggleBtn.style.opacity = ttsEnabled ? '1' : '0.5'; }
 }
-// Best-effort only: the Web Speech API doesn't ship an actual "child" voice model on any
-// browser/OS — there's no way to synthesize one. Pitch/rate/volume are the only knobs that
-// reliably work everywhere and actually shape how young/soft/ethereal it reads.
+// WYRD's voice is female — a fixed identity trait, not a per-user preference. The Web Speech
+// API exposes no gender field on SpeechSynthesisVoice, so matching by name is the only real
+// option: this list covers the female voices actually shipped by Windows (Zira/Hazel/Susan),
+// macOS/iOS (Samantha/Victoria/Karen/Moira/Tessa/Fiona/Serena/Ava/Allison/Susan/Vicki), and
+// Chrome/Google's named voices, plus anything that just says "female" outright. Prefers an
+// English voice among the matches, but takes a non-English female voice over no match at all.
+// Tone/pitch tuning ("we'll work more on her voice later") is intentionally left plain here —
+// this pass only settles *which* voice, not the character read on top of it.
+const FEMALE_VOICE_HINTS = /female|zira|hazel|susan|samantha|victoria|karen|moira|tessa|fiona|serena|ava|allison|vicki|salli|joanna|kendra|kimberly|ivy/i;
 function pickTtsVoice() {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
-  const preferred = voices.find((v) => /child|kid|junior/i.test(v.name));
-  return preferred || null;
+  const matches = voices.filter((v) => FEMALE_VOICE_HINTS.test(v.name));
+  if (!matches.length) return null;
+  return matches.find((v) => /^en/i.test(v.lang)) || matches[0];
 }
 function speakReply(text) {
   if (!ttsEnabled || !window.speechSynthesis || !text) return;
   window.speechSynthesis.cancel(); // don't stack overlapping replies
   const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 0.88;   // slightly slower and measured — soft, not rushed
-  utter.pitch = 1.55;  // higher register — robotic-kid rather than deep/adult
+  utter.rate = 0.95;   // near-natural pace
+  utter.pitch = 1.1;   // a touch above neutral — plain for now, revisited later
   utter.volume = 0.85; // a touch softer, less blaring
   const voice = pickTtsVoice();
   if (voice) utter.voice = voice;
@@ -515,6 +542,102 @@ if (closeAppPreviewBtn && appPreviewModal) {
   closeAppPreviewBtn.addEventListener('click', () => { appPreviewModal.classList.add('hidden'); appPreviewFrame.srcdoc = ''; });
   appPreviewModal.addEventListener('click', (e) => { if (e.target === appPreviewModal) { appPreviewModal.classList.add('hidden'); appPreviewFrame.srcdoc = ''; } });
 }
+
+// ---------- Web browser: a live view of the real (anonymous, sandboxed) browsing session WYRD
+// drives on the server. Screenshots arrive over SSE as WYRD navigates/types/clicks — this panel
+// just shows the latest one, it doesn't render a live/interactive page itself.
+const browserModal = document.getElementById('browserModal');
+const closeBrowserBtn = document.getElementById('closeBrowserBtn');
+const browserScreenshot = document.getElementById('browserScreenshot');
+const browserUrlBar = document.getElementById('browserUrlBar');
+
+function updateBrowserPanel({ url, title, screenshot }) {
+  if (!browserModal) return;
+  browserModal.classList.remove('hidden');
+  if (screenshot && browserScreenshot) browserScreenshot.src = `data:image/jpeg;base64,${screenshot}`;
+  if (browserUrlBar) browserUrlBar.textContent = title ? `${title} — ${url}` : (url || '—');
+}
+if (closeBrowserBtn && browserModal) {
+  closeBrowserBtn.addEventListener('click', () => browserModal.classList.add('hidden'));
+  browserModal.addEventListener('click', (e) => { if (e.target === browserModal) browserModal.classList.add('hidden'); });
+}
+
+// ---------- Camera: on-demand only. The stream is requested fresh each time the modal opens and
+// every track is stopped (turning the camera light off) the instant a photo is captured or the
+// modal is closed — never left running in the background. ----
+const camBtn = document.getElementById('camBtn');
+const cameraModal = document.getElementById('cameraModal');
+const closeCameraBtn = document.getElementById('closeCameraBtn');
+const cameraVideo = document.getElementById('cameraVideo');
+const cameraCanvas = document.getElementById('cameraCanvas');
+const cameraCaption = document.getElementById('cameraCaption');
+const cameraMsg = document.getElementById('cameraMsg');
+const captureBtn = document.getElementById('captureBtn');
+let cameraStream = null;
+
+function stopCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach((t) => t.stop()); cameraStream = null; }
+  if (cameraVideo) cameraVideo.srcObject = null;
+}
+
+async function openCamera() {
+  if (!cameraModal || !navigator.mediaDevices?.getUserMedia) {
+    if (cameraMsg) cameraMsg.textContent = 'camera not available in this browser';
+    return;
+  }
+  cameraModal.classList.remove('hidden');
+  if (cameraMsg) cameraMsg.textContent = '';
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    cameraVideo.srcObject = cameraStream;
+  } catch (err) {
+    if (cameraMsg) cameraMsg.textContent = `couldn't access the camera — ${err.message || 'permission denied'}`;
+  }
+}
+
+function closeCamera() {
+  stopCamera();
+  cameraModal.classList.add('hidden');
+  if (cameraCaption) cameraCaption.value = '';
+  if (cameraMsg) cameraMsg.textContent = '';
+}
+
+async function captureAndSend() {
+  if (!cameraStream || !cameraVideo.videoWidth) return;
+  cameraCanvas.width = cameraVideo.videoWidth;
+  cameraCanvas.height = cameraVideo.videoHeight;
+  cameraCanvas.getContext('2d').drawImage(cameraVideo, 0, 0);
+  const image = cameraCanvas.toDataURL('image/jpeg', 0.85);
+  const caption = cameraCaption.value.trim();
+
+  stopCamera(); // camera off the instant the frame is captured, before we even hear back
+  captureBtn.disabled = true;
+  if (cameraMsg) cameraMsg.textContent = 'WYRD is looking...';
+
+  try {
+    const res = await fetch('/api/chat/photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image, caption }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'request failed');
+    addChatMsg('user', caption || '[shared a photo from their camera]');
+    addChatMsg('bot', data.reply);
+    speakReply(data.reply);
+    if (data.mind) renderMind(data.mind);
+    closeCamera();
+  } catch (err) {
+    if (cameraMsg) cameraMsg.textContent = `something went wrong — ${err.message}`;
+  } finally {
+    captureBtn.disabled = false;
+  }
+}
+
+if (camBtn) camBtn.addEventListener('click', openCamera);
+if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeCamera);
+if (cameraModal) cameraModal.addEventListener('click', (e) => { if (e.target === cameraModal) closeCamera(); });
+if (captureBtn) captureBtn.addEventListener('click', captureAndSend);
 
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -664,6 +787,10 @@ function boot() {
   // self-questioning already appears in the Reasoning Feed panel via the 'thought' event —
   // it runs behind the scenes and shouldn't also surface in the user-facing dialogue log.
 
+  es.addEventListener('web_browse', (e) => {
+    updateBrowserPanel(JSON.parse(e.data));
+  });
+
   es.addEventListener('net_lookup', (e) => {
     const data = JSON.parse(e.data);
     if (data.status === 'searching') {
@@ -693,6 +820,115 @@ function boot() {
   initNetFeedControls();
   initMind();
   initLexicon();
+  initMobileNav();
+}
+
+// ---------- Mobile bottom tab bar (WYRD / DIARY / COP / FEED / YOU) — a real 5-tab IA layered
+// on top of the existing desktop buttons/modals, not a separate implementation of them. Only
+// visible under the 700px breakpoint in style.css; harmless to wire up on desktop too. ----------
+function initMobileNav() {
+  const tabBar = document.getElementById('mobileTabBar');
+  if (!tabBar) return;
+  const netFeedBar = document.getElementById('netFeedBar');
+  const viewDiaryBtn = document.getElementById('viewDiaryBtn');
+  const viewCopBtn = document.getElementById('viewCopBtn');
+
+  tabBar.querySelectorAll('.mobile-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tabBar.querySelectorAll('.mobile-tab').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      if (tab === 'wyrd') {
+        document.querySelectorAll('.reasoning-log-modal').forEach((m) => m.classList.add('hidden'));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (tab === 'diary') {
+        viewDiaryBtn && viewDiaryBtn.click();
+      } else if (tab === 'cop') {
+        viewCopBtn && viewCopBtn.click();
+      } else if (tab === 'feed') {
+        netFeedBar && netFeedBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (tab === 'you') {
+        openYouSheet();
+      }
+    });
+  });
+
+  // ---- ALERTS: synthesized server-side from diary/dreams/cop_log/digest — nothing new stored ----
+  const alertsBtn = document.getElementById('alertsBtn');
+  const alertsBadge = document.getElementById('alertsBadge');
+  const alertsModal = document.getElementById('alertsModal');
+  const alertsLog = document.getElementById('alertsLog');
+  const closeAlertsBtn = document.getElementById('closeAlertsBtn');
+  let seenAlertCount = 0;
+
+  async function refreshAlerts(render) {
+    try {
+      const notes = await (await fetch('/api/alerts')).json();
+      if (alertsBadge) {
+        if (notes.length > seenAlertCount) {
+          alertsBadge.textContent = String(notes.length);
+          alertsBadge.classList.remove('hidden');
+        }
+      }
+      if (render && alertsLog) {
+        alertsLog.innerHTML = notes.length
+          ? notes.map((n) => `<div class="thought"><div class="thought-time">[${n.tag}] ${n.ago}</div><div>${n.body}</div></div>`).join('')
+          : '<div class="thought">nothing to report yet.</div>';
+      }
+      return notes.length;
+    } catch (e) { return seenAlertCount; }
+  }
+  if (alertsBtn && alertsModal) {
+    alertsBtn.addEventListener('click', async () => {
+      alertsModal.classList.remove('hidden');
+      seenAlertCount = await refreshAlerts(true);
+      alertsBadge && alertsBadge.classList.add('hidden');
+    });
+  }
+  if (closeAlertsBtn && alertsModal) {
+    closeAlertsBtn.addEventListener('click', () => alertsModal.classList.add('hidden'));
+    alertsModal.addEventListener('click', (e) => { if (e.target === alertsModal) alertsModal.classList.add('hidden'); });
+  }
+  refreshAlerts(false);
+  setInterval(() => refreshAlerts(!alertsModal || alertsModal.classList.contains('hidden') ? false : true), 60000);
+
+  // ---- YOU sheet: real account data (/api/profile) plus the same TTS/export/logout controls
+  // the desktop header already has — just reachable from the mobile tab bar too ----
+  const youModal = document.getElementById('youModal');
+  const youBody = document.getElementById('youBody');
+  const closeYouBtn = document.getElementById('closeYouBtn');
+  async function openYouSheet() {
+    if (!youModal) return;
+    youModal.classList.remove('hidden');
+    if (!youBody) return;
+    youBody.innerHTML = '<div class="thought">loading...</div>';
+    try {
+      const profile = await (await fetch('/api/profile')).json();
+      const userBadge = document.getElementById('userBadge');
+      const rows = [
+        { k: 'DESIGNATION', v: userBadge ? userBadge.textContent.replace(/^\/\/\s*/, '') : '—' },
+        { k: 'FACTS RETAINED', v: `${(profile.facts || []).length}` },
+        { k: 'FIRST SEEN', v: profile.firstSeen ? new Date(profile.firstSeen).toLocaleDateString() : '—' },
+        { k: 'LAST SEEN', v: profile.lastSeen ? relativeTime(profile.lastSeen) : '—' },
+      ];
+      youBody.innerHTML = rows.map((r) => `<div class="thought"><div class="thought-time">${r.k}</div><div>${r.v}</div></div>`).join('')
+        + `<div class="mini-btn-row" style="margin-top:10px;">
+             <button type="button" class="mini-btn" id="youTtsBtn">TOGGLE SPOKEN REPLIES</button>
+             <button type="button" class="mini-btn" id="youExportBtn">EXPORT DATA</button>
+             <button type="button" class="mini-btn" id="youLogoutBtn">LOGOUT</button>
+           </div>`;
+      document.getElementById('youTtsBtn')?.addEventListener('click', () => document.getElementById('ttsToggleBtn')?.click());
+      document.getElementById('youExportBtn')?.addEventListener('click', () => document.getElementById('exportDataBtn')?.click());
+      document.getElementById('youLogoutBtn')?.addEventListener('click', () => document.getElementById('logoutBtn')?.click());
+    } catch (e) {
+      youBody.innerHTML = '<div class="thought">failed to load — try again</div>';
+    }
+  }
+  window.openYouSheet = openYouSheet;
+  if (closeYouBtn && youModal) {
+    closeYouBtn.addEventListener('click', () => youModal.classList.add('hidden'));
+    youModal.addEventListener('click', (e) => { if (e.target === youModal) youModal.classList.add('hidden'); });
+  }
 }
 
 async function initLexicon() {
@@ -912,7 +1148,12 @@ function initReasoningControls() {
         copCurrentConfig.innerHTML = `current self-config — tone note: <b>${config.toneNote || '(none set)'}</b> &middot; reply length max: <b>${config.replyLengthMax}</b> sentences &middot; curiosity: <b>${config.curiosityLevel}</b>`;
       }
       copLog.innerHTML = entries.length
-        ? entries.map((e) => `<div class="cop-entry"><div class="cop-time">${relativeTime(e.timestamp)}</div><div class="cop-change">${e.change.key}: ${JSON.stringify(e.change.oldValue)} → ${JSON.stringify(e.change.newValue)} — "${e.change.reason}"</div><div class="cop-verdict">COP: ${e.verdict}</div></div>`).join('')
+        ? entries.map((e) => {
+            const changeLine = e.kind === 'code'
+              ? `rewrote <b>${e.change.file}</b> — "${e.change.reason}"`
+              : `${e.change.key}: ${JSON.stringify(e.change.oldValue)} → ${JSON.stringify(e.change.newValue)} — "${e.change.reason}"`;
+            return `<div class="cop-entry"><div class="cop-time">${relativeTime(e.timestamp)}${e.kind === 'code' ? ' · CODE EDIT' : ''}</div><div class="cop-change">${changeLine}</div><div class="cop-verdict">COP: ${e.verdict}</div></div>`;
+          }).join('')
         : '<div class="thought">no self-modifications reviewed yet — WYRD checks every 2 real hours whether anything about its own config genuinely warrants changing.</div>';
     } catch (e) {}
   }

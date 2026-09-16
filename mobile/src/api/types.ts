@@ -170,6 +170,13 @@ export interface NextTick {
   cycleMs: number;
 }
 
+// Server-synthesized from diary/dreams/cop_log/digest — nothing new stored (see GET /api/alerts).
+export interface AlertNote {
+  tag: 'DIARY' | 'DREAM' | 'COP' | 'DIGEST';
+  ago: string;
+  body: string;
+}
+
 // ---- SSE event payloads (GET /api/stream) ----
 export type StreamEvent =
   | { event: 'mind'; data: Mind }

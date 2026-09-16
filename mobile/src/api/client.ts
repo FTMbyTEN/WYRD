@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
+  AlertNote,
   AuthResult,
   ChatResult,
   ConceptsGraph,
@@ -154,4 +155,5 @@ export const api = {
 
   // ---- misc ----
   llmStatus: () => get<{ active: boolean; model: string | null }>('/api/llm/status'),
+  alerts: () => get<AlertNote[]>('/api/alerts'),
 };

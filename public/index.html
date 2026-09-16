@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>WYRD</title>
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -51,6 +52,7 @@
       <span id="statusLine" class="status">STATUS: IDLE</span>
       <span id="clock" class="clock">00:00:00</span>
       <span id="userBadge" class="user-badge"></span>
+      <button id="alertsBtn" type="button" class="logout-btn alerts-btn" title="alerts">ALERTS<span id="alertsBadge" class="alerts-badge hidden">0</span></button>
       <button id="ttsToggleBtn" type="button" class="logout-btn" title="toggle spoken replies">🔊</button>
       <button id="exportDataBtn" type="button" class="logout-btn">EXPORT DATA</button>
       <button id="logoutBtn" type="button" class="logout-btn">LOGOUT</button>
@@ -130,6 +132,7 @@
         <span class="prompt-caret">&gt;</span>
         <input id="chatInput" type="text" placeholder="transmit input..." autocomplete="off" />
         <button type="button" id="micBtn" title="voice command">MIC</button>
+        <button type="button" id="camBtn" title="show WYRD a photo">CAM</button>
         <button type="submit">SEND</button>
       </form>
       <div id="voiceStatus" class="voice-status"></div>
@@ -240,6 +243,65 @@
       </div>
     </div>
   </div>
+
+  <div id="browserModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box app-preview-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ WEB_BROWSER <span class="sub">[ a fresh, anonymous session — never logged in as you ]</span></span>
+        <span id="closeBrowserBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div id="browserUrlBar" class="browser-url-bar">—</div>
+      <div class="app-preview-wrap">
+        <img id="browserScreenshot" class="browser-screenshot" alt="live browser view" />
+      </div>
+    </div>
+  </div>
+
+  <div id="cameraModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box app-preview-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ CAMERA <span class="sub">[ on-demand only — off the instant you capture or close this ]</span></span>
+        <span id="closeCameraBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div class="app-preview-wrap camera-wrap">
+        <video id="cameraVideo" autoplay playsinline muted></video>
+        <canvas id="cameraCanvas" class="hidden"></canvas>
+      </div>
+      <div id="cameraMsg" class="camera-msg"></div>
+      <div class="camera-controls">
+        <input id="cameraCaption" type="text" placeholder="ask something specific (optional) — e.g. what am I wearing?" autocomplete="off" />
+        <button type="button" id="captureBtn" class="mini-btn">CAPTURE</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="alertsModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ ALERTS <span class="sub">[ derived from what WYRD has already logged — nothing new stored ]</span></span>
+        <span id="closeAlertsBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div id="alertsLog" class="reasoning-log"></div>
+    </div>
+  </div>
+
+  <div id="youModal" class="reasoning-log-modal hidden">
+    <div class="reasoning-log-box">
+      <div class="reasoning-log-header">
+        <span>&gt;_ YOU <span class="sub">[ your account on this node ]</span></span>
+        <span id="closeYouBtn" class="reasoning-log-close">&times;</span>
+      </div>
+      <div id="youBody" class="reasoning-log"></div>
+    </div>
+  </div>
+
+  <nav id="mobileTabBar" class="mobile-tab-bar">
+    <button type="button" class="mobile-tab active" data-tab="wyrd">WYRD</button>
+    <button type="button" class="mobile-tab" data-tab="diary">DIARY</button>
+    <button type="button" class="mobile-tab" data-tab="cop">COP</button>
+    <button type="button" class="mobile-tab" data-tab="feed">FEED</button>
+    <button type="button" class="mobile-tab" data-tab="you">YOU</button>
+  </nav>
 
 </div>
 

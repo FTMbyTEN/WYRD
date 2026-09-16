@@ -4,7 +4,6 @@ import { OverlayShell } from './OverlayShell';
 import { Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { useAlerts } from '../../api/alerts';
-import { timeAgo } from '../../util/time';
 
 export function AlertsOverlay({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const alerts = useAlerts();
@@ -13,14 +12,14 @@ export function AlertsOverlay({ visible, onClose }: { visible: boolean; onClose:
       <ScrollView contentContainerStyle={styles.content}>
         {alerts.length === 0 && (
           <Mono style={{ color: colors.greenBorderDim, fontSize: 11.5, textAlign: 'center', marginTop: 20 }}>
-            nothing yet — real activity (diary, COP, dreams, ingests) shows up here live
+            nothing to report yet — derived from what WYRD has already logged (diary, COP, dreams, digest milestones)
           </Mono>
         )}
         {alerts.map((a) => (
           <View key={a.id} style={styles.item}>
             <View style={styles.itemHead}>
               <Mono style={styles.tag}>{a.tag}</Mono>
-              <Mono style={styles.tag}>{timeAgo(a.timestamp)}</Mono>
+              <Mono style={styles.tag}>{a.ago}</Mono>
             </View>
             <Mono style={styles.body}>{a.body}</Mono>
           </View>

@@ -4,7 +4,7 @@ import { OverlayShell } from './OverlayShell';
 import { BrainCanvas } from '../../components/BrainCanvas';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
-import { useGrowth, useLexicon } from '../../api/hooks';
+import { useBrainActivitySignal, useGrowth, useLexicon } from '../../api/hooks';
 
 /** The design's brain visual scales purely on look, not a literal node count; the real backend's
  *  brain3d.html derives neuron growth client-side with no dedicated endpoint (confirmed absent
@@ -14,6 +14,7 @@ import { useGrowth, useLexicon } from '../../api/hooks';
 export function BrainOverlay({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { stats } = useLexicon();
   const { snapshots } = useGrowth();
+  const brainActivity = useBrainActivitySignal();
 
   const learnedToday = useMemo(() => {
     if (!snapshots.length) return null;
@@ -43,7 +44,7 @@ export function BrainOverlay({ visible, onClose }: { visible: boolean; onClose: 
       }
     >
       <View style={{ flex: 1 }}>
-        <BrainCanvas nodeCount={Math.min(400, Math.max(80, stats?.learned ?? 150))} />
+        <BrainCanvas nodeCount={Math.min(400, Math.max(80, stats?.learned ?? 150))} activitySignal={brainActivity} />
         <Mono style={styles.caption}>NODES GROW AS IT LEARNS · NOT A FIXED PROP</Mono>
       </View>
     </OverlayShell>

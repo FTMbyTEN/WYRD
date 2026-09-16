@@ -12,6 +12,7 @@ import type {
   Profile,
   ReasoningNote,
   SelfConfig,
+  StreamEvent,
 } from './types';
 
 /** Fetch once on mount (and whenever `deps` change), re-fetch on an optional poll interval. */
@@ -161,4 +162,18 @@ export function useConversations(limit = 50) {
     [setData],
   );
   return { total: data?.total ?? 0, turns: data?.turns ?? [], loading, error, reload };
+}
+
+/** Increments once per real "WYRD digested something" event (an ingest landing, a reasoning
+ *  tick, a self-question, a COP report) — feed it straight into BrainCanvas's `activitySignal`
+ *  so the brain visual's burst pulses are tied to genuine backend activity, not a fake timer. */
+export function useBrainActivitySignal() {
+  const [signal, setSignal] = useState(0);
+  useEffect(() => {
+    const bump = () => setSignal((n) => n + 1);
+    const events: StreamEvent['event'][] = ['ingested', 'thought', 'cop_report'];
+    const unsubs = events.map((event) => wyrdStream.subscribe(event, bump));
+    return () => unsubs.forEach((u) => u());
+  }, []);
+  return signal;
 }

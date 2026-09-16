@@ -20,7 +20,10 @@ data/dreams.json
 data/growth_history.json
 data/self_config.json
 data/cop_log.json
+data/self_code_edits.json
+data/curriculum.json
 data/datasets/
+data/photos/
 data/*.tmp
 
 # generated reasoning trace files (thousands of small .md files)

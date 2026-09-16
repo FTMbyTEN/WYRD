@@ -362,6 +362,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-width: 0; /* flex item of #app — see the .brain-panel comment above */
   padding: 9px 28px;
   border-bottom: 1px solid var(--green-faint);
   background: rgba(0, 10, 3, 0.5);
@@ -439,8 +440,66 @@ main {
 }
 
 @media (max-width: 700px) {
+  /* #app is height:100% (fixed to the viewport) with html/body normally overflow:hidden — that's
+     fine when main's two panels sit side by side, but once they stack into one column there just
+     isn't room for both inside a single screen height. Without an escape hatch, flexbox's default
+     min-height:auto lets `main` (flex:1 inside #app) get squeezed down to fit the fixed #app
+     height, which was silently collapsing .chat-panel to ~1px with no visible symptom other than
+     "the chat panel is just gone." Letting #app grow past 100vh and scrolling the page is what
+     actually fixes it, not a min-height tweak on the panel alone. */
+  html, body { overflow-y: auto; }
+  #app { height: auto; min-height: 100%; padding-bottom: 58px; } /* room for the fixed tab bar */
   main { grid-template-columns: 1fr; }
   .brain3d-preview-panel { grid-column: span 1; min-height: 260px; }
+  main .chat-panel { min-height: 360px; } /* extra specificity — .panel{min-height:0} is defined
+    later in this file with equal specificity and would otherwise win regardless of this media
+    query, cancelling the min-height out entirely */
+
+  .mobile-tab-bar { display: flex; }
+  #exportDataBtn { display: none; } /* moved into the YOU tab on mobile, see .mobile-tab-bar */
+}
+
+/* ---------- Mobile bottom tab bar — WYRD's own 5-tab IA (WYRD / DIARY / COP / FEED / YOU),
+   reusing the exact same real endpoints and modals the desktop mini-buttons already drive.
+   Hidden by default; the 700px breakpoint above turns it on. ---------- */
+.mobile-tab-bar {
+  display: none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 25;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--green-faint);
+  background: rgba(0, 15, 4, 0.92);
+  backdrop-filter: blur(4px);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.mobile-tab {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  border-top: 2px solid transparent;
+  padding: 10px 0 7px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--green-dim);
+  transition: all 0.22s var(--ease-soft);
+}
+.mobile-tab.active { color: var(--green); border-top-color: var(--green); }
+
+.alerts-btn { position: relative; }
+.alerts-badge {
+  position: absolute;
+  top: -6px; right: -6px;
+  min-width: 15px; height: 15px;
+  border-radius: 8px;
+  background: var(--green);
+  color: #000;
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 0 10px rgba(0,255,65,0.7);
 }
 
 /* ---------- Reasoning log modal (backend keeps running always; this is just an on-demand view) ---------- */
@@ -502,6 +561,30 @@ main {
   flex: 1; width: 100%; border: 1px solid rgba(0,255,65,0.2); border-radius: 4px;
   background: #fff; /* the app itself owns its own look — no terminal-green tint bleeding in */
 }
+
+.browser-url-bar {
+  margin: 10px 14px 0; padding: 6px 10px; font-family: 'Share Tech Mono', monospace; font-size: 11px;
+  color: var(--green-dim); border: 1px solid rgba(0,255,65,0.2); border-radius: 3px;
+  background: rgba(0,0,0,0.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.browser-screenshot {
+  flex: 1; width: 100%; height: 100%; object-fit: contain;
+  border: 1px solid rgba(0,255,65,0.2); border-radius: 4px; background: #111;
+}
+
+.camera-wrap { align-items: center; justify-content: center; background: #000; }
+#cameraVideo {
+  flex: 1; width: 100%; height: 100%; object-fit: contain;
+  border: 1px solid rgba(0,255,65,0.2); border-radius: 4px; background: #000;
+}
+.camera-msg { padding: 0 14px; min-height: 16px; font-size: 11px; color: var(--danger); }
+.camera-controls { display: flex; gap: 8px; padding: 10px 14px 14px; }
+.camera-controls input {
+  flex: 1; font-family: 'Share Tech Mono', monospace; font-size: 12px; padding: 8px 10px;
+  border: 1px solid var(--green-dim); border-radius: 2px; background: rgba(0,15,4,0.7);
+  color: var(--green); outline: none;
+}
+.camera-controls input::placeholder { color: var(--green-faint); }
 
 .reasoning-log-box {
   width: min(700px, 90vw);
@@ -600,6 +683,9 @@ main {
 .brain-panel {
   position: relative;
   z-index: 1;
+  min-width: 0; /* it's a flex item of #app — without this, unbreakable nowrap text several
+    levels down (.mini-feed-text, .digest-eta, etc.) can force #app itself wider than the
+    viewport, same footgun as the .panel/main-grid overflow bug fixed earlier */
   margin: 0 28px 8px;
   padding: 6px 18px;
   border: 1px solid var(--green);
@@ -641,6 +727,7 @@ main {
 }
 
 .brain-cell {
+  min-width: 0; /* grid item — same nowrap-content-forces-track-width footgun as its container */
   border: 1px solid rgba(0,255,65,0.25);
   border-radius: 2px;
   padding: 5px 9px;
@@ -927,3 +1014,52 @@ footer {
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #000; }
 ::-webkit-scrollbar-thumb { background: var(--green-dim); border-radius: 4px; }
+
+/* ---------- Small screens (phones, and narrow/short windows generally) ----------
+   The rest of the app assumes a fixed one-screen layout (html/body overflow:hidden, main is a
+   flex column with min-height:0 panels) — that works down to tablet width thanks to the 700/760px
+   breakpoints above, but a real phone (or even a short desktop window) needs three more things:
+   the header/HUD allowed to wrap instead of overflowing, single-column stacking pushed further
+   down through THE_MIND's own sub-layout (face + grid, digest row, mini-feed buttons), and a
+   scroll escape hatch so content that still doesn't fit is reachable instead of clipped. */
+@media (max-width: 480px) {
+  html, body { overflow-y: auto; } /* safety net: nothing gets permanently clipped if it doesn't fit */
+
+  header { flex-wrap: wrap; gap: 8px; padding: 8px 14px; }
+  .brand { font-size: 20px; letter-spacing: 2px; }
+  .hud { flex-wrap: wrap; gap: 8px 14px; font-size: 10px; }
+
+  main { padding: 6px 10px 10px; gap: 10px; }
+  .brain-panel { margin: 0 10px 8px; padding: 6px 10px; }
+
+  .brain-panel-body { flex-direction: column; align-items: stretch; }
+  .face-panel { flex: none; width: 130px; margin: 0 auto; }
+
+  .brain-grid { grid-template-columns: 1fr; }
+  .brain-cell.wide, .digest-cell, .mini-feed { grid-column: span 1; }
+  .digest-row { flex-wrap: wrap; }
+  .digest-eta { min-width: 0; }
+  .mini-btn-row { flex-wrap: wrap; }
+
+  .chat-form { padding: 10px 12px; flex-wrap: wrap; }
+  .chat-form input { min-width: 0; }
+  .chat-form button { padding: 0 12px; }
+
+  .gate-box { width: 90vw; padding: 28px 22px; }
+  .gate-title { font-size: 34px; }
+  #usernameInput, #passwordInput { width: 100%; box-sizing: border-box; }
+
+  /* every modal built on .reasoning-log-box (diary/dreams/cop/concept-map/growth/world-map/
+     app-preview all share this base) gets the same near-fullscreen treatment on a phone */
+  .reasoning-log-box { width: 94vw; max-height: 88vh; }
+  .world-map-body { padding: 8px; }
+  .app-preview-box { height: 82vh; }
+}
+
+@media (max-height: 560px) {
+  /* a short viewport (landscape phone, a small browser window) needs the same scroll escape
+     hatch as a narrow one — height is the constraint here, not width */
+  html, body { overflow-y: auto; }
+  .brain-panel-body { align-items: center; }
+  #mainFaceCanvas { height: 120px; }
+}

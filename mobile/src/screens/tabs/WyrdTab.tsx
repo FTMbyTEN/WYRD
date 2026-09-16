@@ -1,10 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { BrainCanvas } from '../../components/BrainCanvas';
-import { Display, Mono, Panel } from '../../components/ui';
+import { GroundLight } from '../../components/Holo';
+import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
-import { api } from '../../api/client';
-import { useFeed, useFeedNext, useMind, useReasoning, useReasoningNext } from '../../api/hooks';
+import { useBrainActivitySignal, useFeed, useFeedNext, useMind, useReasoning, useReasoningNext } from '../../api/hooks';
 import { countdown, timeAgo } from '../../util/time';
 import { firstLineFromMarkdown } from '../../util/text';
 
@@ -14,6 +14,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const feedNext = useFeedNext();
   const { notes } = useReasoning();
   const reasoningNext = useReasoningNext();
+  const brainActivity = useBrainActivitySignal();
 
   const mood = mind?.mood ?? '—';
   const focus = mind?.focusTopic ?? 'nothing yet';
@@ -26,7 +27,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   return (
     <View style={{ flex: 1 }}>
       <View style={StyleSheet.absoluteFill}>
-        <BrainCanvas />
+        <BrainCanvas activitySignal={brainActivity} />
       </View>
       <View style={styles.heroWrap}>
         <View style={styles.hero}>
@@ -34,26 +35,13 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
           <Display style={styles.moodValue}>{mood}</Display>
           <Mono style={styles.focusLine}>focus · {focus}</Mono>
         </View>
-      </View>
 
-      <View style={styles.statsRow}>
-        <Panel style={[styles.statCell, styles.noRadius]}>
-          <Mono style={styles.statLabel}>CURIOSITY</Mono>
-          <View style={styles.miniMeter}><View style={[styles.miniMeterFill, { width: `${curPct}%` }]} /></View>
-        </Panel>
-        <Panel style={[styles.statCell, styles.noRadius]}>
-          <Mono style={styles.statLabel}>CONFIDENCE</Mono>
-          <View style={styles.miniMeter}><View style={[styles.miniMeterFill, { width: `${confPct}%` }]} /></View>
-        </Panel>
-        <Panel style={[styles.statCell, styles.noRadius]}>
-          <Mono style={styles.statLabel}>DIGEST</Mono>
-          <Display style={styles.digestValue}>{digestPct}%</Display>
-        </Panel>
+        <HoloStat label="CURIOSITY" value={`${curPct}%`} pct={curPct} style={styles.holoLeft} beamStyle={styles.beamLeft} />
+        <HoloStat label="CONFIDENCE" value={`${confPct}%`} pct={confPct} style={styles.holoRight} beamStyle={styles.beamRight} />
+        <HoloStat label="DIGEST" value={`${digestPct}%`} pct={digestPct} style={styles.holoCenter} beamStyle={styles.beamCenter} big />
       </View>
 
       <View style={styles.actionRow}>
-        <ActionBtn label="INGEST NOW" onPress={() => api.triggerFeed()} />
-        <ActionBtn label="THINK NOW" onPress={() => api.triggerReasoning()} />
         <ActionBtn label="BRAIN_3D ↗" onPress={onOpenBrain} />
       </View>
 
@@ -83,6 +71,30 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   );
 }
 
+/** A holographic readout projected off the brain, sci-fi-HUD style: a thin beam rising from the
+ *  brain into a glass panel, with a soft green glow pooling underneath it — not a bordered stat
+ *  box sitting in a row. `pct` drives both the meter fill and how bright the panel reads, so a
+ *  higher value visibly "lights up" more, same idea as the projection intensifying with signal. */
+function HoloStat({ label, value, pct, style, beamStyle, big }: {
+  label: string; value: string; pct: number; style: any; beamStyle: any; big?: boolean;
+}) {
+  const glow = 0.25 + Math.min(1, Math.max(0, pct / 100)) * 0.55;
+  return (
+    <View style={[styles.holoWrap, style]} pointerEvents="none">
+      <View style={[styles.beam, beamStyle]} />
+      <View style={styles.beamAnchor} />
+      <View style={[styles.holoCard, big && styles.holoCardBig, { shadowOpacity: glow, borderColor: `rgba(0,255,65,${glow})` }]}>
+        <Mono style={styles.holoLabel}>{label}</Mono>
+        <Display style={[styles.holoValue, big && styles.holoValueBig, { textShadowRadius: 10 + glow * 14 }]}>{value}</Display>
+        <View style={styles.holoMeter}>
+          <View style={[styles.holoMeterFill, { width: `${pct}%`, opacity: 0.6 + glow * 0.4 }]} />
+        </View>
+      </View>
+      <GroundLight glow={glow} />
+    </View>
+  );
+}
+
 function ActionBtn({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.actionBtn}>
@@ -104,7 +116,7 @@ function TickerCard({ label, text }: { label: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' },
+  heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   hero: {
     alignItems: 'center', paddingVertical: 22, paddingHorizontal: 26,
     backgroundColor: 'rgba(0,15,4,0.4)', borderRadius: 999,
@@ -112,13 +124,33 @@ const styles = StyleSheet.create({
   moodLabel: { fontSize: 10, letterSpacing: 3, color: colors.greenDim },
   moodValue: { fontSize: 56, lineHeight: 56, textShadowColor: colors.green, textShadowRadius: 22 },
   focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
-  statsRow: { flexDirection: 'row' },
-  noRadius: { borderRadius: 0, borderLeftWidth: 0, borderRightWidth: 0 },
-  statCell: { flex: 1, padding: 10, gap: 5 },
-  statLabel: { fontSize: 8.5, letterSpacing: 1, color: colors.greenDim },
-  miniMeter: { height: 6, borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2, overflow: 'hidden' },
-  miniMeterFill: { height: '100%', backgroundColor: colors.green },
-  digestValue: { fontSize: 19, marginTop: 2 },
+
+  // ---- Holographic projections: beam rising off the brain into a floating glass readout, with
+  // a soft glow pooling under it — sci-fi HUD callout, not a bordered stat box in a row. Percent
+  // positions keep the three readouts anchored around the brain regardless of screen size.
+  holoWrap: { position: 'absolute', alignItems: 'center' },
+  holoLeft: { left: '2%', bottom: '20%' },
+  holoRight: { right: '2%', bottom: '20%' },
+  holoCenter: { bottom: '2%', alignSelf: 'center' },
+  beam: { width: 1, backgroundColor: 'rgba(0,255,65,0.45)' },
+  beamLeft: { height: 34 },
+  beamRight: { height: 34 },
+  beamCenter: { height: 20 },
+  beamAnchor: {
+    position: 'absolute', top: -3, width: 5, height: 5, borderRadius: 3,
+    backgroundColor: colors.green, shadowColor: colors.green, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
+  },
+  holoCard: {
+    marginTop: 2, width: 112, padding: 9, borderRadius: 6, borderWidth: 1,
+    backgroundColor: 'rgba(0,15,4,0.38)',
+    shadowColor: colors.green, shadowRadius: 10, shadowOffset: { width: 0, height: 0 },
+  },
+  holoCardBig: { width: 128, alignItems: 'center' },
+  holoLabel: { fontSize: 8, letterSpacing: 1.5, color: colors.greenDim },
+  holoValue: { fontSize: 20, marginTop: 3, textShadowColor: colors.green },
+  holoValueBig: { fontSize: 30 },
+  holoMeter: { marginTop: 6, height: 4, borderRadius: 2, backgroundColor: 'rgba(10,156,47,0.25)', overflow: 'hidden', width: '100%' },
+  holoMeterFill: { height: '100%', backgroundColor: colors.green },
   actionRow: {
     flexDirection: 'row', gap: 7, paddingHorizontal: 14, paddingTop: 10,
     backgroundColor: 'rgba(0,10,3,0.92)',

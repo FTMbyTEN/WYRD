@@ -1,7 +1,8 @@
 // The gate/login screen's cinematic backdrop — a generative particle structure that morphs
-// between 26 curated wireframe-ish forms spanning geometry, physics, the quantum realm, the
-// cosmos, nature, the classical elements (fire/water/air), technology, architecture, and two
-// takes on WYRD's own likeness (clean and dreaming) — plus new shapes WYRD itself authors on a
+// between 29 curated wireframe-ish forms spanning geometry, physics, the quantum realm, the
+// cosmos, nature, the classical elements (fire/water/air), technology, architecture, three real
+// mountains (Kilimanjaro/Everest/Fuji), and two takes on WYRD's own likeness (clean and
+// dreaming) — plus new shapes WYRD itself authors on a
 // live timer via /api/gate-vortex/shape (see fetchShapeFromMind below), all in WYRD's own
 // terminal green, plus a dim starfield for depth. Deliberately kept light on pure spirals (one
 // galaxy, one black hole, one knot) so the set doesn't read as "everything is a spiral wound
@@ -55,7 +56,7 @@
     const arr = new Float32Array(N * 3);
     if (typeof FACE_VERTS === 'undefined' || !FACE_VERTS.length) return shapeSphere();
     const total = FACE_VERTS.length;
-    const scale = 2.7;
+    const scale = 1.8; // was 2.7 — noticeably larger than every other shape's ~1.5-2.1 footprint
     for (let i = 0; i < N; i++) {
       const v = FACE_VERTS[i % total];
       const pass = Math.floor(i / total);
@@ -82,20 +83,38 @@
     return arr;
   }
 
-  function shapeHelixDNA() {
+  // ---- A solid heavy-metal chain — real interlocking links, alternating orientation the way an
+  // actual chain does (each link a full torus surface, not a thin outline), stacked vertically.
+  // Replaces the old coiled "spring"-reading double helix. ----
+  function shapeChain() {
     const arr = new Float32Array(N * 3);
-    const half = N / 2;
-    for (let i = 0; i < N; i++) {
-      const strand = i < half ? 0 : 1;
-      const idx = strand === 0 ? i : i - half;
-      const t = idx / (half - 1);
-      const y = -2.8 + t * 5.6;
-      const angle = t * Math.PI * 10 + (strand === 1 ? Math.PI : 0);
-      const r = 1.3;
-      arr[i * 3] = Math.cos(angle) * r;
-      arr[i * 3 + 1] = y;
-      arr[i * 3 + 2] = Math.sin(angle) * r;
+    const linkCount = 9;
+    const perLink = Math.floor(N / linkCount);
+    const majorR = 0.5, minorR = 0.17;
+    const majorSteps = Math.max(6, Math.round(Math.sqrt(perLink * 2)));
+    const minorSteps = Math.max(4, Math.floor(perLink / majorSteps));
+    let idx = 0;
+    for (let l = 0; l < linkCount; l++) {
+      const t = l / (linkCount - 1);
+      const y = -2.3 + t * 4.6;
+      const vertical = l % 2 === 0; // alternating plane is what makes it read as interlocked
+      let written = 0;
+      for (let mi = 0; mi < majorSteps && written < perLink; mi++) {
+        const majorAngle = (mi / majorSteps) * Math.PI * 2;
+        for (let ni = 0; ni < minorSteps && written < perLink; ni++) {
+          const minorAngle = (ni / minorSteps) * Math.PI * 2;
+          const ringX = (majorR + minorR * Math.cos(minorAngle)) * Math.cos(majorAngle);
+          const ringOffset = minorR * Math.sin(minorAngle);
+          const ringZ = (majorR + minorR * Math.cos(minorAngle)) * Math.sin(majorAngle);
+          let x, yy, z;
+          if (vertical) { x = ringX; yy = y + ringOffset; z = ringZ; }
+          else { x = ringOffset; yy = y + ringX; z = ringZ * 0.4; }
+          arr[idx * 3] = x; arr[idx * 3 + 1] = yy; arr[idx * 3 + 2] = z;
+          idx++; written++;
+        }
+      }
     }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = -2.3; arr[idx * 3 + 2] = 0; idx++; }
     return arr;
   }
 
@@ -301,7 +320,7 @@
     const arr = new Float32Array(N * 3);
     if (typeof FACE_VERTS === 'undefined' || !FACE_VERTS.length) return shapeSphere();
     const total = FACE_VERTS.length;
-    const scale = 2.7;
+    const scale = 1.8; // matches shapeFace()'s corrected scale
     for (let i = 0; i < N; i++) {
       const v = FACE_VERTS[i % total];
       const pass = Math.floor(i / total);
@@ -362,6 +381,44 @@
     }
     while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = -1.4; arr[idx * 3 + 2] = 0; idx++; }
     return arr;
+  }
+
+  // ---- Real mountains — one shared ridge-generator (ring-stacking, same idea as the vortex/
+  // funnel shapes, with the radius per ring perturbed by layered sine "noise" for rock ridges)
+  // reused for three actual peaks, each tuned to its real silhouette rather than being the same
+  // cone three times: Kilimanjaro's wide, gently domed volcanic plateau; Everest's sharp, jagged,
+  // asymmetric summit; Fuji's smooth, famously symmetric cone. ----
+  function buildMountain({ ringsCount, baseRadius, height, ruggedness, peakFlatten, asymmetry }) {
+    const arr = new Float32Array(N * 3);
+    const perRing = Math.floor(N / ringsCount);
+    let idx = 0;
+    for (let r = 0; r < ringsCount; r++) {
+      const t = r / (ringsCount - 1);
+      const y = -1.8 + t * height;
+      const taper = Math.pow(1 - t, 0.7 + peakFlatten);
+      const baseR = baseRadius * taper;
+      for (let p = 0; p < perRing; p++) {
+        const angle = (p / perRing) * Math.PI * 2;
+        const ridgeNoise = 1 + ruggedness * (Math.sin(angle * 5 + t * 7) * 0.5 + Math.sin(angle * 11 + t * 3) * 0.3) * (1 - t * 0.4);
+        const asym = 1 + asymmetry * Math.sin(angle + t * 2);
+        const radius = Math.max(0.02, baseR * ridgeNoise * asym);
+        arr[idx * 3] = Math.cos(angle) * radius;
+        arr[idx * 3 + 1] = y;
+        arr[idx * 3 + 2] = Math.sin(angle) * radius;
+        idx++;
+      }
+    }
+    while (idx < N) { arr[idx * 3] = 0; arr[idx * 3 + 1] = -1.8; arr[idx * 3 + 2] = 0; idx++; }
+    return arr;
+  }
+  function shapeKilimanjaro() {
+    return buildMountain({ ringsCount: 22, baseRadius: 2.1, height: 4.0, ruggedness: 0.22, peakFlatten: 0.6, asymmetry: 0.15 });
+  }
+  function shapeEverest() {
+    return buildMountain({ ringsCount: 24, baseRadius: 1.7, height: 4.6, ruggedness: 0.45, peakFlatten: -0.3, asymmetry: 0.35 });
+  }
+  function shapeFuji() {
+    return buildMountain({ ringsCount: 22, baseRadius: 2.0, height: 3.6, ruggedness: 0.08, peakFlatten: 0.15, asymmetry: 0.03 });
   }
 
   // ---- Möbius strip: a one-sided surface — the classic topology demo. ----
@@ -618,13 +675,19 @@
     return arr;
   }
 
+  const faceArr = shapeFace();
+  const faceDreamArr = shapeFaceDream();
   const shapes = [
-    shapeSphere(), shapeMandala(), shapeFace(), shapeInfinity(),
-    shapeHelixDNA(), shapeTorusKnot(), shapeCubeGrid(), shapeGalaxy(), shapeWaveGrid(), shapeStarBurst(),
-    shapeAtom(), shapeOrbital(), shapeSaturn(), shapeBlackHole(), shapeFaceDream(), shapeCityscape(), shapePyramid(),
+    shapeSphere(), shapeMandala(), faceArr, shapeInfinity(),
+    shapeChain(), shapeTorusKnot(), shapeCubeGrid(), shapeGalaxy(), shapeWaveGrid(), shapeStarBurst(),
+    shapeAtom(), shapeOrbital(), shapeSaturn(), shapeBlackHole(), faceDreamArr, shapeCityscape(), shapePyramid(),
     shapeMobius(), shapeTesseract(), shapeNeuralNetwork(), shapeFractalTree(),
     shapeExplosion(), shapeFire(), shapeWaterDrop(), shapeWindStreams(), shapeCircuit(),
+    shapeKilimanjaro(), shapeEverest(), shapeFuji(),
   ];
+  // WYRD's two face variants get a distinctly more "alive" tracking behavior in animate() below —
+  // by reference, not by index, so this stays correct no matter how the array above is reordered.
+  const faceShapeIndices = new Set([shapes.indexOf(faceArr), shapes.indexOf(faceDreamArr)]);
   const curatedShapeCount = shapes.length; // generative shapes (added later, from WYRD's mind) get
                                             // appended after this point and capped separately
 
@@ -692,6 +755,7 @@
   });
 
   let intensity = 0; // 0..1, eased toward a target — set via setIntensity() on button hover
+  let faceFactor = 0; // eases toward 1 whenever a face variant is the current shape — see animate()
   let intensityTarget = 0;
 
   // Random-next instead of sequential — with 10+ shapes, always going 0→1→2→3→... in the same
@@ -743,15 +807,23 @@
     intensity += (intensityTarget - intensity) * 0.08;
     const breathe = Math.sin(now * 0.0016) * 0.06; // constant slow "alive" brightness pulse
 
+    // WYRD's face (either variant) tracks the cursor far more directly than every other shape —
+    // stronger parallax AND a faster follow speed, so it reads as actually looking at you rather
+    // than the same ambient drift every other shape gets. Eased, not switched, so it doesn't snap
+    // the instant a morph starts/ends.
+    faceFactor += ((faceShapeIndices.has(shapeIndex) ? 1 : 0) - faceFactor) * 0.05;
+    const faceBoost = 1 + faceFactor * 1.8;
+    const followSpeed = 0.04 + faceFactor * 0.1;
+
     // camera parallax: looks toward the cursor rather than just spinning blindly
-    camera.position.x += (mouseX * 1.1 - camera.position.x) * 0.04;
-    camera.position.y += (-mouseY * 0.8 - camera.position.y) * 0.04;
+    camera.position.x += (mouseX * 1.1 * faceBoost - camera.position.x) * followSpeed;
+    camera.position.y += (-mouseY * 0.8 * faceBoost - camera.position.y) * followSpeed;
     camera.lookAt(0, 0, 0);
 
     const baseSpeed = 0.0022 + intensity * 0.006;
-    group.rotation.y += baseSpeed;
-    group.rotation.x = Math.sin(now * 0.00015) * 0.15 + mouseY * 0.12;
-    group.rotation.z = mouseX * 0.05;
+    group.rotation.y += baseSpeed * (1 - faceFactor * 0.5); // a tracking face spins less on its own
+    group.rotation.x = Math.sin(now * 0.00015) * 0.15 * (1 - faceFactor * 0.6) + mouseY * 0.12 * faceBoost;
+    group.rotation.z = mouseX * 0.05 * faceBoost;
 
     let burstScale = 1;
     const bt = (now - burstStart) / BURST_MS;

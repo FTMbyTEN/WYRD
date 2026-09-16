@@ -7,6 +7,7 @@ import { colors } from '../../theme';
 import { api, ApiError } from '../../api/client';
 import { useConversations } from '../../api/hooks';
 import type { ChatAction } from '../../api/types';
+import { speakAsWyrd } from '../../util/ttsVoice';
 
 interface Props {
   visible: boolean;
@@ -44,7 +45,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     try {
       const result = await api.chat(text);
       handleAction(result.action);
-      if (tts && result.reply) Speech.speak(result.reply);
+      if (tts && result.reply) speakAsWyrd(result.reply);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'could not reach WYRD');
     } finally {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
-import { Display, Mono, Panel } from '../../components/ui';
+import { Display, Mono } from '../../components/ui';
+import { HoloButton, HoloFrame, HoloReadout } from '../../components/Holo';
 import { colors } from '../../theme';
 import { FaceMark } from '../../components/FaceMark';
 import { api } from '../../api/client';
@@ -36,45 +37,46 @@ export function YouTab({ tts, onToggleTts }: { tts: boolean; onToggleTts: () => 
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Panel style={styles.identityPanel}>
-        <View style={styles.avatarWrap}><FaceMark mode="scan" /></View>
-        <Display style={styles.name}>{(username ?? '—').toUpperCase()}</Display>
-        <Mono style={styles.sessionLine}>OWNER NODE · SESSION {daysSince(profile?.firstSeen)}d</Mono>
-      </Panel>
-
-      {rows.map((r) => (
-        <View key={r.k} style={styles.row}>
-          <Mono style={styles.rowKey}>{r.k}</Mono>
-          <Mono numberOfLines={1} style={styles.rowVal}>{r.v}</Mono>
+      <HoloFrame glow={0.6} beam={false} style={styles.identityWrap}>
+        <View style={styles.identityPanel}>
+          <View style={styles.avatarWrap}><FaceMark mode="scan" /></View>
+          <Display style={styles.name}>{(username ?? '—').toUpperCase()}</Display>
+          <Mono style={styles.sessionLine}>OWNER NODE · SESSION {daysSince(profile?.firstSeen)}d</Mono>
         </View>
-      ))}
+      </HoloFrame>
 
-      <Panel style={styles.capPanel}>
-        <Mono style={styles.capLabel}>OWNER-ONLY CAPABILITIES</Mono>
-        <View style={{ marginTop: 8, gap: 7 }}>
-          <CapRow label="Real browsing" value="READ-ONLY · ACCOUNT-GATED" />
-          <CapRow label="Code execution" value="SANDBOXED · ACCOUNT-GATED" />
-          <CapRow label="Discord bridge" value="SEPARATE PROCESS" />
+      <View style={styles.grid}>
+        {rows.map((r) => (
+          <HoloReadout key={r.k} label={r.k} value={r.v} glow={0.4} style={styles.gridCell} />
+        ))}
+      </View>
+
+      <HoloFrame glow={0.35} beam={false} style={styles.capWrap}>
+        <View style={styles.capPanel}>
+          <Mono style={styles.capLabel}>OWNER-ONLY CAPABILITIES</Mono>
+          <View style={{ marginTop: 8, gap: 7 }}>
+            <CapRow label="Real browsing" value="READ-ONLY · ACCOUNT-GATED" />
+            <CapRow label="Code execution" value="SANDBOXED · ACCOUNT-GATED" />
+            <CapRow label="Discord bridge" value="SEPARATE PROCESS" />
+          </View>
+          <Mono style={styles.capFoot}>
+            It can never click, type, or submit anything — on this or any site. Availability of the
+            three above depends on whether this designation is the configured owner account.
+          </Mono>
         </View>
-        <Mono style={styles.capFoot}>
-          It can never click, type, or submit anything — on this or any site. Availability of the
-          three above depends on whether this designation is the configured owner account.
-        </Mono>
-      </Panel>
+      </HoloFrame>
 
-      <Pressable onPress={onToggleTts} style={styles.ttsRow}>
-        <Mono style={{ fontSize: 11, letterSpacing: 1, color: tts ? colors.green : colors.greenDim }}>
-          {tts ? 'SPOKEN REPLIES: ON' : 'SPOKEN REPLIES: OFF'}
-        </Mono>
-      </Pressable>
+      <HoloFrame glow={tts ? 0.6 : 0.3} beam={false} groundLight={false} style={styles.ttsWrap}>
+        <Pressable onPress={onToggleTts} style={styles.ttsRow}>
+          <Mono style={{ fontSize: 11, letterSpacing: 1, color: tts ? colors.green : colors.greenDim }}>
+            {tts ? 'SPOKEN REPLIES: ON' : 'SPOKEN REPLIES: OFF'}
+          </Mono>
+        </Pressable>
+      </HoloFrame>
 
       <View style={styles.bottomRow}>
-        <Pressable onPress={exportData} style={styles.exportBtn}>
-          <Mono style={{ fontSize: 10, letterSpacing: 1, color: colors.greenDim }}>EXPORT DATA</Mono>
-        </Pressable>
-        <Pressable onPress={logout} style={styles.logoutBtn}>
-          <Mono style={{ fontSize: 10, letterSpacing: 1, color: colors.danger }}>LOGOUT</Mono>
-        </Pressable>
+        <HoloButton label="EXPORT DATA" onPress={exportData} />
+        <HoloButton label="LOGOUT" onPress={logout} tone="danger" />
       </View>
     </ScrollView>
   );
@@ -90,22 +92,19 @@ function CapRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 14, gap: 10, paddingBottom: 40 },
-  identityPanel: { alignItems: 'center', padding: 18, borderColor: colors.green },
+  content: { padding: 14, gap: 14, paddingBottom: 40 },
+  identityWrap: { width: '100%' },
+  identityPanel: { alignItems: 'center', padding: 18 },
   avatarWrap: { width: 64, height: 64, marginBottom: 10 },
   name: { fontSize: 40, lineHeight: 40, letterSpacing: 4, textShadowColor: colors.green, textShadowRadius: 14 },
   sessionLine: { marginTop: 6, fontSize: 10, letterSpacing: 1, color: colors.greenDim },
-  row: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12,
-    borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 2, padding: 11,
-  },
-  rowKey: { fontSize: 11.5, color: colors.greenDim },
-  rowVal: { fontSize: 11.5, color: colors.mint, flexShrink: 1, textAlign: 'right' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  gridCell: { width: '47%' },
+  capWrap: { width: '100%' },
   capPanel: { padding: 12 },
   capLabel: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
   capFoot: { marginTop: 9, paddingTop: 9, borderTopWidth: 1, borderTopColor: colors.greenBorderDim, fontSize: 9.5, lineHeight: 14, color: colors.greenBorderDim },
-  ttsRow: { borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 2, padding: 12 },
+  ttsWrap: { width: '100%' },
+  ttsRow: { padding: 12, alignItems: 'center' },
   bottomRow: { flexDirection: 'row', gap: 8 },
-  exportBtn: { flex: 1, borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2, paddingVertical: 11, alignItems: 'center' },
-  logoutBtn: { flex: 1, borderWidth: 1, borderColor: colors.danger, borderRadius: 2, paddingVertical: 11, alignItems: 'center' },
 });
