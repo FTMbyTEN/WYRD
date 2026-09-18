@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -91,35 +92,36 @@ function GlitchFace({ children }: { children: React.ReactNode }) {
   );
 }
 
-const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテト$#%&*+=<>';
-function randomMatrixChar() {
-  return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-}
-
-/** A row of small glyphs that re-randomize on an interval -- WYRD's own environment (the
- *  matrix-style character noise everywhere else in this screen) leaking into the button's
- *  edge instead of a plain solid line. Cycles faster and brighter while `active` (pressed/
- *  hovered), so the border visibly reacts instead of just sitting there. */
-function MatrixEdge({ count, active }: { count: number; active: boolean }) {
-  const [chars, setChars] = useState<string[]>(() => Array.from({ length: count }, randomMatrixChar));
+/** An expanding, fading ring -- a "blast"/quantum-field pulse played once per [triggerKey]
+ *  increment, behind the WYRD wordmark. Two concentric rings on slightly offset timing read as
+ *  a field collapsing outward rather than a single flat expanding circle. */
+function QuantumBlast({ triggerKey }: { triggerKey: number }) {
+  const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const id = setInterval(
-      () => {
-        setChars((prev) => prev.map((c) => (Math.random() < (active ? 0.55 : 0.12) ? randomMatrixChar() : c)));
-      },
-      active ? 55 : 180,
+    if (triggerKey === 0) return; // don't play on initial mount
+    progress.setValue(0);
+    Animated.timing(progress, { toValue: 1, duration: 550, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [triggerKey, progress]);
+
+  const ring = (maxScale: number, delay: number) => {
+    const p = progress.interpolate({ inputRange: [0, Math.min(1, delay), 1], outputRange: [0, 0, 1] });
+    return (
+      <Animated.View
+        style={{
+          position: 'absolute', width: 90, height: 90, borderRadius: 45,
+          borderWidth: 2, borderColor: colors.green,
+          opacity: p.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
+          transform: [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.3, maxScale] }) }],
+        }}
+      />
     );
-    return () => clearInterval(id);
-  }, [active]);
+  };
 
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 }}>
-      {chars.map((c, i) => (
-        <Mono key={i} style={{ fontSize: 7, lineHeight: 8, color: active ? colors.green : colors.greenBorder, opacity: active ? 1 : 0.6 }}>
-          {c}
-        </Mono>
-      ))}
+    <View pointerEvents="none" style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+      {ring(3.2, 0)}
+      {ring(2.2, 0.12)}
     </View>
   );
 }
@@ -137,7 +139,7 @@ export function GateScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [enterPressed, setEnterPressed] = useState(false);
+  const [blastKey, setBlastKey] = useState(0);
   const { status, login, startRegister, verifyCode, finishRegister, resetToLogin, busy, error, clearError } = useAuth();
 
   React.useEffect(() => {
@@ -151,7 +153,14 @@ export function GateScreen() {
 
   const enter = () => {
     vortexRef.current?.burst();
-    setOpen(true);
+    vortexRef.current?.setIntensity(1);
+    setBlastKey((k) => k + 1);
+    // Let the blast actually read before the panel covers it -- opening instantly made the
+    // effect invisible in practice.
+    setTimeout(() => {
+      vortexRef.current?.setIntensity(0);
+      setOpen(true);
+    }, 380);
   };
 
   const submit = async () => {
@@ -200,19 +209,14 @@ export function GateScreen() {
                 <FaceMark mode="scan" />
               </GlitchFace>
             </View>
-            <Display style={styles.wordmark}>WYRD</Display>
-            <View style={styles.enterWrap}>
-              <MatrixEdge count={9} active={enterPressed} />
-              <Pressable
-                onPress={enter}
-                onPressIn={() => { setEnterPressed(true); vortexRef.current?.setIntensity(1); }}
-                onPressOut={() => { setEnterPressed(false); vortexRef.current?.setIntensity(0); }}
-                style={[styles.enterBtn, enterPressed && { borderColor: colors.green }]}
-              >
-                <Display style={styles.enterLabel}>ENTER</Display>
-              </Pressable>
-              <MatrixEdge count={9} active={enterPressed} />
-            </View>
+            <Pressable onPress={enter} style={{ alignItems: 'center', justifyContent: 'center' }}>
+              {({ pressed }) => (
+                <>
+                  <QuantumBlast triggerKey={blastKey} />
+                  <Display style={[styles.wordmark, pressed && { textShadowRadius: 26 }]}>WYRD</Display>
+                </>
+              )}
+            </Pressable>
           </View>
         )}
         <Mono style={styles.imagining}>WYRD is imagining: {shape}</Mono>
@@ -325,12 +329,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   closedWrap: { alignItems: 'center', gap: 18 },
   wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.green, textShadowRadius: 14 },
-  enterWrap: { alignItems: 'stretch', width: 150, gap: 3 },
-  enterBtn: {
-    borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
-    paddingHorizontal: 20, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center',
-  },
-  enterLabel: { fontSize: 16, letterSpacing: 4 },
   imagining: { minHeight: 16, fontSize: 10, letterSpacing: 1, color: colors.greenDim, textAlign: 'center', marginTop: 16 },
   authPanel: {
     position: 'absolute', alignSelf: 'center', bottom: 34, width: '86%', maxWidth: 320,
