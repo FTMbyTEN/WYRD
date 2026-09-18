@@ -139,7 +139,6 @@ export function GateScreen() {
             <Pressable onPress={enter} style={{ alignItems: 'center', justifyContent: 'center' }}>
               {({ pressed }) => (
                 <>
-                  <View pointerEvents="none" style={styles.wordmarkBackdrop} />
                   <QuantumBlast triggerKey={blastKey} />
                   <Display style={[styles.wordmark, pressed && { textShadowRadius: 26 }]}>WYRD</Display>
                 </>
@@ -257,9 +256,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   closedWrap: { alignItems: 'center', gap: 18 },
   wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.green, textShadowRadius: 14 },
-  wordmarkBackdrop: {
-    position: 'absolute', width: 260, height: 90, borderRadius: 12, backgroundColor: '#000',
-  },
   imagining: { minHeight: 16, fontSize: 10, letterSpacing: 1, color: colors.greenDim, textAlign: 'center', marginTop: 16 },
   authPanel: {
     position: 'absolute', alignSelf: 'center', bottom: 34, width: '86%', maxWidth: 320,
