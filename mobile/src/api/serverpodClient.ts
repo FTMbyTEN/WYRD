@@ -8,6 +8,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //   body: JSON.stringify(argsMap)            (plain JSON, no wrapper)
 //   headers: Content-Type: application/json, Authorization: Bearer <accessToken> (if authenticated)
 //   response: 200 -> raw JSON of the return value; non-200 -> JSON or plain-text error body
+// Local dev default: `dart bin/main.dart` in wyrd_server listens on 8080. For a Serverpod Cloud
+// deployment, EXPO_PUBLIC_WYRD_SERVERPOD_URL must point at the API subdomain
+// (https://<project>.api.serverpod.space), NOT the web/static-hosting domain
+// (https://<project>.serverpod.space) -- the latter only serves the built Flutter web app and
+// returns a bare 405 on any POST, which looks identical to a CORS failure in a browser's
+// console. Confirmed live: GET https://<project>.serverpod.space/assets/assets/config.json
+// returns the real {"apiUrl": "..."} the Flutter web app itself uses to find the API.
 const DEFAULT_PORT = 8080;
 function defaultBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_WYRD_SERVERPOD_URL) return process.env.EXPO_PUBLIC_WYRD_SERVERPOD_URL;
@@ -126,8 +133,25 @@ export async function callEndpoint<T>(
   const data = text ? JSON.parse(text) : null;
 
   if (!res.ok) {
-    const message = (data && typeof data === 'object' && 'message' in data && String((data as { message: unknown }).message)) || `${res.status} ${res.statusText}`;
-    throw new ServerpodClientError(res.status, message, data);
+    throw new ServerpodClientError(res.status, messageFromErrorBody(data, res), data);
   }
   return data as T;
+}
+
+// Serverpod exceptions serialize as {className, data: {__className__, ...fields}} rather than
+// a plain {message}. `reason` is the field every exception in serverpod_auth_idp_server actually
+// uses (e.g. EmailAccountLoginException, EmailAccountRequestException) -- fall back to the raw
+// HTTP status when the body doesn't match that shape (a plain 500, a proxy error page, etc.).
+function messageFromErrorBody(data: unknown, res: Response): string {
+  if (data && typeof data === 'object') {
+    const reason = (data as { data?: { reason?: unknown } }).data?.reason;
+    if (typeof reason === 'string') return humanizeReason(reason);
+  }
+  return `${res.status} ${res.statusText}`;
+}
+
+function humanizeReason(reason: string): string {
+  // camelCase enum values (invalidCredentials, tooManyAttempts, expired, policyViolation,
+  // invalid, ...) -> "invalid credentials", etc.
+  return reason.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 }

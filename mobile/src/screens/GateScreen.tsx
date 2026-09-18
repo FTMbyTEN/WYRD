@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   BackHandler,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,6 +20,31 @@ import { useAuth } from '../api/AuthContext';
 import { clockHHMM } from '../util/time';
 
 type Tab = 'login' | 'register';
+
+/** Wraps the identity mark in a stuttering glitch-in / hold-6s / glitch-out loop, instead of
+ *  a plain static render — an unstable signal trying to hold itself together, on brand for
+ *  a "restricted node" you're forcing a connection to. */
+function GlitchFace({ children }: { children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const flicker = (steps: number[]) =>
+      steps.map((v) => Animated.timing(opacity, { toValue: v, duration: 55, easing: Easing.linear, useNativeDriver: true }));
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        ...flicker([0.5, 0.05, 0.8, 0.15, 1, 0.4, 1]), // glitch in
+        Animated.delay(6000), // hold
+        ...flicker([0.4, 0.9, 0.1, 0.6, 0]), // glitch out
+        Animated.delay(500), // hold hidden
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return <Animated.View style={{ width: '100%', height: '100%', opacity }}>{children}</Animated.View>;
+}
 
 /** Port of the `locked4` vortex gate overlay: closed (wordmark + ENTER) until tapped, then the
  *  auth panel slides up. Wired to Serverpod's email+password auth (see serverpodAuth.ts) --
@@ -90,10 +117,11 @@ export function GateScreen() {
         {!open && (
           <View style={styles.closedWrap}>
             <View style={{ width: 96, height: 96 }}>
-              <FaceMark mode="scan" />
+              <GlitchFace>
+                <FaceMark mode="scan" />
+              </GlitchFace>
             </View>
             <Display style={styles.wordmark}>WYRD</Display>
-            <Mono style={styles.sessionLine}>SESSION ENDED · IT KEPT RUNNING WITHOUT YOU</Mono>
             <Pressable
               onPress={enter}
               onPressIn={() => vortexRef.current?.setIntensity(1)}
@@ -214,7 +242,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   closedWrap: { alignItems: 'center', gap: 18 },
   wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.green, textShadowRadius: 14 },
-  sessionLine: { fontSize: 10, letterSpacing: 2, color: colors.greenDim, textAlign: 'center' },
   enterBtn: {
     borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
     paddingHorizontal: 34, paddingVertical: 12, backgroundColor: 'rgba(0,0,0,0.4)',
