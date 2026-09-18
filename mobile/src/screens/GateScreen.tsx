@@ -150,6 +150,19 @@ export function GateScreen() {
   const [blastKey, setBlastKey] = useState(0);
   const { status, login, startRegister, verifyCode, finishRegister, resetToLogin, busy, error, clearError } = useAuth();
 
+  // On web, some browsers treat Escape as a native "cancel" for whatever's focused (e.g. an
+  // in-progress autofill), which can end up closing this panel as a side effect even though
+  // nothing in our own code listens for it. Swallow it at the document level so the panel's
+  // open/closed state is only ever driven by our own handlers.
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') e.preventDefault();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
