@@ -70,14 +70,12 @@ function GlitchFace({ children }: { children: React.ReactNode }) {
         ).start(() => resolve());
       });
 
-    (async function loop() {
-      while (!cancelled) {
-        await playBurst(GLITCH_IN);
-        await new Promise((r) => setTimeout(r, 6000));
-        if (cancelled) break;
-        await playBurst(GLITCH_OUT);
-        await new Promise((r) => setTimeout(r, 500));
-      }
+    (async function playOnce() {
+      await playBurst(GLITCH_IN);
+      await new Promise((r) => setTimeout(r, 6000));
+      if (cancelled) return;
+      await playBurst(GLITCH_OUT);
+      // Stays glitched out -- no repeat.
     })();
 
     return () => {
@@ -92,9 +90,11 @@ function GlitchFace({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** An expanding, fading ring -- a "blast"/quantum-field pulse played once per [triggerKey]
- *  increment, behind the WYRD wordmark. Two concentric rings on slightly offset timing read as
- *  a field collapsing outward rather than a single flat expanding circle. */
+/** A colorless shockwave played once per [triggerKey] increment, behind the WYRD wordmark --
+ *  soft, blurred, achromatic haloes (no hue) expanding and thinning out, meant to read like
+ *  displaced air/a pressure wave rather than a lit-up neon ring. Several overlapping soft-edged
+ *  layers at staggered delays give the expansion an uneven, fluid quality instead of a single
+ *  clean circle. */
 function QuantumBlast({ triggerKey }: { triggerKey: number }) {
   const progress = useRef(new Animated.Value(0)).current;
   const [active, setActive] = useState(false);
@@ -103,22 +103,22 @@ function QuantumBlast({ triggerKey }: { triggerKey: number }) {
     if (triggerKey === 0) return; // don't play on initial mount
     setActive(true);
     progress.setValue(0);
-    Animated.timing(progress, { toValue: 1, duration: 550, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
+    Animated.timing(progress, { toValue: 1, duration: 700, easing: Easing.out(Easing.quad), useNativeDriver: false }).start(() => {
       setActive(false);
     });
   }, [triggerKey, progress]);
 
   if (!active) return null;
 
-  const ring = (maxScale: number, delay: number) => {
-    const p = progress.interpolate({ inputRange: [0, Math.min(1, delay), 1], outputRange: [0, 0, 1] });
+  const halo = (maxScale: number, delay: number, peakOpacity: number, size: number) => {
+    const p = progress.interpolate({ inputRange: [0, Math.min(0.9, delay), 1], outputRange: [0, 0, 1] });
     return (
       <Animated.View
         style={{
-          position: 'absolute', width: 90, height: 90, borderRadius: 45,
-          borderWidth: 2, borderColor: colors.green,
-          opacity: p.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0] }),
-          transform: [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.3, maxScale] }) }],
+          position: 'absolute', width: size, height: size, borderRadius: size / 2,
+          backgroundColor: 'rgba(255,255,255,1)',
+          opacity: p.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, peakOpacity, 0] }),
+          transform: [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.2, maxScale] }) }],
         }}
       />
     );
@@ -126,8 +126,10 @@ function QuantumBlast({ triggerKey }: { triggerKey: number }) {
 
   return (
     <View pointerEvents="none" style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
-      {ring(3.2, 0)}
-      {ring(2.2, 0.12)}
+      {halo(4.6, 0, 0.05, 160)}
+      {halo(3.4, 0.08, 0.08, 120)}
+      {halo(2.4, 0.05, 0.12, 90)}
+      {halo(1.6, 0.15, 0.16, 60)}
     </View>
   );
 }
