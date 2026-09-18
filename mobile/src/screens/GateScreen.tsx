@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
-  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,29 +20,108 @@ import { clockHHMM } from '../util/time';
 
 type Tab = 'login' | 'register';
 
-/** Wraps the identity mark in a stuttering glitch-in / hold-6s / glitch-out loop, instead of
- *  a plain static render — an unstable signal trying to hold itself together, on brand for
- *  a "restricted node" you're forcing a connection to. */
+// A single frame of a glitch burst: an instant (not tweened) cut to `o` opacity, `dx` horizontal
+// tear in pixels, held for `hold` ms before the next cut. Real glitches snap between states —
+// interpolating between them with easing is what makes an animation read as a smooth fade
+// instead, which is the thing to avoid here.
+type GlitchFrame = { o: number; dx: number; hold: number };
+
+const GLITCH_IN: GlitchFrame[] = [
+  { o: 0.6, dx: -6, hold: 30 },
+  { o: 0, dx: 4, hold: 60 },
+  { o: 0.8, dx: -3, hold: 25 },
+  { o: 0.1, dx: 0, hold: 90 },
+  { o: 1, dx: 5, hold: 20 },
+  { o: 0.3, dx: -4, hold: 40 },
+  { o: 1, dx: 0, hold: 0 },
+];
+
+const GLITCH_OUT: GlitchFrame[] = [
+  { o: 0.4, dx: 5, hold: 25 },
+  { o: 1, dx: -5, hold: 20 },
+  { o: 0.1, dx: 3, hold: 60 },
+  { o: 0.7, dx: 0, hold: 30 },
+  { o: 0, dx: 0, hold: 0 },
+];
+
+/** Wraps the identity mark in a real glitch-in / hold-6s / glitch-out loop -- instant snap-cuts
+ *  between opacity/position states (not eased tweens) so it actually reads as signal
+ *  instability, not a fade. `useNativeDriver: false` throughout: Animated's native driver isn't
+ *  reliably supported on the web target (Expo web / react-native-web), where it can silently
+ *  stop a loop dead after one pass instead of erroring. */
 function GlitchFace({ children }: { children: React.ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const flicker = (steps: number[]) =>
-      steps.map((v) => Animated.timing(opacity, { toValue: v, duration: 55, easing: Easing.linear, useNativeDriver: true }));
+    let cancelled = false;
 
-    const loop = Animated.loop(
-      Animated.sequence([
-        ...flicker([0.5, 0.05, 0.8, 0.15, 1, 0.4, 1]), // glitch in
-        Animated.delay(6000), // hold
-        ...flicker([0.4, 0.9, 0.1, 0.6, 0]), // glitch out
-        Animated.delay(500), // hold hidden
-      ]),
+    const playBurst = (frames: GlitchFrame[]) =>
+      new Promise<void>((resolve) => {
+        Animated.sequence(
+          frames.flatMap((f) => [
+            Animated.parallel([
+              Animated.timing(opacity, { toValue: f.o, duration: 0, useNativeDriver: false }),
+              Animated.timing(translateX, { toValue: f.dx, duration: 0, useNativeDriver: false }),
+            ]),
+            Animated.delay(f.hold),
+          ]),
+        ).start(() => resolve());
+      });
+
+    (async function loop() {
+      while (!cancelled) {
+        await playBurst(GLITCH_IN);
+        await new Promise((r) => setTimeout(r, 6000));
+        if (cancelled) break;
+        await playBurst(GLITCH_OUT);
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [opacity, translateX]);
+
+  return (
+    <Animated.View style={{ width: '100%', height: '100%', opacity, transform: [{ translateX }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
+const MATRIX_CHARS = '01アイウエオカキクケコサシスセソタチツテト$#%&*+=<>';
+function randomMatrixChar() {
+  return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+}
+
+/** A row of small glyphs that re-randomize on an interval -- WYRD's own environment (the
+ *  matrix-style character noise everywhere else in this screen) leaking into the button's
+ *  edge instead of a plain solid line. Cycles faster and brighter while `active` (pressed/
+ *  hovered), so the border visibly reacts instead of just sitting there. */
+function MatrixEdge({ count, active }: { count: number; active: boolean }) {
+  const [chars, setChars] = useState<string[]>(() => Array.from({ length: count }, randomMatrixChar));
+
+  useEffect(() => {
+    const id = setInterval(
+      () => {
+        setChars((prev) => prev.map((c) => (Math.random() < (active ? 0.55 : 0.12) ? randomMatrixChar() : c)));
+      },
+      active ? 55 : 180,
     );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
+    return () => clearInterval(id);
+  }, [active]);
 
-  return <Animated.View style={{ width: '100%', height: '100%', opacity }}>{children}</Animated.View>;
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+      {chars.map((c, i) => (
+        <Mono key={i} style={{ fontSize: 7, lineHeight: 8, color: active ? colors.green : colors.greenBorder, opacity: active ? 1 : 0.6 }}>
+          {c}
+        </Mono>
+      ))}
+    </View>
+  );
 }
 
 /** Port of the `locked4` vortex gate overlay: closed (wordmark + ENTER) until tapped, then the
@@ -59,6 +137,7 @@ export function GateScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [enterPressed, setEnterPressed] = useState(false);
   const { status, login, startRegister, verifyCode, finishRegister, resetToLogin, busy, error, clearError } = useAuth();
 
   React.useEffect(() => {
@@ -116,20 +195,24 @@ export function GateScreen() {
       >
         {!open && (
           <View style={styles.closedWrap}>
-            <View style={{ width: 96, height: 96 }}>
+            <View style={{ width: 60, height: 60 }}>
               <GlitchFace>
                 <FaceMark mode="scan" />
               </GlitchFace>
             </View>
             <Display style={styles.wordmark}>WYRD</Display>
-            <Pressable
-              onPress={enter}
-              onPressIn={() => vortexRef.current?.setIntensity(1)}
-              onPressOut={() => vortexRef.current?.setIntensity(0)}
-              style={({ pressed }) => [styles.enterBtn, pressed && { borderColor: colors.green }]}
-            >
-              <Display style={styles.enterLabel}>ENTER</Display>
-            </Pressable>
+            <View style={styles.enterWrap}>
+              <MatrixEdge count={9} active={enterPressed} />
+              <Pressable
+                onPress={enter}
+                onPressIn={() => { setEnterPressed(true); vortexRef.current?.setIntensity(1); }}
+                onPressOut={() => { setEnterPressed(false); vortexRef.current?.setIntensity(0); }}
+                style={[styles.enterBtn, enterPressed && { borderColor: colors.green }]}
+              >
+                <Display style={styles.enterLabel}>ENTER</Display>
+              </Pressable>
+              <MatrixEdge count={9} active={enterPressed} />
+            </View>
           </View>
         )}
         <Mono style={styles.imagining}>WYRD is imagining: {shape}</Mono>
@@ -242,11 +325,12 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   closedWrap: { alignItems: 'center', gap: 18 },
   wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.green, textShadowRadius: 14 },
+  enterWrap: { alignItems: 'stretch', width: 150, gap: 3 },
   enterBtn: {
     borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
-    paddingHorizontal: 34, paddingVertical: 12, backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 20, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center',
   },
-  enterLabel: { fontSize: 22, letterSpacing: 6 },
+  enterLabel: { fontSize: 16, letterSpacing: 4 },
   imagining: { minHeight: 16, fontSize: 10, letterSpacing: 1, color: colors.greenDim, textAlign: 'center', marginTop: 16 },
   authPanel: {
     position: 'absolute', alignSelf: 'center', bottom: 34, width: '86%', maxWidth: 320,
