@@ -97,12 +97,18 @@ function GlitchFace({ children }: { children: React.ReactNode }) {
  *  a field collapsing outward rather than a single flat expanding circle. */
 function QuantumBlast({ triggerKey }: { triggerKey: number }) {
   const progress = useRef(new Animated.Value(0)).current;
+  const [active, setActive] = useState(false);
 
   useEffect(() => {
     if (triggerKey === 0) return; // don't play on initial mount
+    setActive(true);
     progress.setValue(0);
-    Animated.timing(progress, { toValue: 1, duration: 550, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(progress, { toValue: 1, duration: 550, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => {
+      setActive(false);
+    });
   }, [triggerKey, progress]);
+
+  if (!active) return null;
 
   const ring = (maxScale: number, delay: number) => {
     const p = progress.interpolate({ inputRange: [0, Math.min(1, delay), 1], outputRange: [0, 0, 1] });
