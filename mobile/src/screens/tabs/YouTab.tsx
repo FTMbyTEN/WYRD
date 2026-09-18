@@ -14,7 +14,7 @@ function daysSince(iso: string | undefined) {
 }
 
 export function YouTab({ tts, onToggleTts }: { tts: boolean; onToggleTts: () => void }) {
-  const { username, logout } = useAuth();
+  const { email: username, logout } = useAuth();
   const { profile } = useProfile();
   const { total: msgCount } = useConversations();
   const { mind } = useMind();

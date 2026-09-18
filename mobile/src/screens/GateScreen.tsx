@@ -20,16 +20,19 @@ import { clockHHMM } from '../util/time';
 type Tab = 'login' | 'register';
 
 /** Port of the `locked4` vortex gate overlay: closed (wordmark + ENTER) until tapped, then the
- *  auth panel slides up. Wired to the real POST /api/auth/login and /api/auth/register. */
+ *  auth panel slides up. Wired to Serverpod's email+password auth (see serverpodAuth.ts) --
+ *  login is one step, registration is three (email -> emailed code -> password), unlike the
+ *  old Node backend's single-step username+password register. */
 export function GateScreen() {
   const { width, height } = useWindowDimensions();
   const vortexRef = useRef<VortexHandle>(null);
   const [shape, setShape] = useState('');
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('login');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, register, busy, error, clearError } = useAuth();
+  const [code, setCode] = useState('');
+  const { status, login, startRegister, verifyCode, finishRegister, resetToLogin, busy, error, clearError } = useAuth();
 
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -46,11 +49,29 @@ export function GateScreen() {
   };
 
   const submit = async () => {
-    if (!username.trim() || !password) return;
     vortexRef.current?.burst();
-    const ok = tab === 'login' ? await login(username.trim(), password) : await register(username.trim(), password);
-    if (ok) setOpen(false);
+    if (tab === 'login') {
+      if (!email.trim() || !password) return;
+      const ok = await login(email.trim(), password);
+      if (ok) setOpen(false);
+      return;
+    }
+    if (status === 'awaitingVerification') {
+      if (!code.trim()) return;
+      await verifyCode(code.trim());
+      return;
+    }
+    if (status === 'awaitingPassword') {
+      if (!password) return;
+      const ok = await finishRegister(password);
+      if (ok) setOpen(false);
+      return;
+    }
+    if (!email.trim()) return;
+    await startRegister(email.trim());
   };
+
+  const registerStepLabel = status === 'awaitingVerification' ? 'enter the code emailed to you' : status === 'awaitingPassword' ? 'choose a password' : 'designation (email)';
 
   return (
     <View style={{ flex: 1, width, height, backgroundColor: '#000' }}>
@@ -92,36 +113,78 @@ export function GateScreen() {
 
             <View style={styles.tabRow}>
               <Pressable
-                onPress={() => { setTab('login'); clearError(); }}
+                onPress={() => { setTab('login'); resetToLogin(); }}
                 style={[styles.tabBtn, { borderColor: tab === 'login' ? colors.green : colors.greenDim }]}
               >
                 <Mono style={{ color: tab === 'login' ? colors.green : colors.greenDim, fontSize: 11, letterSpacing: 2 }}>LOGIN</Mono>
               </Pressable>
               <Pressable
-                onPress={() => { setTab('register'); clearError(); }}
+                onPress={() => { setTab('register'); resetToLogin(); }}
                 style={[styles.tabBtn, { borderColor: tab === 'register' ? colors.green : colors.greenDim }]}
               >
                 <Mono style={{ color: tab === 'register' ? colors.green : colors.greenDim, fontSize: 11, letterSpacing: 2 }}>REGISTER</Mono>
               </Pressable>
             </View>
 
-            <TextInput
-              value={username}
-              onChangeText={setUsername}
-              placeholder="designation"
-              placeholderTextColor="#0a9c2f88"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-            />
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              placeholder="access key"
-              placeholderTextColor="#0a9c2f88"
-              secureTextEntry
-              style={[styles.input, { marginBottom: 0 }]}
-            />
+            {tab === 'login' && (
+              <>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="designation (email)"
+                  placeholderTextColor="#0a9c2f88"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  style={styles.input}
+                />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="access key"
+                  placeholderTextColor="#0a9c2f88"
+                  secureTextEntry
+                  style={[styles.input, { marginBottom: 0 }]}
+                />
+              </>
+            )}
+
+            {tab === 'register' && status !== 'awaitingVerification' && status !== 'awaitingPassword' && (
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder={registerStepLabel}
+                placeholderTextColor="#0a9c2f88"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                style={[styles.input, { marginBottom: 0 }]}
+              />
+            )}
+
+            {tab === 'register' && status === 'awaitingVerification' && (
+              <TextInput
+                value={code}
+                onChangeText={setCode}
+                placeholder={registerStepLabel}
+                placeholderTextColor="#0a9c2f88"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="number-pad"
+                style={[styles.input, { marginBottom: 0 }]}
+              />
+            )}
+
+            {tab === 'register' && status === 'awaitingPassword' && (
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder={registerStepLabel}
+                placeholderTextColor="#0a9c2f88"
+                secureTextEntry
+                style={[styles.input, { marginBottom: 0 }]}
+              />
+            )}
 
             {!!error && <Mono style={styles.errorText}>{error}</Mono>}
 
@@ -130,7 +193,11 @@ export function GateScreen() {
                 {busy ? 'CONNECTING…' : '> AUTHENTICATE'}
               </Mono>
             </Pressable>
-            <Mono style={styles.hint}>each designation gets its own private dialogue thread</Mono>
+            <Mono style={styles.hint}>
+              {tab === 'register' && status === 'awaitingVerification'
+                ? 'check your email for a one-time code'
+                : 'each designation gets its own private dialogue thread'}
+            </Mono>
           </View>
         )}
       </KeyboardAvoidingView>
