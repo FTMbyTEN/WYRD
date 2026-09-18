@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { VortexCanvas, type VortexHandle } from '../components/VortexCanvas';
+import { FaceMark } from '../components/FaceMark';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
@@ -24,6 +25,73 @@ type Tab = 'login' | 'register';
 // tear in pixels, held for `hold` ms before the next cut. Real glitches snap between states —
 // interpolating between them with easing is what makes an animation read as a smooth fade
 // instead, which is the thing to avoid here.
+type GlitchFrame = { o: number; dx: number; hold: number };
+
+const GLITCH_IN: GlitchFrame[] = [
+  { o: 0.6, dx: -6, hold: 30 },
+  { o: 0, dx: 4, hold: 60 },
+  { o: 0.8, dx: -3, hold: 25 },
+  { o: 0.1, dx: 0, hold: 90 },
+  { o: 1, dx: 5, hold: 20 },
+  { o: 0.3, dx: -4, hold: 40 },
+  { o: 1, dx: 0, hold: 0 },
+];
+
+const GLITCH_OUT: GlitchFrame[] = [
+  { o: 0.4, dx: 5, hold: 25 },
+  { o: 1, dx: -5, hold: 20 },
+  { o: 0.1, dx: 3, hold: 60 },
+  { o: 0.7, dx: 0, hold: 30 },
+  { o: 0, dx: 0, hold: 0 },
+];
+
+/** Wraps the identity mark in a real glitch-in / hold-6s / glitch-out loop -- instant snap-cuts
+ *  between opacity/position states (not eased tweens) so it actually reads as signal
+ *  instability, not a fade. `useNativeDriver: false` throughout: Animated's native driver isn't
+ *  reliably supported on the web target (Expo web / react-native-web), where it can silently
+ *  stop a loop dead after one pass instead of erroring. */
+function GlitchFace({ children }: { children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const playBurst = (frames: GlitchFrame[]) =>
+      new Promise<void>((resolve) => {
+        Animated.sequence(
+          frames.flatMap((f) => [
+            Animated.parallel([
+              Animated.timing(opacity, { toValue: f.o, duration: 0, useNativeDriver: false }),
+              Animated.timing(translateX, { toValue: f.dx, duration: 0, useNativeDriver: false }),
+            ]),
+            Animated.delay(f.hold),
+          ]),
+        ).start(() => resolve());
+      });
+
+    (async function loop() {
+      while (!cancelled) {
+        await playBurst(GLITCH_IN);
+        await new Promise((r) => setTimeout(r, 6000));
+        if (cancelled) break;
+        await playBurst(GLITCH_OUT);
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [opacity, translateX]);
+
+  return (
+    <Animated.View style={{ width: '100%', height: '100%', opacity, transform: [{ translateX }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
 /** An expanding, fading ring -- a "blast"/quantum-field pulse played once per [triggerKey]
  *  increment, behind the WYRD wordmark. Two concentric rings on slightly offset timing read as
  *  a field collapsing outward rather than a single flat expanding circle. */
@@ -136,6 +204,11 @@ export function GateScreen() {
       >
         {!open && (
           <View style={styles.closedWrap}>
+            <View style={{ width: 60, height: 60 }}>
+              <GlitchFace>
+                <FaceMark mode="scan" />
+              </GlitchFace>
+            </View>
             <Pressable onPress={enter} style={{ alignItems: 'center', justifyContent: 'center' }}>
               {({ pressed }) => (
                 <>
