@@ -57,7 +57,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
   }
 
   const starPaint = Skia.Paint();
-  starPaint.setColor(Skia.Color('rgba(0,255,65,0.18)'));
+  starPaint.setColor(Skia.Color('rgba(0,0,0,0.108)'));
 
   // Quantize per-point alpha into buckets so we can batch-draw with drawPoints instead of one
   // draw call per particle (720x/frame) — keeps the depth-fade look at a fraction of the cost.
@@ -86,7 +86,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
       }
       intensity += (intensityTarget - intensity) * 0.08;
 
-      canvas.clear(Skia.Color('#000000'));
+      canvas.clear(Skia.Color('#ffffff'));
       const starPts = stars.map((s) => ({ x: s.x * width, y: s.y * height }));
       starPaint.setStrokeWidth(1.4);
       canvas.drawPoints(PointMode.Points, starPts, starPaint);
@@ -120,7 +120,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
         const pts = bucketPoints[b];
         if (!pts.length) continue;
         const alpha = (b + 1) / BUCKETS;
-        bucketPaints[b].setColor(Skia.Color(`rgba(0,255,65,${alpha.toFixed(3)})`));
+        bucketPaints[b].setColor(Skia.Color(`rgba(0,0,0,${alpha.toFixed(3)})`));
         bucketPaints[b].setStrokeWidth(Math.max(1, size * dprGuess()));
         canvas.drawPoints(PointMode.Points, pts, bucketPaints[b]);
       }

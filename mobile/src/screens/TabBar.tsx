@@ -33,7 +33,7 @@ export function TabBar({ active, onChange }: { active: TabKey; onChange: (t: Tab
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.greenBorder,
-    backgroundColor: 'rgba(0,15,4,0.92)', paddingBottom: Platform.OS === 'ios' ? 18 : 10,
+    backgroundColor: 'rgba(255,255,255,0.92)', paddingBottom: Platform.OS === 'ios' ? 18 : 10,
   },
   btn: { flex: 1, alignItems: 'center', paddingTop: 11, paddingBottom: 7 },
   topBorder: { position: 'absolute', top: -1, left: 0, right: 0, height: 2 },

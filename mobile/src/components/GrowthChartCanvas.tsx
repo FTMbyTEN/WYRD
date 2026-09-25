@@ -24,12 +24,12 @@ export function GrowthChartCanvas({ snapshots }: { snapshots: GrowthSnapshot[] }
   const picture = useSkiaLoop(
     (canvas, W, H) => {
       const pad = 26;
-      canvas.clear(Skia.Color('rgba(0,0,0,0)'));
+      canvas.clear(Skia.Color('rgba(255,255,255,0)'));
 
       const gridPaint = Skia.Paint();
       gridPaint.setStyle(1);
       gridPaint.setStrokeWidth(1);
-      gridPaint.setColor(Skia.Color('rgba(6,61,19,0.9)'));
+      gridPaint.setColor(Skia.Color('rgba(0,0,0,0.18)'));
       for (let i = 0; i <= 4; i++) {
         const y = pad + ((H - pad * 2) * i) / 4;
         canvas.drawLine(pad, y, W - pad, y, gridPaint);
@@ -49,19 +49,19 @@ export function GrowthChartCanvas({ snapshots }: { snapshots: GrowthSnapshot[] }
         paint.setColor(Skia.Color(color));
         canvas.drawPath(path, paint);
       };
-      line(vocab, '#00ff41');
-      line(digest, '#33ccff');
+      line(vocab, '#000000');
+      line(digest, '#888888');
 
       const labelPaint1 = Skia.Paint();
-      labelPaint1.setColor(Skia.Color('#00ff41'));
+      labelPaint1.setColor(Skia.Color('#000000'));
       canvas.drawText('— vocabulary', pad, pad - 8, labelPaint1, font);
       const labelPaint2 = Skia.Paint();
-      labelPaint2.setColor(Skia.Color('#33ccff'));
+      labelPaint2.setColor(Skia.Color('#888888'));
       canvas.drawText('— digest %', pad + 110, pad - 8, labelPaint2, font);
 
       if (!snapshots.length) {
         const emptyPaint = Skia.Paint();
-        emptyPaint.setColor(Skia.Color('#063d13'));
+        emptyPaint.setColor(Skia.Color('#cccccc'));
         const msg = 'no snapshots yet — tracked forward from here';
         canvas.drawText(msg, W / 2 - font.getTextWidth(msg) / 2, H / 2, emptyPaint, font);
       }

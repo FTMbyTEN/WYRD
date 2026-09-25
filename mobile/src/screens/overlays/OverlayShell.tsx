@@ -15,7 +15,7 @@ interface Props {
 export function OverlayShell({ visible, title, onClose, children, footer, black }: Props) {
   return (
     <Modal visible={visible} animationType="fade" transparent={!black} onRequestClose={onClose}>
-      <View style={[styles.root, { backgroundColor: black ? '#000' : 'rgba(0,0,0,0.94)' }]}>
+      <View style={[styles.root, { backgroundColor: black ? '#ffffff' : 'rgba(255,255,255,0.94)' }]}>
         <View style={styles.header}>
           <Display style={styles.title}>{`>_ ${title}`}</Display>
           <Pressable onPress={onClose} hitSlop={12}>

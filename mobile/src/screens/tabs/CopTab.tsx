@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, letterSpacing: 1 },
   subheading: { marginTop: 2, fontSize: 9.5, lineHeight: 14, color: colors.greenDim },
   configPanel: {
-    marginHorizontal: 16, backgroundColor: 'rgba(0,15,4,0.75)', borderWidth: 1, borderColor: colors.greenBorder,
+    marginHorizontal: 16, backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 1, borderColor: colors.greenBorder,
     borderRadius: 4, padding: 13,
   },
   configLabel: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 10 },
   filterBtn: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 2, paddingHorizontal: 12, paddingVertical: 7 },
   list: { paddingHorizontal: 16, paddingBottom: 30, gap: 9 },
-  entry: { backgroundColor: 'rgba(0,15,4,0.72)', borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 4, borderLeftWidth: 2 },
+  entry: { backgroundColor: 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 4, borderLeftWidth: 2 },
   entryBtn: { padding: 12 },
   entryTopRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   entryTag: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },

@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   identityWrap: { width: '100%' },
   identityPanel: { alignItems: 'center', padding: 18 },
   avatarWrap: { width: 64, height: 64, marginBottom: 10 },
-  name: { fontSize: 40, lineHeight: 40, letterSpacing: 4, textShadowColor: colors.green, textShadowRadius: 14 },
+  name: { fontSize: 40, lineHeight: 40, letterSpacing: 4, textShadowColor: colors.glow, textShadowRadius: 14 },
   sessionLine: { marginTop: 6, fontSize: 10, letterSpacing: 1, color: colors.greenDim },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   gridCell: { width: '47%' },

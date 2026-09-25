@@ -71,7 +71,7 @@ export function DiaryTab() {
                   onPress={() => setDiaryI(i)}
                   style={[
                     styles.dateChip,
-                    { borderColor: active ? colors.green : colors.greenBorder, backgroundColor: active ? 'rgba(0,255,65,0.08)' : 'rgba(0,15,4,0.7)' },
+                    { borderColor: active ? colors.green : colors.greenBorder, backgroundColor: active ? 'rgba(0,0,0,0.048)' : 'rgba(255,255,255,0.7)' },
                   ]}
                 >
                   <Mono style={{ fontSize: 10, letterSpacing: 1, color: active ? colors.green : colors.greenDim }}>
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   dreamRow: { borderLeftWidth: 2, borderLeftColor: colors.greenBorder, paddingLeft: 12 },
   dreamTime: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
   dreamText: { marginTop: 4, fontSize: 13.5, lineHeight: 23, color: colors.mintBright, fontStyle: 'italic' },
-  reasoningCard: { backgroundColor: 'rgba(0,15,4,0.7)', borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 4, padding: 12 },
+  reasoningCard: { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 4, padding: 12 },
   reasoningFile: { fontSize: 9, letterSpacing: 1, color: colors.greenBorderDim },
   reasoningBody: { marginTop: 5, fontSize: 12, lineHeight: 18, color: colors.mint },
   dateRail: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim, paddingHorizontal: 14, paddingVertical: 10 },

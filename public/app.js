@@ -6,7 +6,7 @@
   const canvas = document.getElementById('mainFaceCanvas');
   if (!canvas || typeof THREE === 'undefined' || typeof FACE_VERTS === 'undefined') return;
 
-  const GREEN = 0x00ff41;
+  const GREEN = 0x000000;
   const FACE_SCALE = 1.9;
 
   function buildFaceGeometry() {
@@ -59,8 +59,8 @@
   // solid shaded core so the face reads as an actual structural form, not an empty wire cage —
   // opaque but toned down from full blast, so shading/depth still reads instead of a flat glow
   const solidMat = new THREE.MeshStandardMaterial({
-    color: 0x061f0d,
-    emissive: 0x0a3d1e,
+    color: 0xeeeeee,
+    emissive: 0x000000,
     emissiveIntensity: 0.5,
     metalness: 0.25,
     roughness: 0.5,
@@ -70,18 +70,18 @@
 
   // structural detail lines laid directly over the solid fill — visible and clean, but with a
   // touch of transparency so it reads as structure, not a solid mask
-  const wireMat = new THREE.MeshBasicMaterial({ color: 0x6fffb0, transparent: true, opacity: 0.65 });
+  const wireMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.65 });
   wireMat.wireframe = true;
   const wireHead = new THREE.Mesh(headGeo, wireMat);
   wireHead.scale.setScalar(1.004); // avoid z-fighting with the solid mesh directly beneath it
   group.add(wireHead);
 
   // MeshStandardMaterial needs real lights to read as solid/shaded, unlike the old MeshBasicMaterial
-  scene.add(new THREE.AmbientLight(0x1c5c2e, 1.1));
-  const keyLight = new THREE.PointLight(0x00ff41, 1.5, 20);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+  const keyLight = new THREE.PointLight(0x000000, 1.5, 20);
   keyLight.position.set(1.5, 1.5, 4);
   scene.add(keyLight);
-  const rimLight = new THREE.PointLight(0x00ff41, 0.6, 20);
+  const rimLight = new THREE.PointLight(0x000000, 0.6, 20);
   rimLight.position.set(-2, -1, 2);
   scene.add(rimLight);
 
@@ -93,8 +93,8 @@
   }
   function makeEye(idx) {
     const g = new THREE.Group();
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), new THREE.MeshBasicMaterial({ color: 0x0a5c22, transparent: true, opacity: 0.8 }));
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), new THREE.MeshBasicMaterial({ color: 0xd4ffe0 }));
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.8 }));
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     pupil.position.z = 0.1;
     g.add(white, pupil);
     g.position.copy(eyeAnchor(idx));
@@ -141,7 +141,7 @@
 })();
 
 // ---------- Matrix digital rain — the actual classic look: grid-snapped columns, solid green
-// characters, a bright near-white leading glyph, fading to black via canvas persistence ----------
+// grey characters on white, a solid black leading glyph, fading to white via canvas persistence ----------
 (function rain() {
   const canvas = document.getElementById('rain');
   const ctx = canvas.getContext('2d');
@@ -167,7 +167,7 @@
     const dt = Math.min(50, now - last);
     last = now;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)'; // crisp trail cutoff, not a soft blur
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; // crisp trail cutoff, not a soft blur
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.font = `${fontSize}px monospace`;
 
@@ -182,9 +182,9 @@
       const char = chars[Math.floor(Math.random() * chars.length)];
 
       // the bright head glyph is what actually reads as "code" — everything else is just this,
-      // aged by a few frames of the black overlay above
+      // aged by a few frames of the white overlay above
       const isHead = Math.random() > 0.94;
-      ctx.fillStyle = isHead ? '#d4ffe0' : '#00ff41';
+      ctx.fillStyle = isHead ? '#000000' : '#8a8a8a';
       ctx.fillText(char, x, y);
 
       if (y > canvas.height && Math.random() > 0.975) {
@@ -1179,7 +1179,7 @@ function initReasoningControls() {
     try {
       const { nodes, edges } = await (await fetch('/api/concepts')).json();
       if (!nodes.length) {
-        conceptMapSvg.innerHTML = '<text x="300" y="300" fill="#3d7a4d" font-size="12" text-anchor="middle">not enough memory yet to map connections</text>';
+        conceptMapSvg.innerHTML = '<text x="300" y="300" fill="#777777" font-size="12" text-anchor="middle">not enough memory yet to map connections</text>';
         return;
       }
       const cx = 300, cy = 300, R = 240;
@@ -1209,7 +1209,7 @@ function initReasoningControls() {
       });
       conceptMapSvg.innerHTML = svg;
     } catch (e) {
-      conceptMapSvg.innerHTML = '<text x="300" y="300" fill="#3d7a4d" font-size="12" text-anchor="middle">failed to load — try again</text>';
+      conceptMapSvg.innerHTML = '<text x="300" y="300" fill="#777777" font-size="12" text-anchor="middle">failed to load — try again</text>';
     }
   }
   if (viewConceptMapBtn && conceptMapModal) {
@@ -1244,22 +1244,22 @@ function initReasoningControls() {
     try {
       const snaps = await (await fetch('/api/growth')).json();
       if (snaps.length < 2) {
-        growthSvg.innerHTML = '<text x="300" y="150" fill="#3d7a4d" font-size="12" text-anchor="middle">not enough snapshots yet — one is taken automatically every 30 minutes</text>';
+        growthSvg.innerHTML = '<text x="300" y="150" fill="#777777" font-size="12" text-anchor="middle">not enough snapshots yet — one is taken automatically every 30 minutes</text>';
         return;
       }
       const w = 600, h = 300, pad = 20;
       const vocabLine = polylinePoints(snaps.map((s) => s.vocabCount), w, h, pad);
       const digestLine = polylinePoints(snaps.map((s) => s.digestPercent), w, h, pad);
       growthSvg.innerHTML = `
-        <polyline points="${vocabLine}" fill="none" stroke="#00ff41" stroke-width="2" />
-        <polyline points="${digestLine}" fill="none" stroke="#33ccff" stroke-width="2" opacity="0.8" />
-        <text x="10" y="16" fill="#00ff41" font-size="10" font-family="'Share Tech Mono', monospace">— vocabulary</text>
-        <text x="120" y="16" fill="#33ccff" font-size="10" font-family="'Share Tech Mono', monospace">— digest %</text>
-        <text x="10" y="${h - 6}" fill="#3d7a4d" font-size="9" font-family="'Share Tech Mono', monospace">${new Date(snaps[0].timestamp).toLocaleString()}</text>
-        <text x="${w - 10}" y="${h - 6}" fill="#3d7a4d" font-size="9" font-family="'Share Tech Mono', monospace" text-anchor="end">${new Date(snaps[snaps.length - 1].timestamp).toLocaleString()}</text>
+        <polyline points="${vocabLine}" fill="none" stroke="#000000" stroke-width="2" />
+        <polyline points="${digestLine}" fill="none" stroke="#888888" stroke-width="2" opacity="0.8" />
+        <text x="10" y="16" fill="#000000" font-size="10" font-family="'Share Tech Mono', monospace">— vocabulary</text>
+        <text x="120" y="16" fill="#888888" font-size="10" font-family="'Share Tech Mono', monospace">— digest %</text>
+        <text x="10" y="${h - 6}" fill="#777777" font-size="9" font-family="'Share Tech Mono', monospace">${new Date(snaps[0].timestamp).toLocaleString()}</text>
+        <text x="${w - 10}" y="${h - 6}" fill="#777777" font-size="9" font-family="'Share Tech Mono', monospace" text-anchor="end">${new Date(snaps[snaps.length - 1].timestamp).toLocaleString()}</text>
       `;
     } catch (e) {
-      growthSvg.innerHTML = '<text x="300" y="150" fill="#3d7a4d" font-size="12" text-anchor="middle">failed to load — try again</text>';
+      growthSvg.innerHTML = '<text x="300" y="150" fill="#777777" font-size="12" text-anchor="middle">failed to load — try again</text>';
     }
   }
   if (viewGrowthBtn && growthModal) {

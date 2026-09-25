@@ -26,12 +26,12 @@ export function RainBackground({ opacity = 0.1 }: { opacity?: number }) {
       lastRef.current = now;
 
       const st = stateRef.current;
-      canvas.drawColor(Skia.Color('rgba(0,0,0,0.09)'));
+      canvas.drawColor(Skia.Color('rgba(255,255,255,0.09)'));
       const paint = Skia.Paint();
       for (let i = 0; i < st.cols; i++) {
         const ch = CHARS[(Math.random() * CHARS.length) | 0];
         const y = st.drops[i] * fs;
-        paint.setColor(Skia.Color(Math.random() > 0.96 ? '#baffc9' : '#00ff41'));
+        paint.setColor(Skia.Color(Math.random() > 0.96 ? '#111111' : '#000000'));
         canvas.drawText(ch, i * fs, y, paint, font);
         if (y > h && Math.random() > 0.975) st.drops[i] = 0;
         st.drops[i] += 1;

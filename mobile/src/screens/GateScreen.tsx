@@ -116,7 +116,7 @@ function QuantumBlast({ triggerKey }: { triggerKey: number }) {
       <Animated.View
         style={{
           position: 'absolute', width: size, height: size, borderRadius: size / 2,
-          backgroundColor: 'rgba(255,255,255,1)',
+          backgroundColor: 'rgba(0,0,0,0.5)',
           opacity: p.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, peakOpacity, 0] }),
           transform: [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.2, maxScale] }) }],
         }}
@@ -210,7 +210,7 @@ export function GateScreen() {
   const registerStepLabel = status === 'awaitingVerification' ? 'enter the code emailed to you' : status === 'awaitingPassword' ? 'choose a password' : 'designation (email)';
 
   return (
-    <View style={{ flex: 1, width, height, backgroundColor: '#000' }}>
+    <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
       <VortexCanvas ref={vortexRef} onShapeChange={setShape} style={StyleSheet.absoluteFill} />
       <ScreenEffects />
 
@@ -268,7 +268,7 @@ export function GateScreen() {
                   value={email}
                   onChangeText={setEmail}
                   placeholder="designation (email)"
-                  placeholderTextColor="#0a9c2f88"
+                  placeholderTextColor="#55555588"
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
@@ -278,7 +278,7 @@ export function GateScreen() {
                   value={password}
                   onChangeText={setPassword}
                   placeholder="access key"
-                  placeholderTextColor="#0a9c2f88"
+                  placeholderTextColor="#55555588"
                   secureTextEntry
                   style={[styles.input, { marginBottom: 0 }]}
                 />
@@ -290,7 +290,7 @@ export function GateScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder={registerStepLabel}
-                placeholderTextColor="#0a9c2f88"
+                placeholderTextColor="#55555588"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -303,7 +303,7 @@ export function GateScreen() {
                 value={code}
                 onChangeText={setCode}
                 placeholder={registerStepLabel}
-                placeholderTextColor="#0a9c2f88"
+                placeholderTextColor="#55555588"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="number-pad"
@@ -316,7 +316,7 @@ export function GateScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder={registerStepLabel}
-                placeholderTextColor="#0a9c2f88"
+                placeholderTextColor="#55555588"
                 secureTextEntry
                 style={[styles.input, { marginBottom: 0 }]}
               />
@@ -349,19 +349,19 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   closedWrap: { alignItems: 'center', gap: 18 },
-  wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.green, textShadowRadius: 14 },
+  wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.glow, textShadowRadius: 14 },
   imagining: { minHeight: 16, fontSize: 10, letterSpacing: 1, color: colors.greenDim, textAlign: 'center', marginTop: 16 },
   authPanel: {
     position: 'absolute', alignSelf: 'center', bottom: 34, width: '86%', maxWidth: 320,
-    backgroundColor: 'rgba(0,15,4,0.9)', borderWidth: 1, borderColor: colors.greenDim, borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: colors.greenDim, borderRadius: 6,
     padding: 14,
   },
-  authWordmark: { fontSize: 30, letterSpacing: 6, textAlign: 'center', textShadowColor: colors.green, textShadowRadius: 10 },
+  authWordmark: { fontSize: 30, letterSpacing: 6, textAlign: 'center', textShadowColor: colors.glow, textShadowRadius: 10 },
   authSub: { marginTop: 4, textAlign: 'center', fontSize: 8, letterSpacing: 0.5, color: colors.greenDim },
   tabRow: { flexDirection: 'row', gap: 6, marginVertical: 10 },
   tabBtn: { flex: 1, borderWidth: 1, borderRadius: 2, paddingVertical: 6, alignItems: 'center' },
   input: {
-    backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
     paddingHorizontal: 10, paddingVertical: 8, marginBottom: 7, color: colors.green, fontFamily: 'ShareTechMono_400Regular', fontSize: 11.5,
   },
   errorText: { color: colors.danger, fontSize: 9.5, marginTop: 6, textAlign: 'center' },

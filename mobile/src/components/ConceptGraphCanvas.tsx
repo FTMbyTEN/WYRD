@@ -29,7 +29,7 @@ export function ConceptGraphCanvas({ graph }: { graph: ConceptsGraph | null }) {
     (canvas, W, H, now) => {
       const R = Math.min(W, H) * 0.4, cx = W / 2, cy = H / 2;
       const drift = Math.sin(now * 0.0004) * 0.05;
-      canvas.clear(Skia.Color('rgba(0,0,0,0)'));
+      canvas.clear(Skia.Color('rgba(255,255,255,0)'));
       if (!layout.length) return;
 
       const P = layout.map((n) => ({
@@ -41,7 +41,7 @@ export function ConceptGraphCanvas({ graph }: { graph: ConceptsGraph | null }) {
       const edgePaint = Skia.Paint();
       edgePaint.setStyle(1);
       edgePaint.setStrokeWidth(0.7);
-      edgePaint.setColor(Skia.Color('rgba(10,156,47,0.55)'));
+      edgePaint.setColor(Skia.Color('rgba(0,0,0,0.33)'));
       edges.forEach((e) => {
         const ai = index.get(e.a), bi = index.get(e.b);
         if (ai === undefined || bi === undefined || !P[ai] || !P[bi]) return;
@@ -49,9 +49,9 @@ export function ConceptGraphCanvas({ graph }: { graph: ConceptsGraph | null }) {
       });
 
       const nodePaint = Skia.Paint();
-      nodePaint.setColor(Skia.Color('#00ff41'));
+      nodePaint.setColor(Skia.Color('#000000'));
       const labelPaint = Skia.Paint();
-      labelPaint.setColor(Skia.Color('#7fffb0'));
+      labelPaint.setColor(Skia.Color('#111111'));
       P.forEach((n) => {
         canvas.drawCircle(n.x, n.y, n.w * 0.9, nodePaint);
         canvas.drawText(n.id, n.x - font.getTextWidth(n.id) / 2, n.y - (n.w + 6), labelPaint, font);

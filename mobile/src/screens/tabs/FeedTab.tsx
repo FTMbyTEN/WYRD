@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     width: 3, backgroundColor: colors.green, shadowColor: colors.green,
     shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
   },
-  feedItemBody: { flex: 1, backgroundColor: 'rgba(0,15,4,0.72)', borderWidth: 1, borderLeftWidth: 0, borderColor: colors.greenBorderDim, padding: 10 },
+  feedItemBody: { flex: 1, backgroundColor: 'rgba(255,255,255,0.72)', borderWidth: 1, borderLeftWidth: 0, borderColor: colors.greenBorderDim, padding: 10 },
   feedItemHead: { flexDirection: 'row', justifyContent: 'space-between' },
   feedTitle: { marginTop: 5, fontSize: 12.5, lineHeight: 18, color: colors.mint },
 });

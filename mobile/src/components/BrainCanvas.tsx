@@ -117,7 +117,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
     (canvas, W, H, now) => {
       const t = now * 0.00022;
       const R = Math.min(W, H) * 0.42;
-      canvas.clear(Skia.Color('rgba(0,0,0,0)'));
+      canvas.clear(Skia.Color('rgba(255,255,255,0)'));
 
       const ca = Math.cos(t), sa = Math.sin(t);
       const proj = points.map((p) => {
@@ -133,7 +133,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
       edges.forEach((e) => {
         const a = proj[e.a], b = proj[e.b];
         const depth = (a.d + b.d) / 2;
-        linePaint.setColor(Skia.Color(`rgba(10,156,47,${(0.22 + depth * 0.4).toFixed(3)})`));
+        linePaint.setColor(Skia.Color(`rgba(0,0,0,${(0.22 + depth * 0.4).toFixed(3)})`));
         canvas.drawLine(a.sx, a.sy, b.sx, b.sy, linePaint);
       });
 
@@ -145,7 +145,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
         const tt = (now * 0.00035 * e.speed + e.phase) % 1;
         const px = a.sx + (b.sx - a.sx) * tt, py = a.sy + (b.sy - a.sy) * tt;
         const depth = (a.d + b.d) / 2;
-        pulsePaint.setColor(Skia.Color(`rgba(186,255,201,${(0.55 + depth * 0.45).toFixed(3)})`));
+        pulsePaint.setColor(Skia.Color(`rgba(0,0,0,${(0.55 + depth * 0.45).toFixed(3)})`));
         canvas.drawCircle(px, py, 1.3 + depth * 1.1, pulsePaint);
       });
 
@@ -153,7 +153,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
       const dotPaint = Skia.Paint();
       proj.forEach((p) => {
         const pulse = 0.55 + 0.45 * Math.sin(now * 0.002 + p.ph);
-        dotPaint.setColor(Skia.Color(`rgba(0,255,65,${(0.25 + p.d * 0.9 * pulse).toFixed(3)})`));
+        dotPaint.setColor(Skia.Color(`rgba(0,0,0,${(0.25 + p.d * 0.9 * pulse).toFixed(3)})`));
         canvas.drawCircle(p.sx, p.sy, p.s * p.d * 1.5, dotPaint);
       });
 
@@ -167,7 +167,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
         const p = proj[b.nodeIdx];
         if (!p) return;
         burstPaint.setStrokeWidth(1.4 * (1 - age));
-        burstPaint.setColor(Skia.Color(`rgba(186,255,201,${(0.8 * (1 - age)).toFixed(3)})`));
+        burstPaint.setColor(Skia.Color(`rgba(0,0,0,${(0.8 * (1 - age)).toFixed(3)})`));
         canvas.drawCircle(p.sx, p.sy, 3 + age * 22 * p.d, burstPaint);
       });
     },

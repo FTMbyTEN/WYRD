@@ -15,7 +15,7 @@
   if (!canvas || !gate || typeof THREE === 'undefined') return;
 
   const N = 900; // must be evenly divisible by every ringsCount below
-  const GREEN = 0x00ff41;
+  const GREEN = 0x000000;
 
   function shapeSphere() {
     const arr = new Float32Array(N * 3);
@@ -706,7 +706,7 @@
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({
     color: GREEN, size: 0.05, sizeAttenuation: true,
-    transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false,
+    transparent: true, opacity: 0.85, blending: THREE.NormalBlending, depthWrite: false,
   });
   group.add(new THREE.Points(geo, mat));
 

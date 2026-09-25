@@ -32,7 +32,7 @@ export function AlertsOverlay({ visible, onClose }: { visible: boolean; onClose:
 const styles = StyleSheet.create({
   content: { padding: 14, gap: 10 },
   item: {
-    backgroundColor: 'rgba(0,15,4,0.72)', borderWidth: 1, borderColor: colors.greenBorderDim,
+    backgroundColor: 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: colors.greenBorderDim,
     borderLeftWidth: 2, borderLeftColor: colors.green, borderRadius: 4, padding: 10,
   },
   itemHead: { flexDirection: 'row', justifyContent: 'space-between' },

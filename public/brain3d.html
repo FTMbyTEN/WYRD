@@ -10,10 +10,10 @@
   html, body {
     margin: 0;
     height: 100%;
-    background: #000502;
+    background: #ffffff;
     overflow: hidden;
     font-family: 'Share Tech Mono', monospace;
-    color: #00ff41;
+    color: #000000;
   }
   canvas { display: block; opacity: 0; transition: opacity 1.4s cubic-bezier(0.16, 1, 0.3, 1); }
   canvas.loaded { opacity: 1; }
@@ -35,21 +35,21 @@
   #backLink {
     pointer-events: auto;
     font-size: 11px;
-    color: #00ff41;
+    color: #000000;
     text-decoration: none;
-    border: 1px solid #0a5c22;
+    border: 1px solid #888888;
     padding: 6px 12px;
     border-radius: 2px;
     letter-spacing: 1px;
-    background: rgba(0,20,8,0.6);
+    background: rgba(255,255,255,0.6);
   }
-  #backLink:hover { border-color: #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.4); }
+  #backLink:hover { border-color: #000000; box-shadow: 0 0 10px rgba(0,0,0,0.24); }
 
   #title {
     font-family: 'VT323', monospace;
     font-size: 15px;
     letter-spacing: 2px;
-    text-shadow: 0 0 6px rgba(0,255,65,0.6);
+    text-shadow: 0 0 6px rgba(0,0,0,0.36);
     opacity: 0.85;
   }
 
@@ -63,8 +63,8 @@
 
   #stats {
     pointer-events: auto;
-    background: rgba(0,20,8,0.4);
-    border: 1px solid rgba(10,92,34,0.6);
+    background: rgba(255,255,255,0.4);
+    border: 1px solid rgba(0,0,0,0.24);
     border-radius: 2px;
     padding: 4px 7px;
     font-size: 8px;
@@ -76,17 +76,17 @@
   }
   #stats:hover { opacity: 1; }
   #stats .row { display: flex; justify-content: space-between; gap: 6px; }
-  #stats .label { color: #3d7a4d; letter-spacing: 0.5px; }
-  #stats .val { color: #00ff41; text-shadow: 0 0 3px rgba(0,255,65,0.4); }
+  #stats .label { color: #777777; letter-spacing: 0.5px; }
+  #stats .val { color: #000000; text-shadow: 0 0 3px rgba(0,0,0,0.24); }
 
   /* feelings — mood/curiosity/confidence — kept minimal; the machine stats below matter more */
   #feelingsMini {
     font-size: 7px;
-    color: #2f5c3d;
+    color: #999999;
     white-space: nowrap;
     margin-bottom: 4px;
     padding-bottom: 3px;
-    border-bottom: 1px dashed rgba(10,92,34,0.5);
+    border-bottom: 1px dashed rgba(0,0,0,0.2);
   }
   #feelingsMini .meter-mini { width: 22px; height: 3px; margin-left: 2px; }
 
@@ -105,9 +105,9 @@
   }
   #feedText {
     font-size: 12px;
-    color: #7fffb0;
-    background: rgba(0,20,8,0.55);
-    border: 1px solid #0a5c22;
+    color: #111111;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid #888888;
     padding: 6px 16px;
     border-radius: 3px;
     letter-spacing: 0.5px;
@@ -129,11 +129,11 @@
     width: min(420px, 86vw);
     max-height: 70vh;
     overflow-y: auto;
-    background: rgba(0, 15, 6, 0.92);
-    border: 1px solid #00ff41;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid #000000;
     border-radius: 4px;
     padding: 18px 22px;
-    box-shadow: 0 0 40px rgba(0,255,65,0.3);
+    box-shadow: 0 0 40px rgba(0,0,0,0.18);
     backdrop-filter: blur(6px);
   }
   #inspectClose {
@@ -142,22 +142,22 @@
     right: 14px;
     cursor: pointer;
     font-size: 20px;
-    color: #4d9a63;
+    color: #666666;
     line-height: 1;
   }
-  #inspectClose:hover { color: #00ff41; }
+  #inspectClose:hover { color: #000000; }
   #inspectTopic {
     font-family: 'VT323', monospace;
     font-size: 22px;
     letter-spacing: 1px;
-    color: #00ff41;
-    text-shadow: 0 0 8px rgba(0,255,65,0.6);
+    color: #000000;
+    text-shadow: 0 0 8px rgba(0,0,0,0.36);
     margin-bottom: 10px;
     padding-right: 20px;
   }
-  #inspectBody { font-size: 12px; line-height: 1.6; color: #baffc9; }
+  #inspectBody { font-size: 12px; line-height: 1.6; color: #111111; }
   #inspectBody .row { margin-bottom: 10px; }
-  #inspectBody .label { display: block; font-size: 10px; letter-spacing: 1px; color: #4d9a63; margin-bottom: 2px; }
+  #inspectBody .label { display: block; font-size: 10px; letter-spacing: 1px; color: #666666; margin-bottom: 2px; }
 
   #legend {
     position: fixed;
@@ -169,7 +169,7 @@
   .meter-mini {
     width: 44px;
     height: 4px;
-    border: 1px solid #0a5c22;
+    border: 1px solid #888888;
     border-radius: 1px;
     overflow: hidden;
     display: inline-block;
@@ -178,7 +178,7 @@
   }
   .meter-mini-fill {
     height: 100%;
-    background: linear-gradient(90deg, #0a5c22, #00ff41);
+    background: linear-gradient(90deg, #888888, #000000);
     transition: width 0.6s ease;
   }
 </style>
@@ -217,7 +217,7 @@
 <script>
 // ---------- Scene setup ----------
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000502, 0.02);
+scene.fog = new THREE.FogExp2(0xffffff, 0.02);
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 0, 34);
@@ -306,7 +306,7 @@ for (let i = 0; i < MAX_NODES; i++) {
   p.x *= 0.88; // squash toward center so the hemispheres sit close either side of the fissure
 
   const active = initiallyActive.has(i);
-  const mat = new THREE.MeshBasicMaterial({ color: 0x0a5c22, transparent: true, opacity: active ? 0.85 : 0 });
+  const mat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: active ? 0.85 : 0 });
   const mesh = new THREE.Mesh(nodeGeo, mat);
   mesh.position.copy(p);
   mesh.scale.setScalar(active ? 1 : 0.001);
@@ -367,7 +367,7 @@ const edgeMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: t
 const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
 brainGroup.add(edgeLines);
 
-// an edge is only "real" once both endpoints exist — otherwise it stays invisible (black)
+// an edge is only "real" once both endpoints exist — otherwise it stays invisible (white, on the white background)
 const edgeActive = new Uint8Array(edgeList.length);
 function refreshEdgeActivity() {
   edgeList.forEach((e, idx) => { edgeActive[idx] = (nodes[e.a].active && nodes[e.b].active) ? 1 : 0; });
@@ -396,7 +396,7 @@ for (let i = 0; i < starCount; i++) {
   starPos[i * 3 + 2] = r * Math.cos(phi);
 }
 starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-const starMat = new THREE.PointsMaterial({ color: 0x0a5c22, size: 0.5, transparent: true, opacity: 0.4 });
+const starMat = new THREE.PointsMaterial({ color: 0x888888, size: 0.5, transparent: true, opacity: 0.4 });
 scene.add(new THREE.Points(starGeo, starMat));
 
 // ---------- Incoming data packets (net feed / lexicon) ----------
@@ -468,11 +468,11 @@ function showFeed(text) {
 }
 
 // ---------- Live data connection ----------
-const COLOR_REASONING = 0x00ff41;
-const COLOR_NET = 0x33ccff;
-const COLOR_LEXICON = 0xffe066;
-const COLOR_SELF = 0xd66bff;
-const COLOR_SYNTHESIS = 0xffcc33;
+const COLOR_REASONING = 0x000000;
+const COLOR_NET = 0x666666;
+const COLOR_LEXICON = 0x444444;
+const COLOR_SELF = 0x333333;
+const COLOR_SYNTHESIS = 0x555555;
 
 async function initialSync() {
   try {
@@ -685,7 +685,9 @@ function animate() {
     const base = 0.35 + currentGlow * 0.3;
     const permanentFloor = n.permanent ? 0.35 : 0;
     const boost = Math.max(n.energy, permanentFloor);
-    n.mat.color.setRGB(0.02 + boost * 0.9, (base + boost) * 1.0, 0.08 + boost * 0.4);
+    // monochrome on white: more energy = darker ink
+    const ink = Math.max(0, 0.42 - (base - 0.35) * 0.5 - boost * 0.6);
+    n.mat.color.setRGB(ink, ink, ink);
     n.mat.opacity = (0.6 + boost * 0.4) * n.growth;
     const growthScale = n.growth < 1 ? easeOutBack(n.growth) : 1;
     const scale = growthScale * (1 + boost * 1.8) * (n.permanent ? 1.6 : 1);
@@ -696,22 +698,19 @@ function animate() {
   const colorAttr = edgeGeo.getAttribute('color');
   edgeList.forEach((e, idx) => {
     if (!edgeActive[idx]) {
-      colorAttr.setXYZ(idx * 2, 0, 0, 0);
-      colorAttr.setXYZ(idx * 2 + 1, 0, 0, 0);
+      colorAttr.setXYZ(idx * 2, 1, 1, 1);
+      colorAttr.setXYZ(idx * 2 + 1, 1, 1, 1);
       return;
     }
     const flash = flashingEdges.get(idx);
-    let r = 0.02, g = 0.2 + currentGlow * 0.15, b = 0.08;
+    let ink = 0.6 - currentGlow * 0.15;
     if (flash) {
       flash.energy *= 0.9;
-      const c = new THREE.Color(flash.color);
-      r = 0.02 + c.r * flash.energy;
-      g = g + c.g * flash.energy;
-      b = 0.08 + c.b * flash.energy;
+      ink = Math.max(0, ink - flash.energy * 0.6);
       if (flash.energy < 0.02) flashingEdges.delete(idx);
     }
-    colorAttr.setXYZ(idx * 2, r, g, b);
-    colorAttr.setXYZ(idx * 2 + 1, r, g, b);
+    colorAttr.setXYZ(idx * 2, ink, ink, ink);
+    colorAttr.setXYZ(idx * 2 + 1, ink, ink, ink);
   });
   colorAttr.needsUpdate = true;
 

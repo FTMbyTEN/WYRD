@@ -16,7 +16,7 @@ interface Props {
 function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: number) {
   const pad = Math.max(6, W * 0.07);
   const P = faceProject(W, H, yaw, 0.06, pad);
-  canvas.clear(Skia.Color('rgba(0,0,0,0)'));
+  canvas.clear(Skia.Color('rgba(255,255,255,0)'));
   if (!P) return;
 
   if (mode === 'wire') {
@@ -27,7 +27,7 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
       const paint = Skia.Paint();
       paint.setStyle(1); // Stroke
       paint.setStrokeWidth(0.6);
-      paint.setColor(Skia.Color(`rgba(0,255,65,${(0.12 + d * 0.62).toFixed(3)})`));
+      paint.setColor(Skia.Color(`rgba(0,0,0,${(0.08 + d * 0.45).toFixed(3)})`));
       const tri = Skia.Path.Make();
       tri.moveTo(a.x, a.y); tri.lineTo(b.x, b.y); tri.lineTo(c.x, c.y); tri.close();
       canvas.drawPath(tri, paint);
@@ -41,12 +41,12 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
       const y1 = minY + ((maxY - minY) * (b + 1)) / bands;
       const row = P.filter((p) => p.y >= y0 && p.y < y1).sort((m, n) => m.x - n.x);
       if (row.length < 2) continue;
-      const alpha = 0.35 + 0.5 * (1 - Math.abs(b / bands - 0.45) * 2);
+      const alpha = 0.18 + 0.3 * (1 - Math.abs(b / bands - 0.45) * 2); // lighter than the green original — dense black bands read as a smudge on white
       const paint = Skia.Paint();
       paint.setStyle(1);
       paint.setStrokeWidth(1.5);
       paint.setStrokeCap(1); // round
-      paint.setColor(Skia.Color(`rgba(0,255,65,${alpha.toFixed(3)})`));
+      paint.setColor(Skia.Color(`rgba(0,0,0,${alpha.toFixed(3)})`));
       const midY = (y0 + y1) / 2;
       const linePath = Skia.Path.Make();
       row.forEach((p, i) => (i ? linePath.lineTo(p.x, midY) : linePath.moveTo(p.x, midY)));
@@ -55,7 +55,7 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
   } else {
     const s = Math.max(1, W > 300 ? 1.7 : 1);
     const paint = Skia.Paint();
-    paint.setColor(Skia.Color('rgba(0,255,65,0.55)'));
+    paint.setColor(Skia.Color('rgba(0,0,0,0.33)'));
     paint.setStrokeWidth(s);
     paint.setStrokeCap(0); // butt — original drew flat squares, round would soften the look
     canvas.drawPoints(PointMode.Points, P.map((p) => ({ x: p.x, y: p.y })), paint);

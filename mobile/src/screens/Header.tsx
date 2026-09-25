@@ -61,14 +61,14 @@ const styles = StyleSheet.create({
   },
   idRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#063d13',
+    paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#cccccc',
   },
   avatar: { width: 34, height: 34 },
   wordmarkRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  wordmark: { fontSize: 24, letterSpacing: 3, lineHeight: 24, textShadowColor: colors.green, textShadowRadius: 10 },
+  wordmark: { fontSize: 24, letterSpacing: 3, lineHeight: 24, textShadowColor: colors.glow, textShadowRadius: 10 },
   turboBadge: { backgroundColor: colors.green, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 2 },
-  turboText: { fontSize: 8, letterSpacing: 1, color: '#000' },
-  statusText: { fontSize: 9, letterSpacing: 1, color: '#0a9c2f', marginTop: 2 },
+  turboText: { fontSize: 8, letterSpacing: 1, color: '#ffffff' },
+  statusText: { fontSize: 9, letterSpacing: 1, color: '#555555', marginTop: 2 },
   iconBtn: {
     borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 2,
     paddingHorizontal: 9, paddingVertical: 7, position: 'relative',
@@ -77,5 +77,5 @@ const styles = StyleSheet.create({
     position: 'absolute', top: -6, right: -6, minWidth: 15, height: 15, borderRadius: 8,
     backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
   },
-  badgeText: { fontSize: 9, color: '#000', lineHeight: 11 },
+  badgeText: { fontSize: 9, color: '#ffffff', lineHeight: 11 },
 });

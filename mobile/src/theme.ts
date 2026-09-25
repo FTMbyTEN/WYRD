@@ -1,18 +1,22 @@
-// Design tokens lifted directly from `WYRD Mobile.dc.html` (screen 4a) — the terminal-green
-// "restricted node" aesthetic shared with public/style.css in the consciousness-bot backend.
+// Design tokens, originally the terminal-green look of `WYRD Mobile.dc.html` (screen 4a), now
+// recolored to monochrome (white background, black foreground) to match public/style.css.
+// Token names are kept from the green era so call sites didn't change: `green*` are black-to-grey
+// ink levels, `mint*` are near-black text, and `black` is the inverse color (white) used for
+// text on solid ink fills.
 
 export const colors = {
-  bg: '#07090a',
-  panelBg: '#000000',
-  green: '#00ff41', // primary — active state, accents, borders on focus
-  greenDim: '#0a9c2f', // secondary text, inactive icons, idle borders
-  greenBorder: '#0e5c22', // panel borders, dividers
-  greenBorderDim: '#063d13', // subtler dividers, disabled text
-  mint: '#baffc9', // headline/value text
-  mintBright: '#6fffb0', // dreams, user-chat text
+  bg: '#ffffff',
+  panelBg: '#ffffff',
+  green: '#000000', // primary — active state, accents, borders on focus
+  greenDim: '#555555', // secondary text, inactive icons, idle borders
+  greenBorder: '#999999', // panel borders, dividers
+  greenBorderDim: '#cccccc', // subtler dividers, disabled text
+  mint: '#111111', // headline/value text
+  mintBright: '#222222', // dreams, user-chat text
+  glow: 'rgba(0,0,0,0.22)', // text-shadow halo — a soft grey bloom on white, not a black smudge
   danger: '#ff3b3b', // logout, flagged verdicts
-  ink: '#baffc9', // COP's own voice — deliberately not green
-  black: '#000000',
+  ink: '#111111', // COP's own voice — deliberately not green
+  black: '#ffffff',
 } as const;
 
 export const fonts = {

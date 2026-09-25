@@ -20,12 +20,12 @@ export function GlobeCanvas({ countries, focused }: Props) {
     (canvas, W, H, now) => {
       const R = Math.min(W, H) * 0.38, cx = W / 2, cy = H / 2;
       const yaw = now * 0.00022;
-      canvas.clear(Skia.Color('rgba(0,0,0,0)'));
+      canvas.clear(Skia.Color('rgba(255,255,255,0)'));
 
       const latPaint = Skia.Paint();
       latPaint.setStyle(1);
       latPaint.setStrokeWidth(0.6);
-      latPaint.setColor(Skia.Color('rgba(10,156,47,0.5)'));
+      latPaint.setColor(Skia.Color('rgba(0,0,0,0.3)'));
       for (let la = -60; la <= 60; la += 30) {
         const r = R * Math.cos((la * Math.PI) / 180);
         const y = cy - R * Math.sin((la * Math.PI) / 180);
@@ -37,14 +37,14 @@ export function GlobeCanvas({ countries, focused }: Props) {
         const lonPaint = Skia.Paint();
         lonPaint.setStyle(1);
         lonPaint.setStrokeWidth(0.6);
-        lonPaint.setColor(Skia.Color(`rgba(10,156,47,${(0.25 + 0.35 * Math.abs(Math.cos(a))).toFixed(3)})`));
+        lonPaint.setColor(Skia.Color(`rgba(0,0,0,${(0.25 + 0.35 * Math.abs(Math.cos(a))).toFixed(3)})`));
         const rw = Math.abs(R * Math.cos(a));
         canvas.drawOval(Skia.XYWHRect(cx - rw, cy - R, rw * 2, R * 2), lonPaint);
       }
       const rimPaint = Skia.Paint();
       rimPaint.setStyle(1);
       rimPaint.setStrokeWidth(1);
-      rimPaint.setColor(Skia.Color('rgba(0,255,65,0.75)'));
+      rimPaint.setColor(Skia.Color('rgba(0,0,0,0.45)'));
       canvas.drawCircle(cx, cy, R, rimPaint);
 
       marks.forEach((c) => {
@@ -54,13 +54,13 @@ export function GlobeCanvas({ countries, focused }: Props) {
         const sx = cx + x * R, sy = cy - y * R;
         const isFocused = focused && c.cca3 === focused.cca3;
         const dotPaint = Skia.Paint();
-        dotPaint.setColor(Skia.Color(isFocused ? '#baffc9' : 'rgba(0,255,65,0.85)'));
+        dotPaint.setColor(Skia.Color(isFocused ? '#111111' : 'rgba(0,0,0,0.51)'));
         canvas.drawCircle(sx, sy, isFocused ? 3.4 : 2.2, dotPaint);
         if (isFocused) {
           const ringPaint = Skia.Paint();
           ringPaint.setStyle(1);
           ringPaint.setStrokeWidth(1);
-          ringPaint.setColor(Skia.Color('rgba(186,255,201,0.6)'));
+          ringPaint.setColor(Skia.Color('rgba(0,0,0,0.6)'));
           canvas.drawCircle(sx, sy, 8, ringPaint);
         }
       });

@@ -86,7 +86,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               onChangeText={setDraft}
               onSubmitEditing={send}
               placeholder="transmit input..."
-              placeholderTextColor="#0a9c2f88"
+              placeholderTextColor="#55555588"
               style={styles.input}
               returnKeyType="send"
             />
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   prompt: { color: colors.green, fontSize: 14 },
   input: {
-    flex: 1, minWidth: 0, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1, borderColor: colors.greenDim,
+    flex: 1, minWidth: 0, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: colors.greenDim,
     borderRadius: 2, padding: 10, color: colors.green, fontFamily: 'ShareTechMono_400Regular', fontSize: 12.5,
   },
   micBtn: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 2, paddingHorizontal: 10, paddingVertical: 10 },

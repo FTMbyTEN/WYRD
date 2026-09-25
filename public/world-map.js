@@ -39,7 +39,7 @@
     // visible gain, and was the main reason drag rotation felt laggy instead of snappy
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
-    scene.add(new THREE.AmbientLight(0x88ffaa, 0.9));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
     const sun = new THREE.DirectionalLight(0xffffff, 0.8);
     sun.position.set(5, 3, 5);
     scene.add(sun);
@@ -55,7 +55,7 @@
     // terminal-green visual language instead of looking like a bare stock-photo earth
     const shell = new THREE.Mesh(
       new THREE.SphereGeometry(RADIUS * 1.015, 32, 32),
-      new THREE.MeshBasicMaterial({ color: 0x00ff41, wireframe: true, transparent: true, opacity: 0.06 })
+      new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true, opacity: 0.06 })
     );
     scene.add(shell);
 
@@ -118,7 +118,7 @@
     }
     const markerGeo = new THREE.SphereGeometry(0.06, 8, 8);
     countries.forEach((c) => {
-      const marker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0x00ff88 }));
+      const marker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: 0x000000 }));
       marker.position.copy(latLngToVec3(c.lat, c.lng, RADIUS + 0.03));
       marker.userData.country = c;
       markerGroup.add(marker);

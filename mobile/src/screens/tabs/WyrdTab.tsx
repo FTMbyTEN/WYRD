@@ -83,7 +83,7 @@ function HoloStat({ label, value, pct, style, beamStyle, big }: {
     <View style={[styles.holoWrap, style]} pointerEvents="none">
       <View style={[styles.beam, beamStyle]} />
       <View style={styles.beamAnchor} />
-      <View style={[styles.holoCard, big && styles.holoCardBig, { shadowOpacity: glow, borderColor: `rgba(0,255,65,${glow})` }]}>
+      <View style={[styles.holoCard, big && styles.holoCardBig, { shadowOpacity: glow, borderColor: `rgba(0,0,0,${glow})` }]}>
         <Mono style={styles.holoLabel}>{label}</Mono>
         <Display style={[styles.holoValue, big && styles.holoValueBig, { textShadowRadius: 10 + glow * 14 }]}>{value}</Display>
         <View style={styles.holoMeter}>
@@ -119,10 +119,10 @@ const styles = StyleSheet.create({
   heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   hero: {
     alignItems: 'center', paddingVertical: 22, paddingHorizontal: 26,
-    backgroundColor: 'rgba(0,15,4,0.4)', borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 999,
   },
   moodLabel: { fontSize: 10, letterSpacing: 3, color: colors.greenDim },
-  moodValue: { fontSize: 56, lineHeight: 56, textShadowColor: colors.green, textShadowRadius: 22 },
+  moodValue: { fontSize: 56, lineHeight: 56, textShadowColor: colors.glow, textShadowRadius: 22 },
   focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
 
   // ---- Holographic projections: beam rising off the brain into a floating glass readout, with
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   holoLeft: { left: '2%', bottom: '20%' },
   holoRight: { right: '2%', bottom: '20%' },
   holoCenter: { bottom: '2%', alignSelf: 'center' },
-  beam: { width: 1, backgroundColor: 'rgba(0,255,65,0.45)' },
+  beam: { width: 1, backgroundColor: 'rgba(0,0,0,0.27)' },
   beamLeft: { height: 34 },
   beamRight: { height: 34 },
   beamCenter: { height: 20 },
@@ -142,18 +142,18 @@ const styles = StyleSheet.create({
   },
   holoCard: {
     marginTop: 2, width: 112, padding: 9, borderRadius: 6, borderWidth: 1,
-    backgroundColor: 'rgba(0,15,4,0.38)',
+    backgroundColor: 'rgba(255,255,255,0.38)',
     shadowColor: colors.green, shadowRadius: 10, shadowOffset: { width: 0, height: 0 },
   },
   holoCardBig: { width: 128, alignItems: 'center' },
   holoLabel: { fontSize: 8, letterSpacing: 1.5, color: colors.greenDim },
-  holoValue: { fontSize: 20, marginTop: 3, textShadowColor: colors.green },
+  holoValue: { fontSize: 20, marginTop: 3, textShadowColor: colors.glow },
   holoValueBig: { fontSize: 30 },
-  holoMeter: { marginTop: 6, height: 4, borderRadius: 2, backgroundColor: 'rgba(10,156,47,0.25)', overflow: 'hidden', width: '100%' },
+  holoMeter: { marginTop: 6, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.15)', overflow: 'hidden', width: '100%' },
   holoMeterFill: { height: '100%', backgroundColor: colors.green },
   actionRow: {
     flexDirection: 'row', gap: 7, paddingHorizontal: 14, paddingTop: 10,
-    backgroundColor: 'rgba(0,10,3,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
   actionBtn: {
     flex: 1, borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
@@ -161,14 +161,14 @@ const styles = StyleSheet.create({
   },
   tickerRow: {
     flexDirection: 'row', gap: 7, paddingHorizontal: 14, paddingTop: 10,
-    backgroundColor: 'rgba(0,10,3,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
-  tickerCard: { flex: 1, borderWidth: 1, borderColor: '#063d13', borderRadius: 2, padding: 9, minWidth: 0 },
+  tickerCard: { flex: 1, borderWidth: 1, borderColor: '#cccccc', borderRadius: 2, padding: 9, minWidth: 0 },
   tickerHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   pulseDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.green },
   tickerLabel: { fontSize: 8.5, letterSpacing: 1, color: colors.greenDim },
   tickerText: { marginTop: 3, fontSize: 10.5, color: colors.mint },
-  lastThoughtWrap: { padding: 14, backgroundColor: 'rgba(0,10,3,0.92)' },
+  lastThoughtWrap: { padding: 14, backgroundColor: 'rgba(255,255,255,0.92)' },
   lastThoughtLabel: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
   lastThoughtText: { marginTop: 4, fontSize: 12.5, lineHeight: 18, color: colors.mint },
   dialogueBtn: {

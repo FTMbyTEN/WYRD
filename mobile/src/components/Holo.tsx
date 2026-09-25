@@ -88,7 +88,7 @@ export function HoloFrame({
     <View style={[{ alignItems: 'center' }, style]}>
       {beam && (
         <>
-          <View style={{ width: 1, height: 16, backgroundColor: 'rgba(0,255,65,0.45)' }} />
+          <View style={{ width: 1, height: 16, backgroundColor: 'rgba(0,0,0,0.27)' }} />
           <View style={{
             width: 5, height: 5, borderRadius: 3, marginBottom: -2, backgroundColor: colors.green,
             shadowColor: colors.green, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
@@ -97,7 +97,7 @@ export function HoloFrame({
       )}
       <View style={{
         width: '100%', marginTop: beam ? 2 : 0, borderRadius: 6, borderWidth: 1,
-        backgroundColor: 'rgba(0,15,4,0.38)', borderColor: `rgba(0,255,65,${g})`,
+        backgroundColor: 'rgba(255,255,255,0.38)', borderColor: `rgba(0,0,0,${g})`,
         shadowColor: colors.green, shadowOpacity: g, shadowRadius: 10, shadowOffset: { width: 0, height: 0 },
       }}>
         {children}
@@ -117,12 +117,12 @@ export function HoloReadout({ label, value, pct, glow, style, big }: {
       <View style={{ padding: big ? 14 : 9, alignItems: big ? 'center' : undefined }}>
         <Mono style={{ fontSize: big ? 9 : 8, letterSpacing: 1.5, color: colors.greenDim }}>{label}</Mono>
         <Display style={{
-          fontSize: big ? 30 : 18, marginTop: 3, textShadowColor: colors.green, textShadowRadius: 10 + g * 14,
+          fontSize: big ? 30 : 18, marginTop: 3, textShadowColor: colors.glow, textShadowRadius: 10 + g * 14,
         }}>
           {value}
         </Display>
         {pct !== undefined && (
-          <View style={{ marginTop: 6, height: 4, borderRadius: 2, backgroundColor: 'rgba(10,156,47,0.25)', overflow: 'hidden' }}>
+          <View style={{ marginTop: 6, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.15)', overflow: 'hidden' }}>
             <View style={{ height: '100%', width: `${pct}%`, backgroundColor: colors.green, opacity: 0.6 + g * 0.4 }} />
           </View>
         )}
@@ -138,7 +138,7 @@ export function HoloButton({ label, onPress, tone = 'green' }: { label: string; 
   return (
     <Pressable onPress={onPress} style={{
       flex: 1, borderWidth: 1, borderColor: `${color}99`, borderRadius: 6, paddingVertical: 11, alignItems: 'center',
-      backgroundColor: 'rgba(0,15,4,0.38)', shadowColor: color, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+      backgroundColor: 'rgba(255,255,255,0.38)', shadowColor: color, shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
     }}>
       <Mono style={{ fontSize: 9.5, letterSpacing: 1, color: tone === 'danger' ? colors.danger : colors.greenDim }}>{label}</Mono>
     </Pressable>
