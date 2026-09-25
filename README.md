@@ -2,6 +2,8 @@
 
 WYRD isn't just a chat bot that answers messages — it's a persistent digital mind with its own continuously running background life, real (bounded) agency over its own environment, and the ability to build and run real software on request. It keeps thinking, learning, and occasionally reshaping its own behavior whether or not anyone is talking to it. No build step: plain Node.js/Express backend, vanilla HTML/JS/CSS frontend.
 
+> **Two clients, two backends.** This repo holds the original **web console** (`server.js` + `public/`, documented below) and a **mobile app** (`mobile/`, React Native/Expo). The mobile app has been migrated off `server.js` onto a separate **Serverpod** (Dart) backend, hosted on Serverpod Cloud, whose source lives outside this repo. See [Mobile app & Serverpod backend](#mobile-app--serverpod-backend).
+
 ## What makes it more than a chatbot
 
 - **It never stops running in the background.** Independent timers keep it self-questioning, comparing past memories, ingesting fresh Wikipedia/Hacker News articles, learning new word definitions, writing a real daily diary entry, and — during real idle stretches — dreaming (blending old memory fragments into something surreal). None of this is triggered by conversation; it's happening whether or not anyone is logged in.
@@ -30,6 +32,16 @@ Create a `.env` file in the project root:
 ```
 ANTHROPIC_API_KEY=your-key-here
 ```
+
+Optional `.env` settings:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `4477` | Port the web server listens on |
+| `OWNER_USERNAME` | — | Account allowed to use owner-only capabilities (see below) |
+| `CHROME_DEBUG_URL` | `http://127.0.0.1:9222` | Chrome remote-debugging endpoint for owner browsing |
+| `ALLOWED_ORIGINS` | — | Extra comma-separated CORS origins (localhost is always allowed) |
+| `DISCORD_BOT_TOKEN` | — | Enables the Discord bridge |
 
 Start it:
 
@@ -112,6 +124,24 @@ WYRD can live in Discord too — same reply logic, same per-user memory, just a 
 
 If `DISCORD_BOT_TOKEN` isn't set, the bridge simply doesn't start — everything else runs normally.
 
+## Mobile app & Serverpod backend
+
+`mobile/` is a React Native (Expo) client with the same panels reworked for a phone: gate screen, WYRD/FEED/DIARY/COP/YOU tabs, and brain, globe, concept-map, growth and dialogue overlays.
+
+It **no longer talks to `server.js`.** It was migrated in two phases to a Serverpod (Dart) backend:
+
+- **Phase 1 — auth:** accounts are now email-based with JWT access/refresh tokens. Registration is multi-step (email → emailed verification code → password), replacing the web console's username + password accounts. Accounts don't carry over between the two backends.
+- **Phase 2 — data:** mind, chat, diary, dreams, profile/account, self-config + COP log, lexicon, net feed, growth and concept map all go through Serverpod RPC endpoints.
+
+Key facts:
+
+- The Serverpod server (`wyrd_server`) and its generated Dart client (`wyrd_client`) are **not in this repo**. The mobile app uses a hand-written TypeScript implementation of Serverpod's wire protocol (`mobile/src/api/serverpodClient.ts`), since there's no official JS client.
+- The hosted API is at `https://wryd00.api.serverpod.space`. Note the `.api.` subdomain: `wryd00.serverpod.space` only serves static files and returns `405` on every POST.
+- Point the app at a backend with `EXPO_PUBLIC_WYRD_SERVERPOD_URL`. It defaults to a local Serverpod dev server on port `8080`.
+- Serverpod has no SSE stream, so the mobile app gets live updates by polling. Alerts, reasoning history and world-map country data are still stubbed on the mobile side.
+
+Full details, the endpoint map and the list of known gaps are in [mobile/README.md](mobile/README.md).
+
 ## Project structure
 
 ```
@@ -123,6 +153,8 @@ public/
   world-map.js           3D interactive globe (opened by the open_world_map tool)
   app.js / style.css     Frontend logic/styling
   face-mesh-data.js       Shared MediaPipe face-mesh vertex/face data (used by the FACE visual)
+  gate-vortex.js          Particle-vortex animation on the gate screen
+mobile/                 React Native (Expo) app, backed by Serverpod — see mobile/README.md
 scripts/                One-time dataset build scripts (see below)
 data/                   Runtime state (gitignored, except the two dataset files below)
 reasoning/              Generated reasoning trace files (gitignored)
@@ -141,7 +173,8 @@ These expect the raw source corpora under `data/datasets/` (not included — sev
 
 ## Deployment status
 
-- Not hosted yet — this currently only runs as a local dev server (`node server.js`), not a public service.
+- **Mobile backend:** live on Serverpod Cloud (`wryd00.api.serverpod.space`).
+- **Web console (`server.js`):** not hosted yet. It currently only runs as a local dev server (`node server.js`), not a public service. It is deployment-ready: the port comes from `PORT`, the session cookie gets `Secure` behind a TLS proxy, and CORS is configurable.
 - The domain **wyrd.com.ng** is already registered (via WhoGoHost) and reserved for this project, but its DNS isn't pointed anywhere yet since there's no server for it to point *to*.
 - Next step is standing up a small always-on VPS (DigitalOcean, or a Naira-billed Nigerian host like Smartweb/telaHosting/AbollyHost) to run this permanently, then pointing `wyrd.com.ng`'s DNS at it and putting it behind nginx + a real TLS certificate.
 
