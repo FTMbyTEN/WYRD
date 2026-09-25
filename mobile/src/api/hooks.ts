@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './client';
-import { wyrdStream } from './sse';
+import { wyrdStream } from './stream';
 import type {
   CopLogEntry,
   DiaryEntry,
@@ -47,10 +47,18 @@ function usePolled<T>(fetcher: () => Promise<T>, pollMs: number | null, deps: un
   return { data, loading, error, reload, setData };
 }
 
-/** Mind vitals: seeded from GET /api/mind, kept live by the `mind` SSE event (broadcast on
- *  every chat/ingest/reasoning/self-modify tick — far more responsive than polling). */
+/** Prepend a streamed entry, skipping it if the list already has one with the same timestamp
+ *  (a hook's own initial fetch can race the stream's baseline poll and already include it). */
+function prependUnique<T extends { timestamp: string }>(prev: T[] | null, item: T, max: number): T[] {
+  const list = prev || [];
+  if (list.some((it) => it.timestamp === item.timestamp)) return list;
+  return [item, ...list].slice(0, max);
+}
+
+/** Mind vitals: seeded from mind.getMind, kept live by the stream's `mind` event (polled every
+ *  5s, and published immediately with each chat reply). */
 export function useMind() {
-  const { data, loading, error, setData } = usePolled<Mind>(api.mind, 20000);
+  const { data, loading, error, setData } = usePolled<Mind>(api.mind, null);
   useEffect(() => wyrdStream.subscribe('mind', (m) => setData(m as Mind)), [setData]);
   return { mind: data, loading, error };
 }
@@ -60,7 +68,7 @@ export function useDiary(limit = 20) {
   useEffect(
     () =>
       wyrdStream.subscribe('diary', (entry) =>
-        setData((prev) => [entry as DiaryEntry, ...(prev || [])].slice(0, limit)),
+        setData((prev) => prependUnique(prev, entry as DiaryEntry, limit)),
       ),
     [setData, limit],
   );
@@ -72,7 +80,7 @@ export function useDreams(limit = 20) {
   useEffect(
     () =>
       wyrdStream.subscribe('dream', (entry) =>
-        setData((prev) => [entry as DreamEntry, ...(prev || [])].slice(0, limit)),
+        setData((prev) => prependUnique(prev, entry as DreamEntry, limit)),
       ),
     [setData, limit],
   );
@@ -85,7 +93,7 @@ export function useReasoning() {
 }
 
 export function useSelfConfig() {
-  const { data, loading, error, reload, setData } = usePolled<SelfConfig>(api.selfConfig, 30000);
+  const { data, loading, error, reload, setData } = usePolled<SelfConfig>(api.selfConfig, null);
   useEffect(
     () =>
       wyrdStream.subscribe('self_modify', () => {
@@ -101,7 +109,7 @@ export function useCopLog(limit = 20) {
   useEffect(
     () =>
       wyrdStream.subscribe('cop_report', (entry) =>
-        setData((prev) => [entry as CopLogEntry, ...(prev || [])].slice(0, limit)),
+        setData((prev) => prependUnique(prev, entry as CopLogEntry, limit)),
       ),
     [setData, limit],
   );
@@ -114,10 +122,10 @@ export function useLexicon() {
 }
 
 export function useFeed() {
-  const { data, loading, error, reload, setData } = usePolled<FeedItem[]>(api.feedRecent, 15000);
+  const { data, loading, error, reload, setData } = usePolled<FeedItem[]>(api.feedRecent, null);
   useEffect(
     () =>
-      wyrdStream.subscribe('ingested', (item) => setData((prev) => [item as FeedItem, ...(prev || [])].slice(0, 20))),
+      wyrdStream.subscribe('ingested', (item) => setData((prev) => prependUnique(prev, item as FeedItem, 20))),
     [setData],
   );
   return { items: data || [], loading, error, reload };
@@ -134,7 +142,7 @@ export function useConcepts() {
 }
 
 export function useProfile() {
-  const { data, loading, error, reload, setData } = usePolled<Profile>(api.profile, 30000);
+  const { data, loading, error, reload, setData } = usePolled<Profile>(api.profile, null);
   useEffect(() => wyrdStream.subscribe('profile', (p) => setData(p as Profile)), [setData]);
   return { profile: data, loading, error, reload };
 }

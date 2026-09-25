@@ -6,7 +6,7 @@
 // likely mean the list changed, so it still feels live without re-deriving it client-side.
 import { useEffect, useState } from 'react';
 import { api } from './client';
-import { wyrdStream } from './sse';
+import { wyrdStream } from './stream';
 import type { StreamEvent } from './types';
 
 export interface AlertItem {

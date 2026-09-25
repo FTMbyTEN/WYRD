@@ -6,6 +6,7 @@ import { Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api, ApiError } from '../../api/client';
 import { useConversations } from '../../api/hooks';
+import { wyrdStream } from '../../api/stream';
 import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
 
@@ -17,8 +18,8 @@ interface Props {
   onOpenAppPreview: (html: string) => void;
 }
 
-/** Port of the DIALOGUE_LINK overlay: real chat via POST /api/chat, message history from
- *  GET /api/conversations kept live by the `chat` SSE event, and the two tool-call hand-offs
+/** Port of the DIALOGUE_LINK overlay: real chat via chat.sendMessage, message history from
+ *  chat.getHistory kept live by the stream's `chat` event, and the two tool-call hand-offs
  *  (`open_world_map` / `preview_app`) routed to the real overlays instead of the design's two
  *  static demo buttons. The mic toggle is UI-only — there is no on-device speech-to-text wired
  *  up yet (would need expo-speech-recognition or similar); TTS is real via expo-speech. */
@@ -44,6 +45,10 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     setError(null);
     try {
       const result = await api.chat(text);
+      // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
+      // every useConversations/useMind instance updates now, not on its next poll.
+      wyrdStream.publish('chat', { userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
       if (tts && result.reply) speakAsWyrd(result.reply);
     } catch (err) {
