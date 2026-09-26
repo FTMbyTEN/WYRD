@@ -3,6 +3,7 @@ import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react
 import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { BrainCanvas } from '../../components/BrainCanvas';
 import { LearningStream } from '../../components/LearningStream';
+import { DialogueLauncher } from '../../components/DialogueLauncher';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import {
@@ -170,9 +171,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
             {latestNote ? firstLineFromMarkdown(latestNote.content) : mind?.activeGoal || 'still forming one.'}
           </Mono>
         </View>
-        <Pressable onPress={onOpenLink} style={({ pressed }) => [styles.dialogueBtn, pressed && { opacity: 0.8 }]}>
-          <Mono style={styles.dialogueText}>{'> OPEN DIALOGUE_LINK'}</Mono>
-        </Pressable>
+        <DialogueLauncher onPress={onOpenLink} focus={mind?.focusTopic} />
       </View>
     </View>
   );
@@ -346,6 +345,4 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
   quote: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: 12, paddingVertical: 2 },
   quoteText: { fontSize: 13, lineHeight: 20, color: colors.mint },
-  dialogueBtn: { backgroundColor: colors.green, paddingVertical: 14, alignItems: 'center' },
-  dialogueText: { color: colors.black, fontSize: 12, letterSpacing: 2 },
 });
