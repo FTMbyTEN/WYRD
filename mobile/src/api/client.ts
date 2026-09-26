@@ -246,6 +246,8 @@ export const api = {
 
   // ---- profile / account ----
   profile: () => callEndpoint<SpUserProfile>('profile', 'getProfile', {}).then(adaptProfile),
+  // records a visit; also creates the WYRD profile row and stores the sign-in email on it
+  touchVisit: () => callEndpoint<SpUserProfile>('profile', 'touchVisit', {}).then(adaptProfile),
   exportAccount: () => callEndpoint<SpAccountExport>('account', 'exportData', {}),
   deleteAccount: () => callEndpoint<void>('account', 'deleteMyData', {}).then(() => ({ ok: true })),
 

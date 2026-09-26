@@ -39,3 +39,18 @@ export async function signOutDevice(): Promise<void> {
 export function isSignedIn(): Promise<boolean> {
   return callEndpoint<boolean>('serverpod_auth_core.status', 'isSignedIn', {});
 }
+
+/** Starts a password reset; the server emails a code to [email]. Always returns a request ID,
+ *  even for an unknown email (so the reset flow doesn't reveal which emails are registered). */
+export function startPasswordReset(email: string): Promise<string> {
+  return callEndpoint<string>('emailIdp', 'startPasswordReset', { email }, { authenticated: false });
+}
+
+/** Verifies the emailed reset code; returns the token that allows setting a new password. */
+export function verifyPasswordResetCode(passwordResetRequestId: string, verificationCode: string): Promise<string> {
+  return callEndpoint<string>('emailIdp', 'verifyPasswordResetCode', { passwordResetRequestId, verificationCode }, { authenticated: false });
+}
+
+export function finishPasswordReset(finishPasswordResetToken: string, newPassword: string): Promise<void> {
+  return callEndpoint<void>('emailIdp', 'finishPasswordReset', { finishPasswordResetToken, newPassword }, { authenticated: false });
+}

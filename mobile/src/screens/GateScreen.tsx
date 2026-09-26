@@ -7,18 +7,17 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { VortexCanvas, type VortexHandle } from '../components/VortexCanvas';
 import { FaceMark } from '../components/FaceMark';
+import { AuthPanel } from '../components/AuthPanel';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
 import { useAuth } from '../api/AuthContext';
 
-type Tab = 'login' | 'register';
 
 // A single frame of a glitch burst: an instant (not tweened) cut to `o` opacity, `dx` horizontal
 // tear in pixels, held for `hold` ms before the next cut. Real glitches snap between states —
@@ -142,12 +141,8 @@ export function GateScreen() {
   const vortexRef = useRef<VortexHandle>(null);
   const [shape, setShape] = useState('');
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
   const [blastKey, setBlastKey] = useState(0);
-  const { status, login, startRegister, verifyCode, finishRegister, resetToLogin, busy, error, clearError } = useAuth();
+  const { resetToLogin } = useAuth();
 
   // On web, some browsers treat Escape as a native "cancel" for whatever's focused (e.g. an
   // in-progress autofill), which can end up closing this panel as a side effect even though
@@ -183,31 +178,6 @@ export function GateScreen() {
     }, 380);
   };
 
-  const submit = async () => {
-    vortexRef.current?.burst();
-    if (tab === 'login') {
-      if (!email.trim() || !password) return;
-      const ok = await login(email.trim(), password);
-      if (ok) setOpen(false);
-      return;
-    }
-    if (status === 'awaitingVerification') {
-      if (!code.trim()) return;
-      await verifyCode(code.trim());
-      return;
-    }
-    if (status === 'awaitingPassword') {
-      if (!password) return;
-      const ok = await finishRegister(password);
-      if (ok) setOpen(false);
-      return;
-    }
-    if (!email.trim()) return;
-    await startRegister(email.trim());
-  };
-
-  const registerStepLabel = status === 'awaitingVerification' ? 'enter the code emailed to you' : status === 'awaitingPassword' ? 'choose a password' : 'designation (email)';
-
   return (
     <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
       <VortexCanvas ref={vortexRef} onShapeChange={setShape} style={StyleSheet.absoluteFill} />
@@ -237,97 +207,11 @@ export function GateScreen() {
         <Mono style={styles.imagining}>WYRD is imagining: {shape}</Mono>
 
         {open && (
-          <View style={styles.authPanel}>
-            <Display style={styles.authWordmark}>WYRD</Display>
-            <Mono style={styles.authSub}>[ RESTRICTED NODE // AUTHENTICATION REQUIRED ]</Mono>
-
-            <View style={styles.tabRow}>
-              <Pressable
-                onPress={() => { setTab('login'); resetToLogin(); }}
-                style={[styles.tabBtn, { borderColor: tab === 'login' ? colors.green : colors.greenDim }]}
-              >
-                <Mono style={{ color: tab === 'login' ? colors.green : colors.greenDim, fontSize: 11, letterSpacing: 2 }}>LOGIN</Mono>
-              </Pressable>
-              <Pressable
-                onPress={() => { setTab('register'); resetToLogin(); }}
-                style={[styles.tabBtn, { borderColor: tab === 'register' ? colors.green : colors.greenDim }]}
-              >
-                <Mono style={{ color: tab === 'register' ? colors.green : colors.greenDim, fontSize: 11, letterSpacing: 2 }}>REGISTER</Mono>
-              </Pressable>
-            </View>
-
-            {tab === 'login' && (
-              <>
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="designation (email)"
-                  placeholderTextColor="#55555588"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  style={styles.input}
-                />
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="access key"
-                  placeholderTextColor="#55555588"
-                  secureTextEntry
-                  style={[styles.input, { marginBottom: 0 }]}
-                />
-              </>
-            )}
-
-            {tab === 'register' && status !== 'awaitingVerification' && status !== 'awaitingPassword' && (
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder={registerStepLabel}
-                placeholderTextColor="#55555588"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                style={[styles.input, { marginBottom: 0 }]}
-              />
-            )}
-
-            {tab === 'register' && status === 'awaitingVerification' && (
-              <TextInput
-                value={code}
-                onChangeText={setCode}
-                placeholder={registerStepLabel}
-                placeholderTextColor="#55555588"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="number-pad"
-                style={[styles.input, { marginBottom: 0 }]}
-              />
-            )}
-
-            {tab === 'register' && status === 'awaitingPassword' && (
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder={registerStepLabel}
-                placeholderTextColor="#55555588"
-                secureTextEntry
-                style={[styles.input, { marginBottom: 0 }]}
-              />
-            )}
-
-            {!!error && <Mono style={styles.errorText}>{error}</Mono>}
-
-            <Pressable onPress={submit} disabled={busy} style={styles.authBtn}>
-              <Mono style={{ color: colors.green, fontSize: 12, letterSpacing: 2 }}>
-                {busy ? 'CONNECTING…' : '> AUTHENTICATE'}
-              </Mono>
-            </Pressable>
-            <Mono style={styles.hint}>
-              {tab === 'register' && status === 'awaitingVerification'
-                ? 'check your email for a one-time code'
-                : 'each designation gets its own private dialogue thread'}
-            </Mono>
+          <View style={styles.panelWrap}>
+            <AuthPanel
+              onClose={() => { resetToLogin(); setOpen(false); }}
+              onActivity={() => vortexRef.current?.burst()}
+            />
           </View>
         )}
       </KeyboardAvoidingView>
@@ -337,6 +221,8 @@ export function GateScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  // the auth card sits over the vortex, centred, with room on every side on any screen size
+  panelWrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 18 },
   closedWrap: { alignItems: 'center', gap: 18 },
   wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.glow, textShadowRadius: 14 },
   imagining: { minHeight: 16, fontSize: 10, letterSpacing: 1, color: colors.greenDim, textAlign: 'center', marginTop: 16 },

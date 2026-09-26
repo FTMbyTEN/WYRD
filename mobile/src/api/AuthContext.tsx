@@ -25,6 +25,12 @@ interface AuthState {
   logout: () => Promise<void>;
   clearError: () => void;
   resetToLogin: () => void;
+  /** Password reset: 'none' until started, then 'code' (enter the emailed code), then
+   *  'password' (choose a new one). Finishing signs the person in with the new password. */
+  resetStage: 'none' | 'code' | 'password';
+  startReset: (email: string) => Promise<boolean>;
+  verifyResetCode: (code: string) => Promise<boolean>;
+  finishReset: (password: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -42,6 +48,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accountRequestId, setAccountRequestId] = useState<string | null>(null);
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resetStage, setResetStage] = useState<'none' | 'code' | 'password'>('none');
+  const [resetRequestId, setResetRequestId] = useState<string | null>(null);
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetEmail, setResetEmail] = useState<string | null>(null);
+
+  // Every sign-in (and session restore) records a visit, which is also what creates the person's
+  // WYRD profile and stores their email on it. Best-effort: never blocks signing in.
+  const recordVisit = () => { api.touchVisit().catch(() => {}); };
 
   React.useEffect(() => {
     (async () => {
@@ -61,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .catch(() => {});
         }
       }
+      if (has) recordVisit();
       setStatus(has ? 'signedIn' : 'signedOut');
     })();
   }, []);
@@ -73,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await serverpodAuth.persistAuth(auth);
       setEmail(e);
       rememberEmail(e);
+      recordVisit();
       setStatus('signedIn');
       return true;
     } catch (err) {
@@ -136,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await serverpodAuth.persistAuth(auth);
         setEmail(pendingEmail);
         rememberEmail(pendingEmail);
+        recordVisit();
         setStatus('signedIn');
         return true;
       } catch (err) {
@@ -146,6 +163,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [registrationToken, pendingEmail],
+  );
+
+  const startReset = useCallback(async (e: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setResetRequestId(await serverpodAuth.startPasswordReset(e));
+      setResetEmail(e);
+      setResetStage('code');
+      return true;
+    } catch (err) {
+      setError(messageFrom(err, 'could not start the reset'));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const verifyResetCode = useCallback(
+    async (code: string) => {
+      if (!resetRequestId) {
+        setError('start the reset again');
+        return false;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        setResetToken(await serverpodAuth.verifyPasswordResetCode(resetRequestId, code));
+        setResetStage('password');
+        return true;
+      } catch (err) {
+        setError(messageFrom(err, 'invalid or expired code'));
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [resetRequestId],
+  );
+
+  const finishReset = useCallback(
+    async (password: string) => {
+      if (!resetToken || !resetEmail) {
+        setError('verify your reset code again');
+        return false;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        await serverpodAuth.finishPasswordReset(resetToken, password);
+      } catch (err) {
+        setError(messageFrom(err, 'could not set the new password'));
+        setBusy(false);
+        return false;
+      }
+      setBusy(false);
+      setResetStage('none');
+      setResetRequestId(null);
+      setResetToken(null);
+      return login(resetEmail, password); // straight in with the new password
+    },
+    [resetToken, resetEmail, login],
   );
 
   const logout = useCallback(async () => {
@@ -168,13 +247,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccountRequestId(null);
     setRegistrationToken(null);
     setPendingEmail(null);
+    setResetStage('none');
+    setResetRequestId(null);
+    setResetToken(null);
     setError(null);
     setStatus('signedOut');
   }, []);
 
   const value = useMemo(
-    () => ({ status, email, error, busy, login, startRegister, verifyCode, finishRegister, logout, clearError, resetToLogin }),
-    [status, email, error, busy, login, startRegister, verifyCode, finishRegister, logout, clearError, resetToLogin],
+    () => ({
+      status, email, error, busy, login, startRegister, verifyCode, finishRegister, logout, clearError, resetToLogin,
+      resetStage, startReset, verifyResetCode, finishReset,
+    }),
+    [status, email, error, busy, login, startRegister, verifyCode, finishRegister, logout, clearError, resetToLogin,
+      resetStage, startReset, verifyResetCode, finishReset],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

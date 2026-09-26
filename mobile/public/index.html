@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!-- viewport-fit=cover: draw under notches; the app pads itself with the real safe-area insets -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>WYRD</title>
+    <meta name="description" content="A persistent digital mind that keeps thinking, learning and dreaming." />
+    <meta name="theme-color" content="#ffffff" />
+    <!-- Installable, full-screen app: Android/Chrome read the manifest; iOS reads the apple-* tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="WYRD" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #ffffff;
+        overscroll-behavior: none;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        height: 100dvh;
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run WYRD.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
