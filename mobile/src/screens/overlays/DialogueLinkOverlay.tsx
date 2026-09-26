@@ -11,6 +11,8 @@ import { useConversations, useMind } from '../../api/hooks';
 import { wyrdStream } from '../../api/stream';
 import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
+import { captureNative, WebCameraSheet } from '../../components/CameraCapture';
+import { useSpeechInput } from '../../util/speechInput';
 
 interface Props {
   visible: boolean;
@@ -32,14 +34,14 @@ const SUGGESTIONS = [
 /** DIALOGUE_LINK: your private conversation with WYRD. Real chat via chat.sendMessage, history
  *  from chat.getHistory kept live by the stream's `chat` event, and the two tool hand-offs
  *  (`open_world_map` / `preview_app`) routed to the real overlays. Your message shows the moment
- *  you send it, with WYRD "thinking" until the reply lands. The mic toggle is UI-only (no
- *  on-device speech-to-text yet); spoken replies are real via expo-speech. */
+ *  you send it, with WYRD "thinking" until the reply lands. The mic is real speech-to-text
+ *  on web (util/speechInput.ts); spoken replies are real via expo-speech. */
 export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone }: Props) {
   const { turns } = useConversations(60);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState<{ text: string; at: string } | null>(null);
-  const [mic, setMic] = useState(false);
+  const [camOpen, setCamOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const sending = pending !== null;
@@ -73,14 +75,59 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     }
   };
 
-  const toggleMic = () => {
-    setMic((m) => !m);
-    // UI-only affordance -- real speech-to-text is a follow-up.
-    setTimeout(() => setMic(false), 2200);
+  const sendPhoto = async (base64: string) => {
+    setCamOpen(false);
+    const caption = draft.trim();
+    const shown = caption || '[shared a photo from their camera]';
+    setDraft('');
+    setError(null);
+    setPending({ text: shown, at: new Date().toISOString() });
+    try {
+      const result = await api.photo(base64, caption || undefined);
+      wyrdStream.publish('chat', { userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      wyrdStream.publish('mind', result.mind);
+      if (tts && result.reply) speakAsWyrd(result.reply);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'could not reach WYRD');
+      setDraft(caption);
+    } finally {
+      setPending(null);
+    }
   };
 
+  const openCamera = async () => {
+    if (sending) return;
+    if (Platform.OS === 'web') { setCamOpen(true); return; }
+    try {
+      const base64 = await captureNative();
+      if (base64) await sendPhoto(base64);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  // Voice input: the transcript fills the box as you speak and sends when you pause.
+  const speech = useSpeechInput({
+    onText: (t) => setDraft(t),
+    onFinal: (t) => { send(t); },
+  });
+  const mic = speech.listening;
+  const toggleMic = () => {
+    if (speech.listening) { speech.stop(); return; }
+    if (!speech.supported) {
+      setError(Platform.OS === 'web'
+        ? "this browser has no speech recognition — try Chrome, Edge or Safari"
+        : "use your keyboard's dictation mic for now");
+      return;
+    }
+    Speech.stop(); // don't transcribe WYRD's own voice
+    setError(null);
+    speech.start();
+  };
+  useEffect(() => { if (speech.error) setError(speech.error); }, [speech.error]);
+
   useEffect(() => {
-    if (!visible) Speech.stop();
+    if (!visible) { Speech.stop(); speech.stop(); }
   }, [visible]);
 
   useEffect(() => {
@@ -109,6 +156,12 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
                 <Path d="M3.8 7.2a4.2 4.2 0 0 0 8.4 0M8 11.4v3" stroke={mic ? colors.black : colors.greenDim} strokeWidth={1.3} fill="none" />
               </Svg>
             </Pressable>
+            <Pressable onPress={openCamera} disabled={sending} style={styles.iconBtn} accessibilityLabel="Show WYRD a photo">
+              <Svg width={16} height={16} viewBox="0 0 16 16">
+                <Path d="M2 5.2h2.6L5.8 3.5h4.4l1.2 1.7H14v7.3H2Z" stroke={colors.greenDim} strokeWidth={1.3} fill="none" strokeLinejoin="round" />
+                <Path d="M8 10.9a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6Z" stroke={colors.greenDim} strokeWidth={1.3} fill="none" />
+              </Svg>
+            </Pressable>
             <TextInput
               value={draft}
               onChangeText={(t) => { setDraft(t); if (error) setError(null); }}
@@ -131,6 +184,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               </Svg>
             </Pressable>
           </View>
+          <WebCameraSheet visible={camOpen} onClose={() => setCamOpen(false)} onCapture={sendPhoto} />
         </KeyboardAvoidingView>
       }
     >

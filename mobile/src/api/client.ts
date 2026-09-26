@@ -239,6 +239,9 @@ export const api = {
   // ---- chat / dialogue link ----
   chat: (text: string, _nonce?: string) =>
     callEndpoint<SpChatReply>('chat', 'sendMessage', { text }).then(adaptChatResult),
+  /** One camera frame (base64 JPEG), described by WYRD's vision model. */
+  photo: (imageBase64Jpeg: string, caption?: string) =>
+    callEndpoint<SpChatReply>('photo', 'describe', { imageBase64Jpeg, caption: caption || null }).then(adaptChatResult),
   conversations: async (limit = 50) => {
     const turns = await callEndpoint<SpConversationTurn[]>('chat', 'getHistory', { limit });
     return { total: turns.length, turns: turns.map(adaptConversationTurn) };

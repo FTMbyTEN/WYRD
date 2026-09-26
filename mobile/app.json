@@ -27,6 +27,15 @@
         "projectId": "ff7072e6-dd26-4464-ae34-f821f800113e"
       }
     },
-    "owner": "wyrd00"
+    "owner": "wyrd00",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "WYRD uses the camera only when you tap CAM, to see one photo you choose to show it.",
+          "photosPermission": false
+        }
+      ]
+    ]
   }
 }
