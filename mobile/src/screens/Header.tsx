@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { FaceMark } from '../components/FaceMark';
 import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
-import { clockHHMM } from '../util/time';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Mind } from '../api/types';
 
 interface Props {
@@ -20,12 +20,10 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
     ? `STATUS: ${(mind.curiosity ?? 0) > 0.7 ? 'INGESTING' : 'IDLE'} // ${new Date(mind.updatedAt).toTimeString().slice(0, 8)}`
     : 'STATUS: CONNECTING…';
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <View>
-      <View style={styles.clockRow}>
-        <Mono style={{ color: colors.mint, fontSize: 11 }}>{clockHHMM()}</Mono>
-        <Mono style={{ color: colors.greenDim, fontSize: 11 }}>▮▮▮ LTE ▰</Mono>
-      </View>
+    <View style={{ paddingTop: insets.top + 8 }}>
       <View style={styles.idRow}>
         <View style={styles.avatar}>
           <FaceMark mode="scan" />
@@ -56,10 +54,6 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
 }
 
 const styles = StyleSheet.create({
-  clockRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 18, paddingTop: 14, paddingBottom: 4,
-  },
   idRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#cccccc',

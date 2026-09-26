@@ -17,7 +17,6 @@ import { ScreenEffects } from '../components/ScreenEffects';
 import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
 import { useAuth } from '../api/AuthContext';
-import { clockHHMM } from '../util/time';
 
 type Tab = 'login' | 'register';
 
@@ -214,11 +213,6 @@ export function GateScreen() {
       <VortexCanvas ref={vortexRef} onShapeChange={setShape} style={StyleSheet.absoluteFill} />
       <ScreenEffects />
 
-      <View style={styles.statusRow}>
-        <Mono style={{ color: colors.mint, fontSize: 11 }}>{clockHHMM()}</Mono>
-        <Mono style={{ color: colors.greenDim, fontSize: 11 }}>▮▮▮ LTE ▰</Mono>
-      </View>
-
       <KeyboardAvoidingView
         style={styles.center}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -342,11 +336,6 @@ export function GateScreen() {
 }
 
 const styles = StyleSheet.create({
-  statusRow: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 18, paddingVertical: 14,
-  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   closedWrap: { alignItems: 'center', gap: 18 },
   wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.glow, textShadowRadius: 14 },

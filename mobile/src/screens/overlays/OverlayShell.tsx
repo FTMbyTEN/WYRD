@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 
@@ -13,9 +14,10 @@ interface Props {
 }
 
 export function OverlayShell({ visible, title, onClose, children, footer, black }: Props) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="fade" transparent={!black} onRequestClose={onClose}>
-      <View style={[styles.root, { backgroundColor: black ? '#ffffff' : 'rgba(255,255,255,0.94)' }]}>
+      <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom, backgroundColor: black ? '#ffffff' : 'rgba(255,255,255,0.94)' }]}>
         <View style={styles.header}>
           <Display style={styles.title}>{`>_ ${title}`}</Display>
           <Pressable onPress={onClose} hitSlop={12}>
@@ -30,7 +32,7 @@ export function OverlayShell({ visible, title, onClose, children, footer, black 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingTop: Platform.OS === 'ios' ? 44 : 24 },
+  root: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     padding: 16, borderBottomWidth: 1, borderBottomColor: colors.greenBorder,

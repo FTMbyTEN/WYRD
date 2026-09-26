@@ -2,7 +2,25 @@ import React, { Suspense } from 'react';
 import { ActivityIndicator, Platform, StatusBar, StyleSheet, View } from 'react-native';
 import { useFonts, VT323_400Regular } from '@expo-google-fonts/vt323';
 import { ShareTechMono_400Regular } from '@expo-google-fonts/share-tech-mono';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from './src/theme';
+
+// Web: fill exactly the visible viewport on every device -- 100dvh tracks mobile browsers'
+// collapsing address bar (plain 100vh overshoots it) -- and never scroll the page itself.
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent =
+    'html,body{margin:0;height:100%;overflow:hidden;background:#fff;overscroll-behavior:none}' +
+    '#root{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw}';
+  document.head.appendChild(style);
+  let viewport = document.querySelector('meta[name="viewport"]');
+  if (!viewport) {
+    viewport = document.createElement('meta');
+    viewport.setAttribute('name', 'viewport');
+    document.head.appendChild(viewport);
+  }
+  viewport.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
+}
 
 function Loading() {
   return (
@@ -32,12 +50,12 @@ export default function App() {
   if (!fontsLoaded) return <Loading />;
 
   return (
-    <>
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#ffffff' }}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <Suspense fallback={<Loading />}>
         <AppRoot />
       </Suspense>
-    </>
+    </SafeAreaProvider>
   );
 }
 

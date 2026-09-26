@@ -1,5 +1,6 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Mono } from '../components/ui';
 import { colors } from '../theme';
@@ -15,8 +16,9 @@ const TABS: { key: TabKey; label: string; Icon: (p: { color: string }) => React.
 
 /** Four tabs, each a line icon over a label; the active one sits in a solid ink pill. */
 export function TabBar({ active, onChange }: { active: TabKey; onChange: (t: TabKey) => void }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: Math.max(10, insets.bottom + 4) }]}>
       <View style={styles.row}>
         {TABS.map(({ key, label, Icon }) => {
           const on = key === active;
@@ -102,7 +104,6 @@ const styles = StyleSheet.create({
   bar: {
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.greenBorder,
     backgroundColor: colors.black, paddingHorizontal: 10, paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 22 : 10,
   },
   row: { flexDirection: 'row', gap: 6 },
   btn: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 7, borderRadius: 14 },
