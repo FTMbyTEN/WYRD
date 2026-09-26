@@ -1,7 +1,8 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
-import { HoloButton, HoloFrame } from '../../components/Holo';
+import { HoloButton } from '../../components/Holo';
+import { VocabularyPanel } from '../../components/VocabularyPanel';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
 import { useFeed, useLexicon } from '../../api/hooks';
@@ -16,28 +17,18 @@ interface Props {
 export function FeedTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: Props) {
   const { stats } = useLexicon();
   const { items: feed } = useFeed();
-  const recentWords = (stats?.recent ?? []).map((w) => w.word).join(' · ');
-
-  const learned = stats?.learned ?? 0;
-  const vocabGlow = Math.min(1, 0.35 + learned / 4000);
-
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <HoloFrame glow={vocabGlow} beam={false} style={styles.vocabWrap}>
-        <View style={styles.vocabPanel}>
-          <View style={styles.vocabHead}>
-            <Mono style={styles.label}>VOCABULARY</Mono>
-            <Mono style={styles.label}>NEXT WORD IN {countdown(stats?.nextTickAt)}</Mono>
-          </View>
-          <Display style={styles.vocabCount}>{learned.toLocaleString()} words understood</Display>
-          <Mono numberOfLines={1} style={styles.recentWords}>recent · {recentWords || '—'}</Mono>
-          <View style={styles.linkRow}>
+      <VocabularyPanel
+        stats={stats}
+        actions={
+          <>
             <HoloButton label="CONCEPT MAP" onPress={onOpenConcept} />
             <HoloButton label="GROWTH" onPress={onOpenGrowth} />
             <HoloButton label="WORLD MAP" onPress={onOpenGlobe} />
-          </View>
-        </View>
-      </HoloFrame>
+          </>
+        }
+      />
 
       <View style={styles.feedHeadRow}>
         <Mono style={styles.label}>LIVE DATA FEED</Mono>
