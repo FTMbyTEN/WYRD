@@ -75,24 +75,31 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     }
   };
 
-  const sendPhoto = async (base64: string) => {
-    setCamOpen(false);
-    const caption = draft.trim();
-    const shown = caption || '[shared a photo from their camera]';
-    setDraft('');
+  /** One look: a frame (plus on-device tracking notes) to the vision model. Returns the reply. */
+  const lookAt = async (base64: string, caption: string, trackingNote?: string): Promise<string | null> => {
+    const shown = caption || '[let you look through their camera]';
     setError(null);
     setPending({ text: shown, at: new Date().toISOString() });
     try {
-      const result = await api.photo(base64, caption || undefined);
+      const result = await api.photo(base64, caption || undefined, trackingNote);
       wyrdStream.publish('chat', { userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       if (tts && result.reply) speakAsWyrd(result.reply);
+      return result.reply;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'could not reach WYRD');
-      setDraft(caption);
+      const msg = err instanceof ApiError ? err.message : 'could not reach WYRD';
+      setError(msg);
+      return msg;
     } finally {
       setPending(null);
     }
+  };
+
+  // native: one photo from the phone camera, with whatever is typed as the question
+  const sendPhoto = async (base64: string) => {
+    const caption = draft.trim();
+    setDraft('');
+    await lookAt(base64, caption);
   };
 
   const openCamera = async () => {
@@ -184,7 +191,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               </Svg>
             </Pressable>
           </View>
-          <WebCameraSheet visible={camOpen} onClose={() => setCamOpen(false)} onCapture={sendPhoto} />
+          <WebCameraSheet visible={camOpen} onClose={() => setCamOpen(false)} onLook={lookAt} />
         </KeyboardAvoidingView>
       }
     >
