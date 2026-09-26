@@ -108,6 +108,12 @@ function adaptChatResult(r: SpChatReply): ChatResult {
   };
 }
 
+interface SpReasoningNote {
+  timestamp: string;
+  kind: 'reasoning' | 'self';
+  content: string;
+}
+
 interface SpSelfConfigChange {
   timestamp: string;
   key: string;
@@ -252,9 +258,12 @@ export const api = {
     callEndpoint<SpDreamEntry | null>('dream', 'trigger', {}, { authenticated: false }).then((entry) => ({
       entry: entry ? adaptDreamEntry(entry) : null,
     })),
-  // No reasoning-log read endpoint on this backend (server.js's human-readable .md trace files
-  // were intentionally not ported) -- the reasoning tick itself is real, just not browsable here.
-  reasoning: (): Promise<ReasoningNote[]> => Promise.resolve([]),
+  // Rows replacing server.js's reasoning/*.md trace files; `file` is rebuilt in the same
+  // timestamp-plus-kind shape the old filenames had, since the UI keys and labels by it.
+  reasoning: (limit = 50): Promise<ReasoningNote[]> =>
+    callEndpoint<SpReasoningNote[]>('reasoning', 'getNotes', { limit }, { authenticated: false }).then((ns) =>
+      ns.map((n) => ({ file: `${n.timestamp.replace(/[:.]/g, '-')}${n.kind === 'self' ? '-self' : ''}.md`, content: n.content })),
+    ),
   triggerReasoning: () =>
     callEndpoint<boolean>('reasoning', 'trigger', {}, { authenticated: false }).then((ran) => ({ ran })),
   reasoningNext: (): Promise<NextTick> => Promise.resolve({ nextTickAt: Date.now() + 30000, cycleMs: 30000 }),
@@ -301,11 +310,15 @@ export const api = {
   },
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
 
-  // ---- world map ---- (not ported on this backend yet -- see AGENTS notes on world/countries)
-  countries: (): Promise<CountryListItem[]> => Promise.resolve([]),
-  country: (_cca3: string): Promise<CountryDetail> =>
-    Promise.reject(new ServerpodClientError(404, 'world map data is not available on this backend yet')),
+  // ---- world map ----
+  countries: (): Promise<CountryListItem[]> =>
+    callEndpoint<CountryListItem[]>('world', 'getCountries', {}, { authenticated: false }),
+  country: async (cca3: string): Promise<CountryDetail> => {
+    const detail = await callEndpoint<CountryDetail | null>('world', 'getCountry', { code: cca3 }, { authenticated: false });
+    if (!detail) throw new ServerpodClientError(404, 'unknown country code');
+    return detail;
+  },
 
   // ---- misc ----
-  alerts: (): Promise<AlertNote[]> => Promise.resolve([]),
+  alerts: (): Promise<AlertNote[]> => callEndpoint<AlertNote[]>('alerts', 'getAlerts', {}, { authenticated: false }),
 };

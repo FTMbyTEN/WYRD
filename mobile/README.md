@@ -63,12 +63,14 @@ JSON-encoded `oldValueJson`/`newValueJson` → parsed values, flat COP-log field
 | Chat | `chat.sendMessage`, `chat.getHistory` |
 | Profile / account | `profile.getProfile`, `account.exportData`, `account.deleteMyData` |
 | Diary / dreams | `diary.getEntries`, `diary.trigger`, `dream.getEntries`, `dream.trigger` |
-| Reasoning | `reasoning.trigger` |
+| Reasoning | `reasoning.trigger`, `reasoning.getNotes` |
 | Self-config / COP | `selfConfig.getConfig`, `selfConfig.getCopLog`, `selfConfig.trigger` |
 | Lexicon | `lexicon.getStats`, `lexicon.getWord` |
 | Net feed | `feed.getRecent`, `feed.trigger` |
 | Growth | `growth.getSnapshots` |
 | Concept map | `memory.getConcepts` |
+| World map | `world.getCountries`, `world.getCountry` |
+| Alerts | `alerts.getAlerts` |
 
 ### Accounts
 
@@ -93,13 +95,8 @@ These are honest stubs, not faked data — worth knowing before assuming a scree
   backgrounded. `chat` (plus the reply's `mind`) is published locally when a message is sent.
   `thinking`/`idle`/`thought`/`ingesting`/`ingest_error` have no Serverpod source and never fire,
   so the brain visual pulses on feed ingests and COP reports only.
-- **Alerts.** `api.alerts()` returns an empty list — there's no Serverpod alerts endpoint yet.
-- **Reasoning log.** `api.reasoning()` returns an empty list; `reasoning.trigger` works but the
-  history isn't exposed. `reasoningNext`/`feedNext` countdowns are client-side estimates
-  (30s / 60s), not server values.
-- **World map.** `api.countries()` returns an empty list and `api.country()` rejects with
-  "world map data is not available on this backend yet". Chat can still return an
-  `open_world_map` action, but the globe has no country data behind it.
+- **Tick countdowns.** `reasoningNext`/`feedNext` are client-side estimates (30s / 60s), not
+  server values.
 - **Growth "trigger".** There's no server-side snapshot trigger; it re-reads the latest snapshot.
 
 ## What's real vs. adapted from the design
