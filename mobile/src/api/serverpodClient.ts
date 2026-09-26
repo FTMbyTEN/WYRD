@@ -17,7 +17,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // returns the real {"apiUrl": "..."} the Flutter web app itself uses to find the API.
 const DEFAULT_PORT = 8080;
 function defaultBaseUrl(): string {
-  if (process.env.EXPO_PUBLIC_WYRD_SERVERPOD_URL) return process.env.EXPO_PUBLIC_WYRD_SERVERPOD_URL;
+  // trimmed: Windows `set VAR=value && ...` keeps the space before `&&` in the value, and a URL
+  // with a trailing space makes every request fail before it's even sent
+  const fromEnv = process.env.EXPO_PUBLIC_WYRD_SERVERPOD_URL?.trim();
+  if (fromEnv) return fromEnv;
   const host = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
   return `http://${host}:${DEFAULT_PORT}`;
 }
@@ -130,7 +133,18 @@ export async function callEndpoint<T>(
   }
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  // Error responses aren't always JSON -- a gateway timeout or proxy error comes back as plain
+  // text/HTML. Parsing those blindly threw a SyntaxError that callers then reported as a network
+  // failure ("could not reach WYRD"), hiding the real status.
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (res.ok) throw new ServerpodClientError(res.status, 'unreadable response from server', text);
+      data = text;
+    }
+  }
 
   if (!res.ok) {
     throw new ServerpodClientError(res.status, messageFromErrorBody(data, res), data);
@@ -147,7 +161,10 @@ function messageFromErrorBody(data: unknown, res: Response): string {
     const reason = (data as { data?: { reason?: unknown } }).data?.reason;
     if (typeof reason === 'string') return humanizeReason(reason);
   }
-  return `${res.status} ${res.statusText}`;
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    return `server took too long to answer (${res.status}) — try again`;
+  }
+  return `${res.status} ${res.statusText}`.trim();
 }
 
 function humanizeReason(reason: string): string {
