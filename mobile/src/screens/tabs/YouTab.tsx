@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
+import { notify } from '../../util/dialog';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { FaceMark } from '../../components/FaceMark';
@@ -32,16 +33,10 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
       const data = await api.exportAccount();
       await Share.share({ message: JSON.stringify(data, null, 2), title: 'WYRD account export' });
     } catch {
-      Alert.alert('Export failed', 'Could not reach WYRD to export your data.');
+      notify('Export failed', 'Could not reach WYRD to export your data.');
     }
   };
 
-  const confirmLogout = () => {
-    Alert.alert('Log out?', 'WYRD keeps running and remembers you when you come back.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: logout },
-    ]);
-  };
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -102,7 +97,7 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
         />
       </Section>
 
-      <Pressable onPress={confirmLogout} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
+      <Pressable onPress={logout} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
         <Mono style={styles.logoutText}>LOG OUT</Mono>
       </Pressable>
       <Mono style={styles.footnote}>

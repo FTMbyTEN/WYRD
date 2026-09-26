@@ -2,6 +2,14 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 import * as serverpodAuth from './serverpodAuth';
 import { ServerpodClientError } from './serverpodClient';
 import { hasStoredSession, clearAuthTokens } from './serverpodClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './client';
+
+// The signed-in email isn't part of the stored tokens, so it's kept alongside them; otherwise a
+// reload keeps you signed in but forgets who you are (the YOU tab showed "—").
+const EMAIL_KEY = 'wyrd_email';
+const rememberEmail = (e: string | null) =>
+  (e ? AsyncStorage.setItem(EMAIL_KEY, e) : AsyncStorage.removeItem(EMAIL_KEY)).catch(() => {});
 
 type Status = 'checking' | 'signedOut' | 'awaitingVerification' | 'awaitingPassword' | 'signedIn';
 
@@ -42,6 +50,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // in the next batch -- for now a stale/expired token just surfaces as an error on the
       // first real API call, same as any session-expiry case.
       const has = await hasStoredSession();
+      if (has) {
+        const stored = await AsyncStorage.getItem(EMAIL_KEY).catch(() => null);
+        if (stored) {
+          setEmail(stored);
+        } else {
+          // a session from before the email was remembered: look it up once
+          api.exportAccount()
+            .then((a) => { if (a?.email) { setEmail(a.email); rememberEmail(a.email); } })
+            .catch(() => {});
+        }
+      }
       setStatus(has ? 'signedIn' : 'signedOut');
     })();
   }, []);
@@ -53,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const auth = await serverpodAuth.login(e, p);
       await serverpodAuth.persistAuth(auth);
       setEmail(e);
+      rememberEmail(e);
       setStatus('signedIn');
       return true;
     } catch (err) {
@@ -115,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const auth = await serverpodAuth.finishRegistration(registrationToken, password);
         await serverpodAuth.persistAuth(auth);
         setEmail(pendingEmail);
+        rememberEmail(pendingEmail);
         setStatus('signedIn');
         return true;
       } catch (err) {
@@ -133,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await serverpodAuth.signOutDevice().catch(() => clearAuthTokens());
     } finally {
       setEmail(null);
+      rememberEmail(null);
       setAccountRequestId(null);
       setRegistrationToken(null);
       setPendingEmail(null);
