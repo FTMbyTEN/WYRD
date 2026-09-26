@@ -80,6 +80,7 @@ export function AppShell() {
         tts={tts}
         onOpenGlobe={(country) => { setGlobeFocus(country); setOverlay('globe'); }}
         onOpenAppPreview={(html) => { setAppPreviewHtml(html); setOverlay('appPreview'); }}
+        onOpenDrone={() => { setOverlay(null); setTab('drone'); }}
       />
       <BrainOverlay visible={overlay === 'brain'} onClose={close} />
       <GlobeOverlay visible={overlay === 'globe'} onClose={close} focusCountryName={globeFocus} />

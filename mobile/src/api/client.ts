@@ -106,7 +106,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     chosenPath: 'serverpod',
     mind: adaptMind(r.mind),
     netFetched: false,
-    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app')
+    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'open_drone')
       ? (r.action as ChatResult['action'])
       : null,
   };

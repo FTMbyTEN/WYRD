@@ -188,10 +188,10 @@ export function useBrainActivitySignal() {
   return signal;
 }
 
-/** The drone's latest telemetry (every 2s), its recent missions (every 5s), and whether this
+/** The drone's latest telemetry (every 1.5s), its recent missions (every 5s), and whether this
  *  account is the operator (asked once). */
 export function useDrone() {
-  const state = usePolled<DroneState | null>(api.droneState, 2000);
+  const state = usePolled<DroneState | null>(api.droneState, 1500);
   const missions = usePolled<DroneMission[]>(() => api.droneMissions(10), 5000);
   const operator = usePolled<boolean>(api.droneIsOperator, null);
   return {

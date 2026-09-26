@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, LayoutChangeEvent, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { FENCE_M, MissionMap, toLocal } from '../../components/MissionMap';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api, ApiError } from '../../api/client';
@@ -8,17 +8,7 @@ import { useDrone } from '../../api/hooks';
 import type { DroneMission, DroneState } from '../../api/types';
 import { timeAgo } from '../../util/time';
 
-// Mirrors the server's DroneSafety limits (wyrd_server/lib/src/drone/drone_safety.dart).
-const FENCE_M = 300;
 const STALE_MS = 10000;
-
-const EARTH_R = 6371000;
-/** Metres north/east of home -- flat-earth, fine inside the fence. */
-function toLocal(lat: number, lon: number, homeLat: number, homeLon: number) {
-  const north = ((lat - homeLat) * Math.PI / 180) * EARTH_R;
-  const east = ((lon - homeLon) * Math.PI / 180) * EARTH_R * Math.cos((homeLat * Math.PI) / 180);
-  return { north, east };
-}
 
 type LinkStatus = 'LIVE' | 'STALE' | 'OFFLINE';
 function linkStatus(state: DroneState | null | undefined): LinkStatus {
@@ -99,7 +89,7 @@ export function DroneTab() {
         <Stat label="MISSION" value={state?.missionStatus && state.missionStatus !== 'idle' ? `${state.missionStatus}${state.missionStep ? ` ${state.missionStep}` : ''}` : 'idle'} />
       </View>
 
-      <FlightMap state={state} mission={active} />
+      <MissionMap state={state} mission={active} />
 
       {isOperator ? (
         <View style={styles.controls}>
@@ -171,77 +161,6 @@ function MissionRow({ mission }: { mission: DroneMission }) {
         {mission.reason ? <Mono style={[styles.missionMeta, bad && styles.warnText]}>{mission.reason}</Mono> : null}
       </View>
       <Mono style={[styles.badge, bad && styles.badgeBad]}>{mission.status.toUpperCase()}</Mono>
-    </View>
-  );
-}
-
-/** Top-down view centred on home: the fence ring, the mission's waypoints, and the drone with its heading. */
-function FlightMap({ state, mission }: { state: DroneState | null | undefined; mission: DroneMission | undefined }) {
-  const [size, setSize] = useState(0);
-  const onLayout = (e: LayoutChangeEvent) => setSize(e.nativeEvent.layout.width);
-  const c = size / 2;
-  const scale = (size / 2 - 14) / FENCE_M; // px per metre, fence ring just inside the edge
-  const hasHome = state?.homeLat != null && state?.homeLon != null;
-
-  const toXY = (lat: number, lon: number) => {
-    const p = toLocal(lat, lon, state!.homeLat!, state!.homeLon!);
-    return { x: c + p.east * scale, y: c - p.north * scale };
-  };
-
-  let waypoints: { x: number; y: number }[] = [];
-  if (hasHome && mission) {
-    try {
-      waypoints = (JSON.parse(mission.stepsJson) as { type: string; lat?: number; lon?: number }[])
-        .filter((s) => s.type === 'goto' && s.lat != null && s.lon != null)
-        .map((s) => toXY(s.lat!, s.lon!));
-    } catch {
-      waypoints = [];
-    }
-  }
-  const drone = hasHome && state?.lat != null && state?.lon != null ? toXY(state.lat, state.lon) : null;
-  const heading = ((state?.headingDeg ?? 0) * Math.PI) / 180;
-
-  return (
-    <View style={styles.map} onLayout={onLayout}>
-      {size > 0 && (
-        <Svg width={size} height={size}>
-          <Circle cx={c} cy={c} r={FENCE_M * scale} stroke={colors.green} strokeWidth={1} strokeDasharray="4 4" fill="none" />
-          <Circle cx={c} cy={c} r={(FENCE_M / 2) * scale} stroke={colors.greenBorderDim} strokeWidth={1} fill="none" />
-          <Line x1={c} y1={8} x2={c} y2={size - 8} stroke={colors.greenBorderDim} strokeWidth={1} />
-          <Line x1={8} y1={c} x2={size - 8} y2={c} stroke={colors.greenBorderDim} strokeWidth={1} />
-          <SvgText x={c + 6} y={16} fontSize={9} fontFamily="ShareTechMono_400Regular" fill={colors.greenDim}>N</SvgText>
-          <SvgText x={c + 16} y={c - (FENCE_M * scale) + 12} fontSize={8} fontFamily="ShareTechMono_400Regular" fill={colors.greenDim}>{`${FENCE_M} m fence`}</SvgText>
-          {!hasHome ? (
-            <SvgText x={c} y={c + 24} fontSize={10} fontFamily="ShareTechMono_400Regular" fill={colors.greenDim} textAnchor="middle">no home position yet</SvgText>
-          ) : null}
-          <Circle cx={c} cy={c} r={4} fill={colors.black} stroke={colors.green} strokeWidth={1.5} />
-          {waypoints.length > 0 ? (
-            <Polyline
-              points={[{ x: c, y: c }, ...waypoints, { x: c, y: c }].map((p) => `${p.x},${p.y}`).join(' ')}
-              stroke={colors.greenDim}
-              strokeWidth={1}
-              strokeDasharray="2 3"
-              fill="none"
-            />
-          ) : null}
-          {waypoints.map((p, i) => (
-            <Circle key={i} cx={p.x} cy={p.y} r={3} fill={colors.greenDim} />
-          ))}
-          {drone ? (
-            <>
-              <Line
-                x1={drone.x}
-                y1={drone.y}
-                x2={drone.x + Math.sin(heading) * 14}
-                y2={drone.y - Math.cos(heading) * 14}
-                stroke={colors.green}
-                strokeWidth={2}
-              />
-              <Circle cx={drone.x} cy={drone.y} r={6} fill={colors.green} />
-            </>
-          ) : null}
-        </Svg>
-      )}
     </View>
   );
 }

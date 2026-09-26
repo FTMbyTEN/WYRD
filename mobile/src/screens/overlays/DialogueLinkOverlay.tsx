@@ -18,6 +18,7 @@ interface Props {
   tts: boolean;
   onOpenGlobe: (countryName: string | null) => void;
   onOpenAppPreview: (html: string) => void;
+  onOpenDrone: () => void;
 }
 
 const SUGGESTIONS = [
@@ -33,7 +34,7 @@ const SUGGESTIONS = [
  *  (`open_world_map` / `preview_app`) routed to the real overlays. Your message shows the moment
  *  you send it, with WYRD "thinking" until the reply lands. The mic toggle is UI-only (no
  *  on-device speech-to-text yet); spoken replies are real via expo-speech. */
-export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview }: Props) {
+export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone }: Props) {
   const { turns } = useConversations(60);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
@@ -47,7 +48,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     if (!action) return;
     if (action.type === 'open_world_map') onOpenGlobe(action.country);
     else if (action.type === 'preview_app') onOpenAppPreview(action.html);
-  }, [onOpenGlobe, onOpenAppPreview]);
+    else if (action.type === 'open_drone') onOpenDrone();
+  }, [onOpenGlobe, onOpenAppPreview, onOpenDrone]);
 
   const send = async (override?: string) => {
     const text = (override ?? draft).trim();
