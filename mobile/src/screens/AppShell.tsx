@@ -19,6 +19,7 @@ import { ScreenEffects } from '../components/ScreenEffects';
 import { useMind } from '../api/hooks';
 import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
 import { colors } from '../theme';
+import { useIsDesktop } from '../util/layout';
 
 type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | 'cop' | null;
 
@@ -30,6 +31,7 @@ export function AppShell() {
   const [appPreviewHtml, setAppPreviewHtml] = useState<string | null>(null);
 
   const { mind } = useMind();
+  const desktop = useIsDesktop();
   const unread = useUnreadAlertCount();
 
   const openAlerts = () => { setOverlay('alerts'); markAllAlertsRead(); };
@@ -40,7 +42,9 @@ export function AppShell() {
       <RainBackground opacity={0.1} />
       <ScreenEffects />
 
-      <View style={styles.content}>
+      <View style={[styles.content, desktop && styles.contentDesktop]}>
+        {desktop && <TabBar active={tab} onChange={setTab} vertical />}
+        <View style={{ flex: 1, minWidth: 0 }}>
         <Header
           mind={mind}
           tts={tts}
@@ -50,7 +54,7 @@ export function AppShell() {
           onOpenCop={() => setOverlay('cop')}
         />
 
-        <View style={{ flex: 1, minHeight: 0 }}>
+        <View style={[{ flex: 1, minHeight: 0 }, desktop && tab !== 'wyrd' && styles.readable]}>
           {tab === 'wyrd' && (
             <WyrdTab onOpenBrain={() => setOverlay('brain')} onOpenLink={() => setOverlay('link')} />
           )}
@@ -65,7 +69,8 @@ export function AppShell() {
           {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => setOverlay('cop')} />}
         </View>
 
-        <TabBar active={tab} onChange={setTab} />
+        {!desktop && <TabBar active={tab} onChange={setTab} />}
+        </View>
       </View>
 
       <AlertsOverlay visible={overlay === 'alerts'} onClose={close} />
@@ -89,4 +94,7 @@ export function AppShell() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.black },
   content: { flex: 1 },
+  contentDesktop: { flexDirection: 'row' },
+  // on wide screens, text-heavy tabs stay a comfortable reading width instead of stretching
+  readable: { width: '100%', maxWidth: 860, alignSelf: 'center' },
 });

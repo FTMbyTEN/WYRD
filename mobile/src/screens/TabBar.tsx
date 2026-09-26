@@ -14,12 +14,17 @@ const TABS: { key: TabKey; label: string; Icon: (p: { color: string }) => React.
   { key: 'you', label: 'YOU', Icon: YouIcon },
 ];
 
-/** Four tabs, each a line icon over a label; the active one sits in a solid ink pill. */
-export function TabBar({ active, onChange }: { active: TabKey; onChange: (t: TabKey) => void }) {
+/** Four tabs, each a line icon over a label; the active one sits in a solid ink pill. Bottom bar
+ *  on phones/tablets; `vertical` is the desktop sidebar (icon beside label, full-height rail). */
+export function TabBar({ active, onChange, vertical }: { active: TabKey; onChange: (t: TabKey) => void; vertical?: boolean }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(10, insets.bottom + 4) }]}>
-      <View style={styles.row}>
+    <View
+      style={vertical
+        ? [styles.rail, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 18 }]
+        : [styles.bar, { paddingBottom: Math.max(10, insets.bottom + 4) }]}
+    >
+      <View style={vertical ? styles.column : styles.row}>
         {TABS.map(({ key, label, Icon }) => {
           const on = key === active;
           const ink = on ? colors.black : colors.greenDim;
@@ -27,13 +32,13 @@ export function TabBar({ active, onChange }: { active: TabKey; onChange: (t: Tab
             <Pressable
               key={key}
               onPress={() => onChange(key)}
-              style={({ pressed }) => [styles.btn, on && styles.btnOn, pressed && !on && styles.btnPressed]}
+              style={({ pressed }) => [vertical ? styles.railBtn : styles.btn, on && styles.btnOn, pressed && !on && styles.btnPressed]}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
               accessibilityLabel={label}
             >
               <Icon color={ink} />
-              <Mono style={[styles.label, { color: ink }]}>{label}</Mono>
+              <Mono style={[vertical ? styles.railLabel : styles.label, { color: ink }]}>{label}</Mono>
             </Pressable>
           );
         })}
@@ -110,4 +115,12 @@ const styles = StyleSheet.create({
   btnOn: { backgroundColor: colors.green },
   btnPressed: { backgroundColor: 'rgba(0,0,0,0.06)' },
   label: { fontSize: 8.5, letterSpacing: 1.5 },
+
+  rail: {
+    width: 176, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.greenBorder,
+    backgroundColor: colors.black, paddingHorizontal: 12,
+  },
+  column: { gap: 6 },
+  railBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 12 },
+  railLabel: { fontSize: 11, letterSpacing: 2 },
 });
