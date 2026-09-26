@@ -4,6 +4,8 @@
 //
 //   npm start                       # listens for the autopilot on UDP 14550
 //   MAVLINK_PORT=14551 npm start    # other port
+//   WYRD_BRIDGE_TOKEN=... npm start # also connect to the WYRD server (same value as the server's
+//                                   # droneBridgeToken secret); WYRD_SERVER_URL overrides the server
 //
 // Local API (127.0.0.1 only -- never exposed to the network):
 //   GET  /state                 live telemetry + mission status
@@ -14,9 +16,12 @@ const http = require('http');
 const { MavlinkLink } = require('./link');
 const { Pilot } = require('./pilot');
 const { checkCommand } = require('./safety');
+const { WyrdSync } = require('./wyrd-sync');
 
 const MAVLINK_PORT = Number(process.env.MAVLINK_PORT || 14550);
 const API_PORT = Number(process.env.BRIDGE_PORT || 8765);
+const WYRD_SERVER_URL = process.env.WYRD_SERVER_URL || 'https://wryd00.api.serverpod.space';
+const WYRD_BRIDGE_TOKEN = process.env.WYRD_BRIDGE_TOKEN || '';
 
 const link = new MavlinkLink({ port: MAVLINK_PORT });
 const pilot = new Pilot(link);
@@ -92,6 +97,12 @@ const server = http.createServer(async (req, res) => {
   await link.start();
   log(`listening for the autopilot on UDP ${MAVLINK_PORT}`);
   server.listen(API_PORT, '127.0.0.1', () => log(`control API on http://127.0.0.1:${API_PORT}`));
+  if (WYRD_BRIDGE_TOKEN) {
+    new WyrdSync({ serverUrl: WYRD_SERVER_URL, token: WYRD_BRIDGE_TOKEN, link, pilot, log }).start();
+    log(`reporting to WYRD at ${WYRD_SERVER_URL}`);
+  } else {
+    log('WYRD_BRIDGE_TOKEN not set: running locally only, WYRD cannot send missions');
+  }
   setInterval(() => {
     const s = link.state;
     if (!s.connected) return log('waiting for the autopilot…');

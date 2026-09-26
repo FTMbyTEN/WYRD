@@ -55,9 +55,31 @@ twice a second:
   for, the mission is cancelled and the bridge stops sending commands. It never fights a human.
 - ArduPilot's own failsafes (battery, GPS, fence, lost link) still apply underneath all of this.
 
+## Connecting to WYRD (Serverpod)
+
+The bridge reports telemetry to the WYRD server every 2 s and picks up missions WYRD planned.
+
+1. Set two Serverpod secrets (from `wyrd_server`), then `scloud deploy`:
+   - `scloud password set droneBridgeToken <a long random value>`
+   - `scloud password set droneOperatorEmail <the email you sign in to WYRD with>`
+2. Start the bridge with the same token: `WYRD_BRIDGE_TOKEN=<value> npm start`
+
+Server endpoints (`wyrd_server/lib/src/drone`):
+
+| Endpoint | Who | |
+| --- | --- | --- |
+| `droneBridge.report` / `missionUpdate` | the bridge (token) | telemetry in, missions out, outcomes back |
+| `drone.getState` / `getMissions` | any signed-in user | watch the drone |
+| `drone.plan(instruction)` | operator only | WYRD turns plain language into a mission |
+| `drone.abort` | operator only | cancel and return home (jumps the queue) |
+
+WYRD plans in metres north/east of home and the server converts that to coordinates. Every plan
+is checked twice: by the server (`drone_safety.dart`) before it's stored, and by the bridge
+before it flies. Planning is refused up front, without spending AI budget, when no drone is
+connected, telemetry is stale, or home isn't known yet.
+
 ## Next
 
-- Serverpod side: a `drone` endpoint WYRD uses to receive telemetry and hand out missions, and a
-  chat tool so you can ask WYRD to plan a flight in plain language (checked by the same rules).
+- App: a DRONE panel to watch telemetry and type flight instructions (operator only).
 - First real test: fly a small square over the simulated field.
 - Before any real flight: check NCAA (Nigeria) drone regulations.
