@@ -32,9 +32,6 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts }: Pro
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.wordmarkRow}>
             <Display style={styles.wordmark}>WYRD</Display>
-            <View style={styles.turboBadge}>
-              <Mono style={styles.turboText}>TURBO</Mono>
-            </View>
           </View>
           <Mono numberOfLines={1} style={styles.statusText}>{statusLine}</Mono>
         </View>
@@ -66,8 +63,6 @@ const styles = StyleSheet.create({
   avatar: { width: 34, height: 34 },
   wordmarkRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wordmark: { fontSize: 24, letterSpacing: 3, lineHeight: 24, textShadowColor: colors.glow, textShadowRadius: 10 },
-  turboBadge: { backgroundColor: colors.green, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 2 },
-  turboText: { fontSize: 8, letterSpacing: 1, color: '#ffffff' },
   statusText: { fontSize: 9, letterSpacing: 1, color: '#555555', marginTop: 2 },
   iconBtn: {
     borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 2,

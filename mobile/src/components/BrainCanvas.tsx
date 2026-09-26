@@ -98,10 +98,17 @@ function buildEdges(points: BrainPoint[]): Edge[] {
  * surface — with signal packets ("electrons") travelling the connections continuously, and real
  * ingestion/reasoning events (`activitySignal`, bump it on each one) triggering a bright expanding
  * pulse at a random node so "WYRD digesting something" is an actual visible event, not a metaphor.
+ * `energy` (1 = resting) speeds up and thickens the signal traffic, e.g. while the brain is
+ * opened up on the WYRD tab.
  */
-export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: number; activitySignal?: number }) {
+export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { nodeCount?: number; activitySignal?: number; energy?: number }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const burstsRef = useRef<Burst[]>([]);
+  // Signal travel is integrated per frame (not now * speed) so changing energy never makes the
+  // packets jump mid-edge.
+  const energyRef = useRef(energy);
+  energyRef.current = energy;
+  const signalClock = useRef({ t: 0, last: 0 });
 
   const points = useMemo(() => buildBrain(nodeCount), [nodeCount]);
   const edges = useMemo(() => buildEdges(points), [points]);
@@ -118,6 +125,10 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
       const t = now * 0.00022;
       const R = Math.min(W, H) * 0.42;
       canvas.clear(Skia.Color('rgba(255,255,255,0)'));
+      const clock = signalClock.current;
+      clock.t += (clock.last ? Math.min(64, now - clock.last) : 0) * energyRef.current;
+      clock.last = now;
+      const boost = Math.min(1, (energyRef.current - 1) / 1.5);
 
       const ca = Math.cos(t), sa = Math.sin(t);
       const proj = points.map((p) => {
@@ -142,11 +153,11 @@ export function BrainCanvas({ nodeCount = 150, activitySignal }: { nodeCount?: n
       const pulsePaint = Skia.Paint();
       edges.forEach((e) => {
         const a = proj[e.a], b = proj[e.b];
-        const tt = (now * 0.00035 * e.speed + e.phase) % 1;
+        const tt = (clock.t * 0.00035 * e.speed + e.phase) % 1;
         const px = a.sx + (b.sx - a.sx) * tt, py = a.sy + (b.sy - a.sy) * tt;
         const depth = (a.d + b.d) / 2;
         pulsePaint.setColor(Skia.Color(`rgba(0,0,0,${(0.55 + depth * 0.45).toFixed(3)})`));
-        canvas.drawCircle(px, py, 1.3 + depth * 1.1, pulsePaint);
+        canvas.drawCircle(px, py, (1.3 + depth * 1.1) * (1 + boost * 0.6), pulsePaint);
       });
 
       // Nodes themselves, gently pulsing — the "neurons".

@@ -1,12 +1,36 @@
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { BrainCanvas } from '../../components/BrainCanvas';
-import { GroundLight } from '../../components/Holo';
+import { LearningStream } from '../../components/LearningStream';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
-import { useBrainActivitySignal, useFeed, useFeedNext, useMind, useReasoning, useReasoningNext } from '../../api/hooks';
+import {
+  useBrainActivitySignal,
+  useFeed,
+  useFeedNext,
+  useLexicon,
+  useMind,
+  useReasoning,
+  useReasoningNext,
+} from '../../api/hooks';
 import { countdown, timeAgo } from '../../util/time';
 import { firstLineFromMarkdown } from '../../util/text';
+
+const BRAIN_ZOOM = 1.6;
+
+// Filler words that say nothing about what WYRD is actually learning.
+const STOPWORDS = new Set(
+  'the and for with that this from into your their about what when where which while will would there these those have has had been were they them then than just also more most some such only over very like show make made using used uses how why who its it\'s are was'.split(' '),
+);
+
+function keywords(text: string, max: number): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !STOPWORDS.has(w))
+    .slice(0, max);
+}
 
 export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; onOpenLink: () => void }) {
   const { mind } = useMind();
@@ -14,7 +38,14 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const feedNext = useFeedNext();
   const { notes } = useReasoning();
   const reasoningNext = useReasoningNext();
+  const { stats: lexicon } = useLexicon();
   const brainActivity = useBrainActivitySignal();
+
+  const [expanded, setExpanded] = useState(false);
+  const zoom = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(zoom, { toValue: expanded ? 1 : 0, friction: 9, tension: 45, useNativeDriver: true }).start();
+  }, [expanded, zoom]);
 
   const mood = mind?.mood ?? '—';
   const focus = mind?.focusTopic ?? 'nothing yet';
@@ -24,82 +55,100 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const latestFeed = feed[0];
   const latestNote = notes[0];
 
+  // What WYRD is taking in right now, newest first: the latest ingests, the topics of its latest
+  // self-questions, the words it most recently learned, and what it's focused on.
+  const learningWords = useMemo(() => {
+    const out: string[] = [];
+    feed.slice(0, 4).forEach((f) => out.push(...keywords(f.title, 4)));
+    notes.slice(0, 4).forEach((n) => {
+      const topic = /-\s*topic:\s*(.+)/i.exec(n.content)?.[1]?.trim();
+      if (topic) out.push(topic.toLowerCase());
+    });
+    (lexicon?.recent ?? []).slice().reverse().forEach((w) => out.push(w.word));
+    if (mind?.focusTopic) out.push(mind.focusTopic);
+    return [...new Set(out)].slice(0, 30);
+  }, [feed, notes, lexicon, mind?.focusTopic]);
+
+  const brainScale = zoom.interpolate({ inputRange: [0, 1], outputRange: [1, BRAIN_ZOOM] });
+  const heroOpacity = zoom.interpolate({ inputRange: [0, 0.45], outputRange: [1, 0], extrapolate: 'clamp' });
+  const panelOpacity = zoom.interpolate({ inputRange: [0.4, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+  const panelScale = zoom.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
+
   return (
     <View style={{ flex: 1 }}>
-      <View style={StyleSheet.absoluteFill}>
-        <BrainCanvas activitySignal={brainActivity} />
-      </View>
-      <View style={styles.heroWrap}>
-        <View style={styles.hero}>
-          <Mono style={styles.moodLabel}>MOOD</Mono>
+      <Pressable
+        style={styles.heroWrap}
+        onPress={() => setExpanded((e) => !e)}
+        accessibilityRole="button"
+        accessibilityLabel={expanded ? 'Close the brain view' : 'Open the brain to see its vitals'}
+      >
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: brainScale }] }]}>
+          <BrainCanvas activitySignal={brainActivity} energy={expanded ? 2.2 : 1} />
+        </Animated.View>
+
+        <LearningStream words={learningWords} active={expanded} />
+
+        <Animated.View style={[styles.hero, { opacity: heroOpacity }]} pointerEvents="none">
+          <Mono style={styles.eyebrow}>MOOD</Mono>
           <Display style={styles.moodValue}>{mood}</Display>
           <Mono style={styles.focusLine}>focus · {focus}</Mono>
+        </Animated.View>
+
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { opacity: panelOpacity, transform: [{ scale: panelScale }] }]}
+        >
+          <Vital label="CURIOSITY" pct={curPct} style={styles.vitalLeft} />
+          <Vital label="CONFIDENCE" pct={confPct} style={styles.vitalRight} />
+          <Vital label="DIGEST" pct={digestPct} style={styles.vitalCenter} big />
+        </Animated.View>
+
+        <Mono style={styles.hint} pointerEvents="none">
+          {expanded ? 'TAP TO CLOSE' : 'TAP THE BRAIN'}
+        </Mono>
+      </Pressable>
+
+      <View style={styles.panel}>
+        <Pressable onPress={onOpenBrain} style={styles.actionBtn}>
+          <Mono style={styles.actionText}>BRAIN_3D ↗</Mono>
+        </Pressable>
+
+        <View style={styles.tickerRow}>
+          <TickerCard
+            label={`NET_FEED · NEXT ${countdown(feedNext?.nextTickAt)}`}
+            text={latestFeed ? `[${latestFeed.feedSource}] ${latestFeed.title}` : 'waiting on the first ingest…'}
+          />
+          <TickerCard
+            label={`REASONING · NEXT ${countdown(reasoningNext?.nextTickAt)}`}
+            text={latestNote ? firstLineFromMarkdown(latestNote.content, 60) : 'no reasoning notes yet'}
+          />
         </View>
 
-        <HoloStat label="CURIOSITY" value={`${curPct}%`} pct={curPct} style={styles.holoLeft} beamStyle={styles.beamLeft} />
-        <HoloStat label="CONFIDENCE" value={`${confPct}%`} pct={confPct} style={styles.holoRight} beamStyle={styles.beamRight} />
-        <HoloStat label="DIGEST" value={`${digestPct}%`} pct={digestPct} style={styles.holoCenter} beamStyle={styles.beamCenter} big />
-      </View>
-
-      <View style={styles.actionRow}>
-        <ActionBtn label="BRAIN_3D ↗" onPress={onOpenBrain} />
-      </View>
-
-      <View style={styles.tickerRow}>
-        <TickerCard
-          label={`NET_FEED · NEXT ${countdown(feedNext?.nextTickAt)}`}
-          text={latestFeed ? `[${latestFeed.feedSource}] ${latestFeed.title}` : 'waiting on the first ingest…'}
-        />
-        <TickerCard
-          label={`REASONING · NEXT ${countdown(reasoningNext?.nextTickAt)}`}
-          text={latestNote ? firstLineFromMarkdown(latestNote.content, 60) : 'no reasoning notes yet'}
-        />
-      </View>
-
-      <View style={styles.lastThoughtWrap}>
-        <Mono style={styles.lastThoughtLabel}>
+        <Mono style={styles.eyebrow}>
           LAST THOUGHT · {latestNote ? timeAgo(mind?.updatedAt ?? Date.now()) : '—'}
         </Mono>
         <Mono style={styles.lastThoughtText}>
           {latestNote ? firstLineFromMarkdown(latestNote.content) : mind?.activeGoal || 'still forming one.'}
         </Mono>
         <Pressable onPress={onOpenLink} style={styles.dialogueBtn}>
-          <Mono style={{ color: colors.green, fontSize: 12, letterSpacing: 2 }}>{'> OPEN DIALOGUE_LINK'}</Mono>
+          <Mono style={styles.dialogueText}>{'> OPEN DIALOGUE_LINK'}</Mono>
         </Pressable>
       </View>
     </View>
   );
 }
 
-/** A holographic readout projected off the brain, sci-fi-HUD style: a thin beam rising from the
- *  brain into a glass panel, with a soft green glow pooling underneath it — not a bordered stat
- *  box sitting in a row. `pct` drives both the meter fill and how bright the panel reads, so a
- *  higher value visibly "lights up" more, same idea as the projection intensifying with signal. */
-function HoloStat({ label, value, pct, style, beamStyle, big }: {
-  label: string; value: string; pct: number; style: any; beamStyle: any; big?: boolean;
-}) {
-  const glow = 0.25 + Math.min(1, Math.max(0, pct / 100)) * 0.55;
+/** One vital sign shown inside the zoomed-in brain: label, value, and a hairline meter. */
+function Vital({ label, pct, style, big }: { label: string; pct: number; style: object; big?: boolean }) {
+  const clamped = Math.min(100, Math.max(0, pct));
   return (
-    <View style={[styles.holoWrap, style]} pointerEvents="none">
-      <View style={[styles.beam, beamStyle]} />
-      <View style={styles.beamAnchor} />
-      <View style={[styles.holoCard, big && styles.holoCardBig, { shadowOpacity: glow, borderColor: `rgba(0,0,0,${glow})` }]}>
-        <Mono style={styles.holoLabel}>{label}</Mono>
-        <Display style={[styles.holoValue, big && styles.holoValueBig, { textShadowRadius: 10 + glow * 14 }]}>{value}</Display>
-        <View style={styles.holoMeter}>
-          <View style={[styles.holoMeterFill, { width: `${pct}%`, opacity: 0.6 + glow * 0.4 }]} />
-        </View>
+    <View style={[styles.vital, big && styles.vitalBig, style]}>
+      <Mono style={styles.eyebrow}>{label}</Mono>
+      <Display style={[styles.vitalValue, big && styles.vitalValueBig]}>{`${clamped}%`}</Display>
+      <View style={styles.meter}>
+        <View style={[styles.meterFill, { width: `${clamped}%` }]} />
       </View>
-      <GroundLight glow={glow} />
     </View>
-  );
-}
-
-function ActionBtn({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={styles.actionBtn}>
-      <Mono style={{ fontSize: 9.5, letterSpacing: 1, color: colors.greenDim }}>{label}</Mono>
-    </Pressable>
   );
 }
 
@@ -115,64 +164,44 @@ function TickerCard({ label, text }: { label: string; text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', position: 'relative' },
-  hero: {
-    alignItems: 'center', paddingVertical: 22, paddingHorizontal: 26,
-    backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 999,
-  },
-  moodLabel: { fontSize: 10, letterSpacing: 3, color: colors.greenDim },
-  moodValue: { fontSize: 56, lineHeight: 56, textShadowColor: colors.glow, textShadowRadius: 22 },
-  focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
+// Monochrome system: pure white ground, black ink at three weights (green = ink, greenDim =
+// secondary, greenBorder = hairline), no glows or shadows -- contrast and spacing do the work.
+const HAIRLINE = StyleSheet.hairlineWidth;
 
-  // ---- Holographic projections: beam rising off the brain into a floating glass readout, with
-  // a soft glow pooling under it — sci-fi HUD callout, not a bordered stat box in a row. Percent
-  // positions keep the three readouts anchored around the brain regardless of screen size.
-  holoWrap: { position: 'absolute', alignItems: 'center' },
-  holoLeft: { left: '2%', bottom: '20%' },
-  holoRight: { right: '2%', bottom: '20%' },
-  holoCenter: { bottom: '2%', alignSelf: 'center' },
-  beam: { width: 1, backgroundColor: 'rgba(0,0,0,0.27)' },
-  beamLeft: { height: 34 },
-  beamRight: { height: 34 },
-  beamCenter: { height: 20 },
-  beamAnchor: {
-    position: 'absolute', top: -3, width: 5, height: 5, borderRadius: 3,
-    backgroundColor: colors.green, shadowColor: colors.green, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
+const styles = StyleSheet.create({
+  heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  hero: { alignItems: 'center', paddingVertical: 18, paddingHorizontal: 24, backgroundColor: 'rgba(255,255,255,0.82)' },
+  eyebrow: { fontSize: 9, letterSpacing: 3, color: colors.greenDim },
+  moodValue: { fontSize: 54, lineHeight: 56, color: colors.green, marginTop: 2 },
+  focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
+  hint: { position: 'absolute', bottom: 10, fontSize: 8.5, letterSpacing: 3, color: colors.greenBorder },
+
+  vital: {
+    position: 'absolute', width: 118, paddingVertical: 10, paddingHorizontal: 11,
+    backgroundColor: colors.black, borderWidth: 1, borderColor: colors.green,
   },
-  holoCard: {
-    marginTop: 2, width: 112, padding: 9, borderRadius: 6, borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.38)',
-    shadowColor: colors.green, shadowRadius: 10, shadowOffset: { width: 0, height: 0 },
+  vitalBig: { width: 150, alignItems: 'center' },
+  vitalLeft: { left: '6%', top: '36%' },
+  vitalRight: { right: '6%', top: '36%' },
+  vitalCenter: { left: '50%', marginLeft: -75, top: '18%' },
+  vitalValue: { fontSize: 24, color: colors.green, marginTop: 4 },
+  vitalValueBig: { fontSize: 36 },
+  meter: { marginTop: 7, height: 2, width: '100%', backgroundColor: colors.greenBorderDim },
+  meterFill: { height: '100%', backgroundColor: colors.green },
+
+  panel: {
+    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14, gap: 10,
+    backgroundColor: colors.black, borderTopWidth: HAIRLINE, borderTopColor: colors.greenBorder,
   },
-  holoCardBig: { width: 128, alignItems: 'center' },
-  holoLabel: { fontSize: 8, letterSpacing: 1.5, color: colors.greenDim },
-  holoValue: { fontSize: 20, marginTop: 3, textShadowColor: colors.glow },
-  holoValueBig: { fontSize: 30 },
-  holoMeter: { marginTop: 6, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.15)', overflow: 'hidden', width: '100%' },
-  holoMeterFill: { height: '100%', backgroundColor: colors.green },
-  actionRow: {
-    flexDirection: 'row', gap: 7, paddingHorizontal: 14, paddingTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  actionBtn: {
-    flex: 1, borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
-    paddingVertical: 9, alignItems: 'center',
-  },
-  tickerRow: {
-    flexDirection: 'row', gap: 7, paddingHorizontal: 14, paddingTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-  },
-  tickerCard: { flex: 1, borderWidth: 1, borderColor: '#cccccc', borderRadius: 2, padding: 9, minWidth: 0 },
+  actionBtn: { borderWidth: 1, borderColor: colors.greenBorder, paddingVertical: 9, alignItems: 'center' },
+  actionText: { fontSize: 9.5, letterSpacing: 2, color: colors.greenDim },
+  tickerRow: { flexDirection: 'row', gap: 8 },
+  tickerCard: { flex: 1, borderWidth: HAIRLINE, borderColor: colors.greenBorder, padding: 9, minWidth: 0 },
   tickerHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   pulseDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.green },
   tickerLabel: { fontSize: 8.5, letterSpacing: 1, color: colors.greenDim },
-  tickerText: { marginTop: 3, fontSize: 10.5, color: colors.mint },
-  lastThoughtWrap: { padding: 14, backgroundColor: 'rgba(255,255,255,0.92)' },
-  lastThoughtLabel: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
-  lastThoughtText: { marginTop: 4, fontSize: 12.5, lineHeight: 18, color: colors.mint },
-  dialogueBtn: {
-    marginTop: 12, borderWidth: 1, borderColor: colors.green, borderRadius: 2,
-    paddingVertical: 14, alignItems: 'center',
-  },
+  tickerText: { marginTop: 4, fontSize: 10.5, color: colors.mint },
+  lastThoughtText: { marginTop: -4, fontSize: 12.5, lineHeight: 18, color: colors.mint },
+  dialogueBtn: { backgroundColor: colors.green, paddingVertical: 14, alignItems: 'center' },
+  dialogueText: { color: colors.black, fontSize: 12, letterSpacing: 2 },
 });

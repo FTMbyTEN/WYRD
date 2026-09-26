@@ -12,11 +12,11 @@ export function ScreenEffects() {
       <Svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
         <Defs>
           <Pattern id="scanlines" patternUnits="userSpaceOnUse" width={3} height={3}>
-            <Rect x={0} y={0} width={3} height={1} fill="rgba(0,0,0,0.035)" />
+            <Rect x={0} y={0} width={3} height={1} fill="rgba(0,0,0,0.02)" />
           </Pattern>
           <RadialGradient id="vignette" cx="50%" cy="50%" r="72%">
             <Stop offset="55%" stopColor="#000000" stopOpacity={0} />
-            <Stop offset="100%" stopColor="#000000" stopOpacity={0.14} />
+            <Stop offset="100%" stopColor="#000000" stopOpacity={0.08} />
           </RadialGradient>
         </Defs>
         <Rect x={0} y={0} width="100%" height="100%" fill="url(#scanlines)" />

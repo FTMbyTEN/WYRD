@@ -13,7 +13,7 @@ export const colors = {
   greenBorderDim: '#cccccc', // subtler dividers, disabled text
   mint: '#111111', // headline/value text
   mintBright: '#222222', // dreams, user-chat text
-  glow: 'rgba(0,0,0,0.22)', // text-shadow halo — a soft grey bloom on white, not a black smudge
+  glow: 'rgba(0,0,0,0)', // text-shadow halo: off -- crisp black type reads better on white than any bloom
   danger: '#ff3b3b', // logout, flagged verdicts
   ink: '#111111', // COP's own voice — deliberately not green
   black: '#ffffff',

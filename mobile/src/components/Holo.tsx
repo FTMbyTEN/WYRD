@@ -1,87 +1,17 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import React from 'react';
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Display, Mono } from './ui';
 import { colors } from '../theme';
 
-/** One soft, wavering tongue of ethereal flame — three fully-round, overlapping blobs (never a
- *  hard rectangular edge) tapering from a wide base to a soft point, quietly breathing in size,
- *  opacity, and a few degrees of sway on its own independent, never-repeating-in-sync loop. */
-function Flame({ deg, delayMs, size, glow }: { deg: number; delayMs: number; size: number; glow: number }) {
-  const t = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(t, { toValue: 1, duration: 1400 + delayMs, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(t, { toValue: 0, duration: 1600 + delayMs, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
-    const start = setTimeout(() => loop.start(), delayMs);
-    return () => { clearTimeout(start); loop.stop(); };
-  }, [t, delayMs]);
-
-  const sway = t.interpolate({ inputRange: [0, 1], outputRange: [`${deg - 4}deg`, `${deg + 4}deg`] });
-  const scaleY = t.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1.15] });
-  const opacity = t.interpolate({ inputRange: [0, 1], outputRange: [glow * 0.55, glow * 0.95] });
-
-  return (
-    <Animated.View
-      style={{
-        position: 'absolute', bottom: 0, alignItems: 'center',
-        transform: [{ rotate: sway }, { scaleY }],
-        transformOrigin: 'bottom',
-        opacity,
-      }}
-    >
-      <View style={{
-        width: size * 0.4, height: size * 0.4, borderRadius: size * 0.2, marginBottom: -size * 0.12,
-        backgroundColor: colors.mint, shadowColor: colors.green, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
-      }} />
-      <View style={{
-        width: size * 0.65, height: size * 0.65, borderRadius: size * 0.33, marginBottom: -size * 0.2,
-        backgroundColor: colors.green, shadowColor: colors.green, shadowOpacity: 1, shadowRadius: 9, shadowOffset: { width: 0, height: 0 },
-      }} />
-      <View style={{
-        width: size, height: size, borderRadius: size / 2,
-        backgroundColor: colors.green, shadowColor: colors.green, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 0 },
-      }} />
-    </Animated.View>
-  );
-}
-
-/** A soft, ethereal light burning up from the ground under a panel — like a low, quiet flame, not
- *  a bar or a rigid beam. Three flame tongues, each built from overlapping circles only (no
- *  straight edges anywhere) and flickering on its own independent loop, sitting over one soft
- *  round bed of light at the very base. Every shape is round; the "burn" comes entirely from each
- *  flame's own untied breathing animation, so the whole thing never moves as one rigid unit. */
-export function GroundLight({ glow = 0.5, width = 92, height = 46 }: { glow?: number; width?: number; height?: number }) {
-  const g = Math.max(0.15, Math.min(1, glow));
-  const flames = [
-    { deg: -14, delayMs: 120, size: 15 },
-    { deg: 0, delayMs: 380, size: 20 },
-    { deg: 13, delayMs: 640, size: 14 },
-  ];
-  return (
-    <View style={{ width, height, alignItems: 'center' }}>
-      <View style={{
-        position: 'absolute', bottom: -6, width: 22, height: 22, borderRadius: 11,
-        backgroundColor: colors.green, opacity: g * 0.5, transform: [{ scaleX: 1.7 }],
-        shadowColor: colors.green, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 0 },
-      }} />
-      {flames.map((f) => <Flame key={f.deg} {...f} glow={g} />)}
-    </View>
-  );
-}
-
 /** Shared sci-fi holographic-projection language: a thin beam rising into a glass panel, lit from
- *  underneath by a soft ground light — used for every "readout" across the app (WYRD tab's
+ *  underneath — used for every "readout" across the app (WYRD tab's
  *  brain-orbiting stats, YOU's identity/facts, FEED's vocabulary) instead of plain bordered boxes.
  *  `glow` (0..1) drives border/shadow/light intensity — pass a real percentage where one exists
  *  (curiosity, digest) so brightness itself carries information, or a fixed value otherwise. */
 export function HoloFrame({
-  children, glow = 0.45, style, beam = true, groundLight = true,
+  children, glow = 0.45, style, beam = true,
 }: {
-  children: React.ReactNode; glow?: number; style?: StyleProp<ViewStyle>; beam?: boolean; groundLight?: boolean;
+  children: React.ReactNode; glow?: number; style?: StyleProp<ViewStyle>; beam?: boolean;
 }) {
   const g = Math.max(0.15, Math.min(1, glow));
   return (
@@ -102,7 +32,6 @@ export function HoloFrame({
       }}>
         {children}
       </View>
-      {groundLight && <GroundLight glow={g} />}
     </View>
   );
 }

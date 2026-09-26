@@ -66,7 +66,7 @@ export function YouTab({ tts, onToggleTts }: { tts: boolean; onToggleTts: () => 
         </View>
       </HoloFrame>
 
-      <HoloFrame glow={tts ? 0.6 : 0.3} beam={false} groundLight={false} style={styles.ttsWrap}>
+      <HoloFrame glow={tts ? 0.6 : 0.3} beam={false} style={styles.ttsWrap}>
         <Pressable onPress={onToggleTts} style={styles.ttsRow}>
           <Mono style={{ fontSize: 11, letterSpacing: 1, color: tts ? colors.green : colors.greenDim }}>
             {tts ? 'SPOKEN REPLIES: ON' : 'SPOKEN REPLIES: OFF'}
