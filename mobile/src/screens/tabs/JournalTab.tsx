@@ -3,10 +3,18 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { useDiary, useDreams, useReasoning } from '../../api/hooks';
+import { FeedTab } from './FeedTab';
 
-type Journal = 'DIARY' | 'DREAMS' | 'REASONING';
+type Journal = 'DIARY' | 'DREAMS' | 'REASONING' | 'FEED';
+const JOURNALS: Journal[] = ['DIARY', 'DREAMS', 'REASONING', 'FEED'];
 
-export function DiaryTab() {
+/** JOURNAL: everything WYRD writes (diary, dreams, reasoning) and everything it takes in (the net
+ *  feed and vocabulary) in one tab, switched by the segmented control at the top. */
+export function JournalTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: {
+  onOpenConcept: () => void;
+  onOpenGrowth: () => void;
+  onOpenGlobe: () => void;
+}) {
   const [journal, setJournal] = useState<Journal>('DIARY');
   const { entries: diary } = useDiary();
   const { entries: dreams } = useDreams();
@@ -17,16 +25,19 @@ export function DiaryTab() {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.segRow}>
-        {(['DIARY', 'DREAMS', 'REASONING'] as Journal[]).map((j) => (
-          <Pressable
-            key={j}
-            onPress={() => setJournal(j)}
-            style={[styles.segBtn, { borderColor: journal === j ? colors.green : colors.greenBorder }]}
-          >
-            <Mono style={{ fontSize: 9.5, letterSpacing: 1, color: journal === j ? colors.green : colors.greenDim }}>{j}</Mono>
-          </Pressable>
-        ))}
+        {JOURNALS.map((j) => {
+          const on = journal === j;
+          return (
+            <Pressable key={j} onPress={() => setJournal(j)} style={[styles.segBtn, on && styles.segBtnOn]}>
+              <Mono style={[styles.segText, on && styles.segTextOn]}>{j}</Mono>
+            </Pressable>
+          );
+        })}
       </View>
+
+      {journal === 'FEED' && (
+        <FeedTab onOpenConcept={onOpenConcept} onOpenGrowth={onOpenGrowth} onOpenGlobe={onOpenGlobe} />
+      )}
 
       {journal === 'DREAMS' && (
         <ScrollView contentContainerStyle={styles.content}>
@@ -107,8 +118,14 @@ export function DiaryTab() {
 }
 
 const styles = StyleSheet.create({
-  segRow: { flexDirection: 'row', gap: 7, padding: 14, paddingBottom: 0 },
-  segBtn: { flex: 1, borderWidth: 1, borderRadius: 2, paddingVertical: 8, alignItems: 'center' },
+  segRow: {
+    flexDirection: 'row', margin: 14, marginBottom: 0, padding: 3,
+    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999,
+  },
+  segBtn: { flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center' },
+  segBtnOn: { backgroundColor: colors.green },
+  segText: { fontSize: 9.5, letterSpacing: 1.5, color: colors.greenDim },
+  segTextOn: { color: colors.black },
   content: { padding: 18, paddingBottom: 40 },
   heading: { fontSize: 20, letterSpacing: 1 },
   subheading: { marginTop: 2, fontSize: 9.5, letterSpacing: 1, color: colors.greenDim },

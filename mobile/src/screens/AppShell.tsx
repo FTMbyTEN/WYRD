@@ -3,9 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Header } from './Header';
 import { TabBar, type TabKey } from './TabBar';
 import { WyrdTab } from './tabs/WyrdTab';
-import { DiaryTab } from './tabs/DiaryTab';
-import { CopTab } from './tabs/CopTab';
-import { FeedTab } from './tabs/FeedTab';
+import { JournalTab } from './tabs/JournalTab';
 import { YouTab } from './tabs/YouTab';
 import { DroneTab } from './tabs/DroneTab';
 import { AlertsOverlay } from './overlays/AlertsOverlay';
@@ -15,13 +13,14 @@ import { GlobeOverlay } from './overlays/GlobeOverlay';
 import { ConceptMapOverlay } from './overlays/ConceptMapOverlay';
 import { GrowthOverlay } from './overlays/GrowthOverlay';
 import { AppPreviewOverlay } from './overlays/AppPreviewOverlay';
+import { CopOverlay } from './overlays/CopOverlay';
 import { RainBackground } from '../components/RainBackground';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { useMind } from '../api/hooks';
 import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
 import { colors } from '../theme';
 
-type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | null;
+type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | 'cop' | null;
 
 export function AppShell() {
   const [tab, setTab] = useState<TabKey>('wyrd');
@@ -48,23 +47,22 @@ export function AppShell() {
           onToggleTts={() => setTts((v) => !v)}
           alertCount={unread}
           onOpenAlerts={openAlerts}
+          onOpenCop={() => setOverlay('cop')}
         />
 
         <View style={{ flex: 1, minHeight: 0 }}>
           {tab === 'wyrd' && (
             <WyrdTab onOpenBrain={() => setOverlay('brain')} onOpenLink={() => setOverlay('link')} />
           )}
-          {tab === 'diary' && <DiaryTab />}
-          {tab === 'cop' && <CopTab />}
-          {tab === 'feed' && (
-            <FeedTab
+          {tab === 'journal' && (
+            <JournalTab
               onOpenConcept={() => setOverlay('concept')}
               onOpenGrowth={() => setOverlay('growth')}
               onOpenGlobe={() => { setGlobeFocus(null); setOverlay('globe'); }}
             />
           )}
           {tab === 'drone' && <DroneTab />}
-          {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} />}
+          {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => setOverlay('cop')} />}
         </View>
 
         <TabBar active={tab} onChange={setTab} />
@@ -83,6 +81,7 @@ export function AppShell() {
       <ConceptMapOverlay visible={overlay === 'concept'} onClose={close} />
       <GrowthOverlay visible={overlay === 'growth'} onClose={close} />
       <AppPreviewOverlay visible={overlay === 'appPreview'} onClose={close} html={appPreviewHtml} />
+      <CopOverlay visible={overlay === 'cop'} onClose={close} />
     </View>
   );
 }

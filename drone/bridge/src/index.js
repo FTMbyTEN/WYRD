@@ -33,6 +33,7 @@ pilot.on('override', (mode) => log(`OVERRIDE: pilot switched to ${mode}`));
 pilot.on('mission', (m) => log(`mission ${m.status} (step ${m.index + 1}/${m.steps})${m.error ? `: ${m.error}` : ''}`));
 link.on('connected', () => log(`autopilot connected (system ${link.target.system})`));
 link.on('mode', (mode, prev) => log(`mode ${prev ?? '-'} -> ${mode}`));
+link.on('statustext', (text) => log(`autopilot: ${text}`));
 
 function snapshot() {
   const s = link.state;

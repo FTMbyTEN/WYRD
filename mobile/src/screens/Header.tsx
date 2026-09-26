@@ -12,9 +12,10 @@ interface Props {
   onToggleTts: () => void;
   alertCount: number;
   onOpenAlerts: () => void;
+  onOpenCop: () => void;
 }
 
-export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts }: Props) {
+export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpenCop }: Props) {
   const statusLine = mind
     ? `STATUS: ${(mind.curiosity ?? 0) > 0.7 ? 'INGESTING' : 'IDLE'} // ${new Date(mind.updatedAt).toTimeString().slice(0, 8)}`
     : 'STATUS: CONNECTING…';
@@ -37,6 +38,9 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts }: Pro
         </View>
         <Pressable onPress={onToggleTts} style={styles.iconBtn}>
           <Mono style={{ fontSize: 10, letterSpacing: 1, color: tts ? colors.green : colors.greenDim }}>TTS</Mono>
+        </Pressable>
+        <Pressable onPress={onOpenCop} style={styles.iconBtn} accessibilityLabel="COP oversight">
+          <Mono style={{ fontSize: 10, letterSpacing: 1, color: colors.greenDim }}>COP</Mono>
         </Pressable>
         <Pressable onPress={onOpenAlerts} style={styles.iconBtn}>
           <Mono style={{ fontSize: 10, letterSpacing: 1, color: colors.greenDim }}>ALERTS</Mono>

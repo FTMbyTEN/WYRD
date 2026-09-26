@@ -15,9 +15,17 @@ source "$HOME/.profile"
 # Windows host IP as seen from inside WSL, so the MAVLink stream reaches Windows-side tools.
 WIN_HOST="$(ip route show default | awk '{print $3}')"
 
+# HEADLESS=1: no MAVProxy console window or prompt, for running in the background or from
+# scripts (Windows 10's WSL has no Linux GUI support anyway).
+if [ "${HEADLESS:-0}" = "1" ]; then
+  MAVPROXY_UI=(--mavproxy-args="--daemon --non-interactive")
+else
+  MAVPROXY_UI=(--console)
+fi
+
 exec Tools/autotest/sim_vehicle.py -v ArduCopter \
   --custom-location="$LOCATION" \
   --no-rebuild \
   --out="udp:${WIN_HOST}:14550" \
   --out="udp:127.0.0.1:14550" \
-  --console
+  "${MAVPROXY_UI[@]}"

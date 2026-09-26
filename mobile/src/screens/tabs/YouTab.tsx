@@ -1,7 +1,6 @@
 import React from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
-import { HoloButton, HoloFrame, HoloReadout } from '../../components/Holo';
 import { colors } from '../../theme';
 import { FaceMark } from '../../components/FaceMark';
 import { api } from '../../api/client';
@@ -13,11 +12,20 @@ function daysSince(iso: string | undefined) {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
 }
 
-export function YouTab({ tts, onToggleTts }: { tts: boolean; onToggleTts: () => void }) {
-  const { email: username, logout } = useAuth();
+interface Props {
+  tts: boolean;
+  onToggleTts: () => void;
+  onOpenCop: () => void;
+}
+
+/** Your profile with WYRD: who you are to it, what it has learned about you, and your settings. */
+export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
+  const { email, logout } = useAuth();
   const { profile } = useProfile();
   const { total: msgCount } = useConversations();
   const { mind } = useMind();
+  const facts = profile?.facts ?? [];
+  const days = daysSince(profile?.firstSeen);
 
   const exportData = async () => {
     try {
@@ -28,83 +36,163 @@ export function YouTab({ tts, onToggleTts }: { tts: boolean; onToggleTts: () => 
     }
   };
 
-  const rows = [
-    { k: 'PRIVATE THREAD', v: `${msgCount} messages` },
-    { k: 'FACTS ABOUT YOU', v: `${profile?.facts.length ?? 0} retained` },
-    { k: 'SHARED MEMORY', v: `${(mind?.digest.totalTopics ?? 0).toLocaleString()} topics` },
-    { k: 'MEMBER SINCE', v: profile ? new Date(profile.firstSeen).toDateString() : '—' },
-  ];
+  const confirmLogout = () => {
+    Alert.alert('Log out?', 'WYRD keeps running and remembers you when you come back.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: logout },
+    ]);
+  };
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <HoloFrame glow={0.6} beam={false} style={styles.identityWrap}>
-        <View style={styles.identityPanel}>
-          <View style={styles.avatarWrap}><FaceMark mode="scan" /></View>
-          <Display style={styles.name}>{(username ?? '—').toUpperCase()}</Display>
-          <Mono style={styles.sessionLine}>OWNER NODE · SESSION {daysSince(profile?.firstSeen)}d</Mono>
+    <ScrollView contentContainerStyle={styles.page}>
+      {/* identity */}
+      <View style={styles.identity}>
+        <View style={styles.avatar}>
+          <FaceMark mode="scan" />
         </View>
-      </HoloFrame>
-
-      <View style={styles.grid}>
-        {rows.map((r) => (
-          <HoloReadout key={r.k} label={r.k} value={r.v} glow={0.4} style={styles.gridCell} />
-        ))}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Mono style={styles.eyebrow}>SIGNED IN AS</Mono>
+          <Display numberOfLines={1} style={styles.name}>{(email ?? '—').split('@')[0]}</Display>
+          <Mono numberOfLines={1} style={styles.email}>{email ?? ''}</Mono>
+        </View>
       </View>
 
-      <HoloFrame glow={0.35} beam={false} style={styles.capWrap}>
-        <View style={styles.capPanel}>
-          <Mono style={styles.capLabel}>OWNER-ONLY CAPABILITIES</Mono>
-          <View style={{ marginTop: 8, gap: 7 }}>
-            <CapRow label="Real browsing" value="READ-ONLY · ACCOUNT-GATED" />
-            <CapRow label="Code execution" value="SANDBOXED · ACCOUNT-GATED" />
-            <CapRow label="Discord bridge" value="SEPARATE PROCESS" />
-          </View>
-          <Mono style={styles.capFoot}>
-            It can never click, type, or submit anything — on this or any site. Availability of the
-            three above depends on whether this designation is the configured owner account.
-          </Mono>
-        </View>
-      </HoloFrame>
-
-      <HoloFrame glow={tts ? 0.6 : 0.3} beam={false} style={styles.ttsWrap}>
-        <Pressable onPress={onToggleTts} style={styles.ttsRow}>
-          <Mono style={{ fontSize: 11, letterSpacing: 1, color: tts ? colors.green : colors.greenDim }}>
-            {tts ? 'SPOKEN REPLIES: ON' : 'SPOKEN REPLIES: OFF'}
-          </Mono>
-        </Pressable>
-      </HoloFrame>
-
-      <View style={styles.bottomRow}>
-        <HoloButton label="EXPORT DATA" onPress={exportData} />
-        <HoloButton label="LOGOUT" onPress={logout} tone="danger" />
+      {/* at a glance */}
+      <View style={styles.stats}>
+        <Stat value={msgCount.toLocaleString()} label="MESSAGES" />
+        <View style={styles.statRule} />
+        <Stat value={String(facts.length)} label="FACTS KNOWN" />
+        <View style={styles.statRule} />
+        <Stat value={String(days)} label={days === 1 ? 'DAY' : 'DAYS'} />
       </View>
+
+      {/* what WYRD knows */}
+      <Section title="WHAT WYRD KNOWS ABOUT YOU">
+        {facts.length === 0 ? (
+          <Mono style={styles.muted}>
+            Nothing yet. Tell it about yourself in DIALOGUE_LINK and it will remember, privately.
+          </Mono>
+        ) : (
+          facts.slice(0, 12).map((f, i) => (
+            <View key={`${i}-${f}`} style={[styles.factRow, i > 0 && styles.rowRule]}>
+              <Mono style={styles.factIndex}>{String(i + 1).padStart(2, '0')}</Mono>
+              <Mono style={styles.factText}>{f}</Mono>
+            </View>
+          ))
+        )}
+        {facts.length > 12 ? <Mono style={styles.muted}>+ {facts.length - 12} more in your export</Mono> : null}
+      </Section>
+
+      {/* settings */}
+      <Section title="SETTINGS">
+        <Row title="Spoken replies" detail="WYRD reads its chat replies aloud">
+          <Switch
+            value={tts}
+            onValueChange={onToggleTts}
+            trackColor={{ false: colors.greenBorderDim, true: colors.green }}
+            thumbColor={colors.black}
+          />
+        </Row>
+        <Row title="COP oversight" detail="Every change WYRD made to itself, independently reviewed" onPress={onOpenCop} ruled />
+        <Row
+          title="Export my data"
+          detail={`Your private thread and facts${mind ? ` · shared memory holds ${mind.digest.totalTopics.toLocaleString()} topics` : ''}`}
+          onPress={exportData}
+          ruled
+        />
+      </Section>
+
+      <Pressable onPress={confirmLogout} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
+        <Mono style={styles.logoutText}>LOG OUT</Mono>
+      </Pressable>
+      <Mono style={styles.footnote}>
+        Your conversations and facts are private to you. WYRD's mind, diary and drone are shared by everyone.
+      </Mono>
     </ScrollView>
   );
 }
 
-function CapRow({ label, value }: { label: string; value: string }) {
+function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
-      <Mono style={{ fontSize: 11.5, color: colors.mint }}>{label}</Mono>
-      <Mono style={{ fontSize: 11.5, color: colors.green }}>{value}</Mono>
+    <View style={styles.stat}>
+      <Display style={styles.statValue}>{value}</Display>
+      <Mono style={styles.statLabel}>{label}</Mono>
     </View>
   );
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Mono style={styles.eyebrow}>{title}</Mono>
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+function Row({ title, detail, onPress, ruled, children }: {
+  title: string;
+  detail: string;
+  onPress?: () => void;
+  ruled?: boolean;
+  children?: React.ReactNode;
+}) {
+  const body = (
+    <>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Mono style={styles.rowTitle}>{title}</Mono>
+        <Mono style={styles.rowDetail}>{detail}</Mono>
+      </View>
+      {children ?? <Mono style={styles.chevron}>›</Mono>}
+    </>
+  );
+  return onPress ? (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, ruled && styles.rowRule, pressed && styles.pressed]}>
+      {body}
+    </Pressable>
+  ) : (
+    <View style={[styles.row, ruled && styles.rowRule]}>{body}</View>
+  );
+}
+
+const HAIRLINE = StyleSheet.hairlineWidth;
+
 const styles = StyleSheet.create({
-  content: { padding: 14, gap: 14, paddingBottom: 40 },
-  identityWrap: { width: '100%' },
-  identityPanel: { alignItems: 'center', padding: 18 },
-  avatarWrap: { width: 64, height: 64, marginBottom: 10 },
-  name: { fontSize: 40, lineHeight: 40, letterSpacing: 4, textShadowColor: colors.glow, textShadowRadius: 14 },
-  sessionLine: { marginTop: 6, fontSize: 10, letterSpacing: 1, color: colors.greenDim },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  gridCell: { width: '47%' },
-  capWrap: { width: '100%' },
-  capPanel: { padding: 12 },
-  capLabel: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
-  capFoot: { marginTop: 9, paddingTop: 9, borderTopWidth: 1, borderTopColor: colors.greenBorderDim, fontSize: 9.5, lineHeight: 14, color: colors.greenBorderDim },
-  ttsWrap: { width: '100%' },
-  ttsRow: { padding: 12, alignItems: 'center' },
-  bottomRow: { flexDirection: 'row', gap: 8 },
+  page: { padding: 16, paddingBottom: 40, gap: 18 },
+  eyebrow: { fontSize: 9, letterSpacing: 2.5, color: colors.greenDim },
+  muted: { fontSize: 11.5, lineHeight: 17, color: colors.greenDim, paddingVertical: 4 },
+
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 4 },
+  avatar: {
+    width: 64, height: 64, borderRadius: 32, overflow: 'hidden',
+    borderWidth: 1, borderColor: colors.green, alignItems: 'center', justifyContent: 'center',
+  },
+  name: { fontSize: 32, lineHeight: 34, color: colors.green, marginTop: 2 },
+  email: { fontSize: 11, color: colors.greenDim },
+
+  stats: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.green,
+  },
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 28, lineHeight: 30, color: colors.green },
+  statLabel: { marginTop: 2, fontSize: 8.5, letterSpacing: 1.5, color: colors.greenDim },
+  statRule: { width: HAIRLINE, alignSelf: 'stretch', backgroundColor: colors.greenBorder },
+
+  section: { gap: 8 },
+  card: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 4 },
+  factRow: { flexDirection: 'row', gap: 10, paddingVertical: 9 },
+  factIndex: { fontSize: 10, color: colors.greenBorder, paddingTop: 1 },
+  factText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.mint },
+
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  rowRule: { borderTopWidth: HAIRLINE, borderTopColor: colors.greenBorder },
+  rowTitle: { fontSize: 13, color: colors.green },
+  rowDetail: { marginTop: 2, fontSize: 10.5, lineHeight: 15, color: colors.greenDim },
+  chevron: { fontSize: 20, color: colors.greenDim },
+  pressed: { opacity: 0.6 },
+
+  logout: { borderWidth: 1, borderColor: colors.danger, paddingVertical: 13, alignItems: 'center' },
+  logoutText: { fontSize: 11, letterSpacing: 2.5, color: colors.danger },
+  footnote: { fontSize: 10, lineHeight: 15, color: colors.greenDim, textAlign: 'center' },
 });

@@ -44,6 +44,7 @@ class MavlinkLink extends EventEmitter {
     this.remote = null; // { address, port } of the autopilot, learned from its first packet
     this.target = { system: 1, component: 1 };
     this.pendingAcks = new Map(); // command id -> resolver
+    this.recentStatus = []; // { at, text } -- the autopilot's latest STATUSTEXT messages
     this.state = {
       connected: false,
       armed: false,
@@ -131,6 +132,15 @@ class MavlinkLink extends EventEmitter {
       case common.HomePosition.MSG_ID:
         s.home = { lat: data.latitude / 1e7, lon: data.longitude / 1e7, altM: data.altitude / 1000 };
         break;
+      case common.StatusText.MSG_ID: {
+        // The autopilot's own messages ("PreArm: Need Position Estimate", ...). Kept so a
+        // rejected command can say why, and re-emitted for logging.
+        const text = String(data.text).replace(/\0+$/, '').trim();
+        this.recentStatus.push({ at: now, text });
+        if (this.recentStatus.length > 20) this.recentStatus.shift();
+        this.emit('statustext', text, data.severity);
+        return;
+      }
       case common.CommandAck.MSG_ID: {
         const resolve = this.pendingAcks.get(data.command);
         if (resolve) {
@@ -230,9 +240,13 @@ class MavlinkLink extends EventEmitter {
   }
 
   async _expectAccepted(commandId, params, label) {
+    const sentAt = Date.now();
     const result = await this.command(commandId, params);
     if (result !== common.MavResult.ACCEPTED) {
-      throw new Error(`${label} rejected by the autopilot (${common.MavResult[result] ?? result})`);
+      // ArduPilot explains refusals in a STATUSTEXT right around the ACK ("Arm: Need Position Estimate")
+      await new Promise((r) => setTimeout(r, 300));
+      const why = this.recentStatus.filter((s) => s.at >= sentAt - 500).map((s) => s.text).at(-1);
+      throw new Error(`${label} rejected by the autopilot: ${why ?? common.MavResult[result] ?? result}`);
     }
   }
 }

@@ -4,6 +4,7 @@ import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { useCopLog, useSelfConfig } from '../../api/hooks';
 import { countdown, timeAgo } from '../../util/time';
+import { OverlayShell } from './OverlayShell';
 
 const SELF_MODIFY_MIN_GAP_MS = 4 * 60 * 60 * 1000; // mirrors the backend's own constant (not exposed via API)
 
@@ -11,7 +12,17 @@ function isFlagged(verdict: string) {
   return /\bflag/i.test(verdict);
 }
 
-export function CopTab() {
+/** COP: the independent overseer of WYRD's self-modifications, shown as a pop-up (header COP
+ *  button, or YOU > COP oversight). */
+export function CopOverlay({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  return (
+    <OverlayShell visible={visible} title="COP" onClose={onClose} black>
+      <CopPanel />
+    </OverlayShell>
+  );
+}
+
+function CopPanel() {
   const { config } = useSelfConfig();
   const { entries } = useCopLog();
   const [filter, setFilter] = useState<'ALL' | 'FLAGGED'>('ALL');
@@ -26,7 +37,6 @@ export function CopTab() {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headWrap}>
-        <Display style={styles.heading}>{'>_ COP'}</Display>
         <Mono style={styles.subheading}>
           an independent overseer reviewing WYRD's self-modifications — not WYRD itself. It cannot veto anything. It can only tell you what happened.
         </Mono>
