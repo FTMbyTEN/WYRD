@@ -87,6 +87,7 @@ function adaptConversationTurn(t: SpConversationTurn): ConversationTurn {
 interface SpChatAction {
   type: string;
   country: string | null;
+  html: string | null; // preview_app only
 }
 interface SpChatReply {
   reply: string;

@@ -138,7 +138,7 @@ Key facts:
 - The Serverpod server (`wyrd_server`) and its generated Dart client (`wyrd_client`) are **not in this repo**. The mobile app uses a hand-written TypeScript implementation of Serverpod's wire protocol (`mobile/src/api/serverpodClient.ts`), since there's no official JS client.
 - The hosted API is at `https://wryd00.api.serverpod.space`. Note the `.api.` subdomain: `wryd00.serverpod.space` only serves static files and returns `405` on every POST.
 - Point the app at a backend with `EXPO_PUBLIC_WYRD_SERVERPOD_URL`. It defaults to a local Serverpod dev server on port `8080`.
-- Serverpod has no SSE stream, so the mobile app gets live updates by polling. The port off `server.js` is in progress: the world map, alerts and reasoning log are done; the coding agent, dream/lexicon ticks, Discord bridge and a few smaller routes are still to come.
+- Serverpod has no SSE stream, so the mobile app gets live updates by polling. The port off `server.js` is in progress: the world map, alerts, reasoning log, coding agent (live `preview_app` apps), lexicon learning and dream idle ticks are done; code execution (`run_code`), the Discord bridge and a few smaller routes are still to come.
 
 Full details, the endpoint map and the list of known gaps are in [mobile/README.md](mobile/README.md).
 
