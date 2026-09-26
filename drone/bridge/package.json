@@ -1,0 +1,18 @@
+{
+  "name": "wyrd-drone-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Connects WYRD to an ArduPilot autopilot (SITL or a real drone's companion computer) over MAVLink, with a safety layer between them.",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "node-mavlink": "2.3.0"
+  }
+}
