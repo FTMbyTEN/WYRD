@@ -18,6 +18,9 @@ import type {
   Profile,
   ReasoningNote,
   SelfConfig,
+  DroneMission,
+  DronePlanResult,
+  DroneState,
 } from './types';
 
 // Ports every read/write in this file from the old Node REST API (server.js) onto the real
@@ -322,4 +325,11 @@ export const api = {
 
   // ---- misc ----
   alerts: (): Promise<AlertNote[]> => callEndpoint<AlertNote[]>('alerts', 'getAlerts', {}, { authenticated: false }),
+
+  // ---- drone ---- (any signed-in user can watch; plan/abort are operator-only on the server)
+  droneState: () => callEndpoint<DroneState | null>('drone', 'getState', {}),
+  droneMissions: (limit = 10) => callEndpoint<DroneMission[]>('drone', 'getMissions', { limit }),
+  droneIsOperator: () => callEndpoint<boolean>('drone', 'isOperator', {}),
+  dronePlan: (instruction: string) => callEndpoint<DronePlanResult>('drone', 'plan', { instruction }),
+  droneAbort: () => callEndpoint<DroneMission>('drone', 'abort', {}),
 };

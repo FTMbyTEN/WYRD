@@ -192,3 +192,42 @@ export type StreamEvent =
   | { event: 'ingest_error'; data: unknown }
   | { event: 'profile'; data: Profile }
   | { event: 'chat'; data: { userText: string; botText: string; timestamp: string; nonce: string | null } };
+
+// ---- drone (Serverpod drone / droneBridge endpoints) ----
+export interface DroneState {
+  droneId: string;
+  connected: boolean;
+  armed: boolean;
+  mode: string | null;
+  lat: number | null;
+  lon: number | null;
+  relativeAltM: number | null;
+  headingDeg: number | null;
+  groundSpeedMs: number | null;
+  batteryPct: number | null;
+  gpsFix: number | null;
+  satellites: number | null;
+  homeLat: number | null;
+  homeLon: number | null;
+  missionStatus: string | null;
+  missionStep: number | null;
+  missionError: string | null;
+  updatedAt: string;
+}
+export interface DroneMission {
+  id: number;
+  droneId: string;
+  kind: 'mission' | 'abort';
+  instruction: string;
+  summary: string;
+  stepsJson: string;
+  status: 'pending' | 'sent' | 'running' | 'done' | 'aborted' | 'rejected';
+  reason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface DronePlanResult {
+  accepted: boolean;
+  reason: string | null;
+  mission: DroneMission | null;
+}

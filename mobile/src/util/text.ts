@@ -4,7 +4,8 @@
 // paragraph. Joining every line indiscriminately (the original approach) surfaced the metadata
 // verbatim as the displayed "last thought", e.g. "Self-questioning time: 2026-... topic: x
 // supporting blocks: ... Q: ... A: ..." — readable to a developer, not to a user.
-const METADATA_LINE = /^(?:#|time:|topic:|source blocks:|supporting blocks:|candidates compared:)/i;
+// also the reasoning trace's candidate lines ("-> pairing[12+34] score=..." / "   pairing[...]")
+const METADATA_LINE = /^(?:#|time:|topic:|source blocks:|supporting blocks:|candidates compared:|->|pairing\[)/i;
 
 /** Strips the light markdown + metadata preamble the reasoning `.md` notes use, down to the
  *  actual thought for compact display (WYRD tab's "LAST THOUGHT" strip). */

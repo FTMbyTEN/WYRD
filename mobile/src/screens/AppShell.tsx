@@ -7,6 +7,7 @@ import { DiaryTab } from './tabs/DiaryTab';
 import { CopTab } from './tabs/CopTab';
 import { FeedTab } from './tabs/FeedTab';
 import { YouTab } from './tabs/YouTab';
+import { DroneTab } from './tabs/DroneTab';
 import { AlertsOverlay } from './overlays/AlertsOverlay';
 import { DialogueLinkOverlay } from './overlays/DialogueLinkOverlay';
 import { BrainOverlay } from './overlays/BrainOverlay';
@@ -62,6 +63,7 @@ export function AppShell() {
               onOpenGlobe={() => { setGlobeFocus(null); setOverlay('globe'); }}
             />
           )}
+          {tab === 'drone' && <DroneTab />}
           {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} />}
         </View>
 

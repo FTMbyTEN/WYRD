@@ -3,6 +3,8 @@ import { api } from './client';
 import { wyrdStream } from './stream';
 import type {
   CopLogEntry,
+  DroneMission,
+  DroneState,
   DiaryEntry,
   DreamEntry,
   FeedItem,
@@ -184,4 +186,19 @@ export function useBrainActivitySignal() {
     return () => unsubs.forEach((u) => u());
   }, []);
   return signal;
+}
+
+/** The drone's latest telemetry (every 2s), its recent missions (every 5s), and whether this
+ *  account is the operator (asked once). */
+export function useDrone() {
+  const state = usePolled<DroneState | null>(api.droneState, 2000);
+  const missions = usePolled<DroneMission[]>(() => api.droneMissions(10), 5000);
+  const operator = usePolled<boolean>(api.droneIsOperator, null);
+  return {
+    state: state.data,
+    missions: missions.data ?? [],
+    isOperator: operator.data === true,
+    error: state.error,
+    reloadMissions: missions.reload,
+  };
 }

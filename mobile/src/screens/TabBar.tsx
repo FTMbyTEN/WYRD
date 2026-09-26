@@ -3,12 +3,13 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Mono } from '../components/ui';
 import { colors } from '../theme';
 
-export type TabKey = 'wyrd' | 'diary' | 'cop' | 'feed' | 'you';
+export type TabKey = 'wyrd' | 'diary' | 'cop' | 'feed' | 'drone' | 'you';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'wyrd', label: 'WYRD' },
   { key: 'diary', label: 'DIARY' },
   { key: 'cop', label: 'COP' },
   { key: 'feed', label: 'FEED' },
+  { key: 'drone', label: 'DRONE' },
   { key: 'you', label: 'YOU' },
 ];
 
