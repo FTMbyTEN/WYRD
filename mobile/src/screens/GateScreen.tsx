@@ -16,7 +16,10 @@ import { ScreenEffects } from '../components/ScreenEffects';
 import { Display } from '../components/ui';
 import { colors } from '../theme';
 import { useAuth } from '../api/AuthContext';
+import { GlitchWord } from '../components/GlitchWord';
+import { AtomField } from '../components/AtomField';
 
+const WORDS = ['WYRD', 'WELCOME'];
 /** A colorless shockwave played once per [triggerKey] increment, behind the WYRD wordmark --
  *  soft, blurred, achromatic haloes (no hue) expanding and thinning out, meant to read like
  *  displaced air/a pressure wave rather than a lit-up neon ring. Several overlapping soft-edged
@@ -109,6 +112,7 @@ export function GateScreen() {
   return (
     <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
       <VortexCanvas ref={vortexRef} style={StyleSheet.absoluteFill} />
+      <AtomField />
       <ScreenEffects />
 
       <KeyboardAvoidingView
@@ -121,7 +125,7 @@ export function GateScreen() {
               {({ pressed }) => (
                 <>
                   <QuantumBlast triggerKey={blastKey} />
-                  <Display style={[styles.wordmark, pressed && { textShadowRadius: 26 }]}>WYRD</Display>
+                  <GlitchWord words={WORDS} style={[styles.wordmark, pressed && { textShadowRadius: 26 }]} />
                 </>
               )}
             </Pressable>
