@@ -96,7 +96,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
       let scale = 1;
       const bt = (now - burstStart) / BURST_MS;
       if (bt >= 0 && bt < 1) scale = 1 + easeOutElastic(bt) * 0.22 * (1 - bt);
-      const F = Math.min(width, height) * 0.62 * scale;
+      const F = Math.min(width, height) * 0.8 * scale;
       const cx = width / 2, cy = height / 2;
       const cy0 = Math.cos(yaw), sy0 = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
       const breathe = Math.sin(now * 0.0016) * 0.06;
