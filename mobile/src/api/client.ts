@@ -12,6 +12,7 @@ import type {
   FeedItem,
   GrowthSnapshot,
   GrowthRange,
+  Sighting,
   ConceptDetail,
   LexiconStats,
   LexiconWord,
@@ -242,6 +243,8 @@ export const api = {
   chat: (text: string, _nonce?: string) =>
     callEndpoint<SpChatReply>('chat', 'sendMessage', { text }).then(adaptChatResult),
   /** One camera frame (base64 JPEG), described by WYRD's vision model. */
+  /** What WYRD remembers seeing of the signed-in person (descriptions only), newest first. */
+  sightings: (limit = 3) => callEndpoint<Sighting[]>('photo', 'getSightings', { limit }),
   photo: (imageBase64Jpeg: string, caption?: string, trackingNote?: string) =>
     callEndpoint<SpChatReply>('photo', 'describe', { imageBase64Jpeg, caption: caption || null, trackingNote: trackingNote || null }).then(adaptChatResult),
   conversations: async (limit = 50) => {

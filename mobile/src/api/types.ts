@@ -79,6 +79,12 @@ export interface ConceptsGraph {
   edges: ConceptEdge[];
 }
 
+export interface Sighting {
+  timestamp: string;
+  description: string;
+  question: string | null;
+}
+
 export type GrowthRange = 'day' | 'week' | 'month' | 'all';
 
 export interface ConceptExample {

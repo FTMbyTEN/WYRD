@@ -2,14 +2,21 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Display, Mono } from './ui';
+import { api } from '../api/client';
+import type { Sighting } from '../api/types';
+import { timeAgo } from '../util/time';
 import { colors } from '../theme';
 import {
   describeForWyrd, distanceOf, expressionOf, gazeOf, loadTracker,
   type Edge, type FaceReading, type Pt, type Tracker,
 } from '../util/faceTracking';
 
-const MAX_EDGE = 1024; // plenty for the vision model, keeps uploads small
-const AUTO_LOOK_AFTER_MS = 1500; // steady lock before WYRD takes its first look
+const MAX_EDGE = 1568; // the vision model's sweet spot: full detail without being downscaled
+const STEADY_MS = 1500; // a face (or a new face count) must hold this long before it counts
+const RETURN_AFTER_MS = 15000; // away at least this long, then back = "you came back"
+const AUTO_GAP_MS = 45000; // at least this long between WYRD's own looks
+const AUTO_MAX = 6; // own looks per opening, so the daily AI budget stays safe
+const PENDING_TTL_MS = 10000; // a reason to look goes stale if it can't be acted on soon
 const HUD = 'rgba(255,255,255,0.92)';
 const HUD_DIM = 'rgba(255,255,255,0.35)';
 
@@ -52,7 +59,10 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
   const trackerRef = useRef<Tracker | null>(null);
   const facesRef = useRef<FaceReading[]>([]);
   const stats = useRef({ lockedAt: 0, blinks: 0, eyesShut: false, frames: 0, fpsAt: 0, fps: 0 });
-  const autoLooked = useRef(false);
+  // WYRD's own looks: it looks when something happens (you appear, come back, or someone joins)
+  const autoRef = useRef({ fired: 0, lastAt: 0, pending: null as string | null, pendingAt: 0, everSeen: false, lostAt: 0, count: 0, countSince: 0, stable: 0 });
+  const [memory, setMemory] = useState<Sighting[]>([]);
+  const [reason, setReason] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -78,21 +88,26 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
     c.width = Math.round(v.videoWidth * k);
     c.height = Math.round(v.videoHeight * k);
     c.getContext('2d')!.drawImage(v, 0, 0, c.width, c.height); // unmirrored: what the camera sees
-    return c.toDataURL('image/jpeg', 0.8).split(',')[1];
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1];
   };
 
-  const look = useCallback(async (q?: string) => {
+  const refreshMemory = () => { api.sightings(3).then(setMemory).catch(() => {}); };
+
+  const look = useCallback(async (q?: string, why?: string) => {
     if (lookingRef.current) return;
     const base64 = frameBase64();
     if (!base64) return;
     lookingRef.current = true;
     setLooking(true);
     const s = stats.current;
-    const note = describeForWyrd(facesRef.current, s.lockedAt ? (performance.now() - s.lockedAt) / 1000 : 0, s.blinks);
+    const tracked = describeForWyrd(facesRef.current, s.lockedAt ? (performance.now() - s.lockedAt) / 1000 : 0, s.blinks);
+    const note = why ? `why you looked on your own: ${why}; ${tracked}` : tracked;
+    setReason(why ?? null);
     try {
       const reply = await onLook(base64, (q ?? question).trim(), note);
       if (reply) setSaid(reply);
       setQuestion('');
+      refreshMemory();
     } finally {
       lookingRef.current = false;
       setLooking(false);
@@ -107,7 +122,9 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
     let cancelled = false;
     setError(null);
     setSaid(null);
-    autoLooked.current = false;
+    setReason(null);
+    autoRef.current = { fired: 0, lastAt: 0, pending: null, pendingAt: 0, everSeen: false, lostAt: 0, count: 0, countSince: 0, stable: 0 };
+    refreshMemory();
     stats.current = { lockedAt: 0, blinks: 0, eyesShut: false, frames: 0, fpsAt: performance.now(), fps: 0 };
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -179,9 +196,29 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
 
       drawHud(cv, faces, tr?.edges, now, !!tr);
 
-      if (auto && main && !autoLooked.current && s.lockedAt && now - s.lockedAt > AUTO_LOOK_AFTER_MS) {
-        autoLooked.current = true;
-        lookRef.current('');
+      // what just happened in front of the camera, as a reason for WYRD to look
+      const A = autoRef.current;
+      const want = (why: string) => { A.pending = why; A.pendingAt = now; };
+      if (main) {
+        if (!A.everSeen) { A.everSeen = true; want('they appeared in front of the camera'); }
+        else if (A.lostAt && now - A.lostAt > RETURN_AFTER_MS) want('they came back after being away');
+        A.lostAt = 0;
+      } else if (!A.lostAt) {
+        A.lostAt = now;
+      }
+      if (faces.length !== A.count) { A.count = faces.length; A.countSince = now; }
+      else if (now - A.countSince > STEADY_MS && A.count !== A.stable) {
+        if (A.count > A.stable && A.stable >= 1) want('someone else joined them');
+        A.stable = A.count;
+      }
+      if (A.pending && now - A.pendingAt > PENDING_TTL_MS) A.pending = null;
+      const steady = main && s.lockedAt && now - s.lockedAt > STEADY_MS;
+      if (auto && A.pending && steady && A.fired < AUTO_MAX && (A.fired === 0 || now - A.lastAt > AUTO_GAP_MS) && !lookingRef.current) {
+        A.fired++;
+        A.lastAt = now;
+        const why = A.pending;
+        A.pending = null;
+        lookRef.current('', why);
       }
 
       if (now - lastPush > 160) {
@@ -260,13 +297,24 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
                 </View>
                 {(said || looking) && (
                   <View style={styles.subtitle} pointerEvents="none">
-                    <Mono style={styles.subtitleWho}>WYRD</Mono>
+                    <Mono style={styles.subtitleWho}>WYRD{reason ? ` · LOOKED BECAUSE ${reason.replace(/^they /, 'YOU ').replace(/^someone/, 'SOMEONE').toUpperCase()}` : ''}</Mono>
                     <Mono style={styles.subtitleText}>{looking && !said ? 'looking…' : said}</Mono>
                   </View>
                 )}
               </>
             )}
           </View>
+
+          {memory.length > 0 && (
+            <View style={styles.memory}>
+              <Mono style={styles.memoryLabel}>WYRD REMEMBERS SEEING YOU</Mono>
+              {memory.slice(0, 2).map((m, i) => (
+                <Mono key={i} style={styles.memoryLine} numberOfLines={2}>
+                  <Mono style={styles.memoryWhen}>{timeAgo(m.timestamp)} · </Mono>{m.description}
+                </Mono>
+              ))}
+            </View>
+          )}
 
           <View style={styles.controls}>
             <TextInput
@@ -285,7 +333,7 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
           <View style={styles.footer}>
             <Pressable onPress={() => setAuto((a) => !a)} style={styles.autoRow} accessibilityRole="switch" accessibilityState={{ checked: auto }}>
               <View style={[styles.check, auto && styles.checkOn]} />
-              <Mono style={styles.footerText}>AUTO · WYRD looks once when you appear</Mono>
+              <Mono style={styles.footerText}>AUTO · WYRD looks when you appear, come back, or someone joins ({autoRef.current.fired}/{AUTO_MAX})</Mono>
             </Pressable>
             <Mono style={styles.footerText}>tracking runs on this device · WYRD sees a frame only when it looks</Mono>
           </View>
@@ -465,6 +513,10 @@ const styles = StyleSheet.create({
   lookBtn: { backgroundColor: '#fff', paddingHorizontal: 22, alignItems: 'center', justifyContent: 'center' },
   lookText: { color: '#000', letterSpacing: 3, fontSize: 14 },
   footer: { paddingHorizontal: 10, paddingBottom: 10, gap: 4 },
+  memory: { paddingHorizontal: 10, paddingTop: 10, gap: 3 },
+  memoryLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 9, letterSpacing: 2 },
+  memoryLine: { color: 'rgba(255,255,255,0.85)', fontSize: 11, lineHeight: 16 },
+  memoryWhen: { color: 'rgba(255,255,255,0.45)', fontSize: 10 },
   autoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   check: { width: 10, height: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)' },
   checkOn: { backgroundColor: '#fff' },
