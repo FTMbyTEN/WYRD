@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { OverlayShell } from './OverlayShell';
-import { GlobeCanvas } from '../../components/GlobeCanvas';
+import { WorldMap } from '../../components/WorldMap';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
@@ -23,16 +23,21 @@ interface Props {
 export function GlobeOverlay({ visible, onClose, focusCountryName }: Props) {
   const [countries, setCountries] = useState<CountryListItem[]>([]);
   const [detail, setDetail] = useState<CountryDetail | null>(null);
+  const [picked, setPicked] = useState<CountryListItem | null>(null);
+
+  // a new request from WYRD overrides whatever was tapped
+  useEffect(() => { setPicked(null); }, [focusCountryName, visible]);
 
   useEffect(() => {
     if (!visible) return;
     api.countries().then(setCountries).catch(() => {});
   }, [visible]);
 
-  const focused = useMemo(
+  const requested = useMemo(
     () => countries.find((c) => c.name.toLowerCase() === (focusCountryName ?? '').toLowerCase()) ?? countries[0] ?? null,
     [countries, focusCountryName],
   );
+  const focused = picked ?? requested;
 
   useEffect(() => {
     if (!focused) return;
@@ -46,22 +51,21 @@ export function GlobeOverlay({ visible, onClose, focusCountryName }: Props) {
       onClose={onClose}
       black
       footer={
-        <ScrollView style={styles.footer} contentContainerStyle={{ paddingBottom: 26 }}>
+        <ScrollView style={styles.footer} contentContainerStyle={{ paddingBottom: 14 }}>
           <Display style={styles.countryName}>{detail?.name ?? focused?.name ?? '—'}</Display>
           <View style={{ marginTop: 10, gap: 6 }}>
             <Row k="capital" v={detail?.capital ?? '—'} />
             <Row k="region" v={detail ? `${detail.region}${detail.subregion ? ` · ${detail.subregion}` : ''}` : '—'} />
             <Row k="live weather" v={detail?.weather ? `${detail.weather.tempC.toFixed(0)}°C · ${WEATHER_LABELS[detail.weather.code] ?? 'code ' + detail.weather.code}` : '—'} />
           </View>
-          {focusCountryName && (
+          {focusCountryName && !picked && (
             <Mono style={styles.note}>focused because WYRD opened the map here during your conversation</Mono>
           )}
         </ScrollView>
       }
     >
       <View style={{ flex: 1 }}>
-        <GlobeCanvas countries={countries} focused={focused} />
-        <Mono style={styles.hint}>drag to spin · scroll to zoom · tap a marker</Mono>
+        {visible && <WorldMap countries={countries} focused={focused} onSelect={setPicked} />}
       </View>
     </OverlayShell>
   );
@@ -77,8 +81,7 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 const styles = StyleSheet.create({
-  hint: { position: 'absolute', left: 0, right: 0, bottom: 10, textAlign: 'center', fontSize: 9.5, letterSpacing: 1, color: colors.greenDim },
-  footer: { borderTopWidth: 1, borderTopColor: colors.greenBorder, padding: 16 },
-  countryName: { fontSize: 26, letterSpacing: 2 },
+  footer: { borderTopWidth: 1, borderTopColor: colors.greenBorder, paddingHorizontal: 16, paddingTop: 12, maxHeight: 170, flexGrow: 0 },
+  countryName: { fontSize: 22, letterSpacing: 2 },
   note: { marginTop: 10, fontSize: 11, lineHeight: 16, color: colors.greenDim },
 });
