@@ -11,6 +11,8 @@ import type {
   DreamEntry,
   FeedItem,
   GrowthSnapshot,
+  GrowthRange,
+  ConceptDetail,
   LexiconStats,
   LexiconWord,
   Mind,
@@ -318,6 +320,11 @@ export const api = {
     return adaptGrowthSnapshot(snaps[0]);
   },
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
+  /** Growth averaged over a readable span; see GrowthEndpoint.getHistory. */
+  growthHistory: (range: GrowthRange) =>
+    callEndpoint<SpGrowthSnapshot[]>('growth', 'getHistory', { range }, { authenticated: false }).then((es) => es.map(adaptGrowthSnapshot)),
+  conceptDetail: (topic: string) =>
+    callEndpoint<ConceptDetail>('memory', 'getConceptDetail', { topic }, { authenticated: false }),
 
   // ---- world map ----
   countries: (): Promise<CountryListItem[]> =>

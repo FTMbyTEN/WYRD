@@ -79,6 +79,24 @@ export interface ConceptsGraph {
   edges: ConceptEdge[];
 }
 
+export type GrowthRange = 'day' | 'week' | 'month' | 'all';
+
+export interface ConceptExample {
+  source: string;
+  title: string;
+  snippet: string | null;
+  url: string | null;
+  timestamp: string;
+}
+export interface ConceptDetail {
+  topic: string;
+  mentions: number;
+  definition: string | null;
+  partOfSpeech: string | null;
+  related: ConceptNode[];
+  examples: ConceptExample[];
+}
+
 export interface GrowthSnapshot {
   timestamp: string;
   vocabCount: number;
