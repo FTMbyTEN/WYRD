@@ -17,7 +17,7 @@ import { Display } from '../components/ui';
 import { colors } from '../theme';
 import { useAuth } from '../api/AuthContext';
 import { GlitchWord } from '../components/GlitchWord';
-import { AtomField } from '../components/AtomField';
+import { DustField } from '../components/DustField';
 
 const WORDS = ['WYRD', 'WELCOME'];
 /** A colorless shockwave played once per [triggerKey] increment, behind the WYRD wordmark --
@@ -112,7 +112,7 @@ export function GateScreen() {
   return (
     <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
       <VortexCanvas ref={vortexRef} style={StyleSheet.absoluteFill} />
-      <AtomField />
+      <DustField />
       <ScreenEffects />
 
       <KeyboardAvoidingView
