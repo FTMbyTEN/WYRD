@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import * as serverpodAuth from './serverpodAuth';
 import { ServerpodClientError } from './serverpodClient';
-import { hasStoredSession, clearAuthTokens } from './serverpodClient';
+import { hasStoredSession, clearAuthTokens, onSessionExpired } from './serverpodClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './client';
 
@@ -56,6 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Every sign-in (and session restore) records a visit, which is also what creates the person's
   // WYRD profile and stores their email on it. Best-effort: never blocks signing in.
   const recordVisit = () => { api.touchVisit().catch(() => {}); };
+
+  // The session can end underneath us (expired, or revoked elsewhere): go back to sign-in.
+  React.useEffect(() => onSessionExpired(() => {
+    setStatus((s) => (s === 'signedIn' ? 'signedOut' : s));
+    setError('your session expired — sign in again');
+  }), []);
 
   React.useEffect(() => {
     (async () => {

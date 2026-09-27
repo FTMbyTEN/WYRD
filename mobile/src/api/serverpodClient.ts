@@ -29,19 +29,19 @@ export const SERVERPOD_BASE_URL = defaultBaseUrl().replace(/\/$/, '');
 const ACCESS_TOKEN_KEY = 'wyrd_sp_access_token';
 const REFRESH_TOKEN_KEY = 'wyrd_sp_refresh_token';
 
-let cachedAccessToken: string | null | undefined;
-let cachedRefreshToken: string | null | undefined;
+// Tokens are always read from storage, never cached in memory: several copies of the app (the
+// installed web app plus a browser tab, say) share one stored session, and refresh tokens are
+// single-use, so a copy holding a stale in-memory refresh token would fail its refresh and wipe
+// the session every copy depends on -- leaving each of them stuck on 401s.
+const getAccessToken = () => AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+const getRefreshToken = () => AsyncStorage.getItem(REFRESH_TOKEN_KEY);
 
-async function getAccessToken(): Promise<string | null> {
-  if (cachedAccessToken !== undefined) return cachedAccessToken;
-  cachedAccessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-  return cachedAccessToken;
-}
-
-async function getRefreshToken(): Promise<string | null> {
-  if (cachedRefreshToken !== undefined) return cachedRefreshToken;
-  cachedRefreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
-  return cachedRefreshToken;
+// Tells the auth layer the session is really gone, so the app returns to sign-in instead of
+// sitting on a signed-in screen where every call fails.
+const expiredListeners = new Set<() => void>();
+export function onSessionExpired(cb: () => void): () => void {
+  expiredListeners.add(cb);
+  return () => { expiredListeners.delete(cb); };
 }
 
 export interface AuthSuccess {
@@ -51,16 +51,12 @@ export interface AuthSuccess {
 }
 
 export async function storeAuthSuccess(auth: AuthSuccess): Promise<void> {
-  cachedAccessToken = auth.token;
-  cachedRefreshToken = auth.refreshToken ?? null;
   await AsyncStorage.setItem(ACCESS_TOKEN_KEY, auth.token);
   if (auth.refreshToken) await AsyncStorage.setItem(REFRESH_TOKEN_KEY, auth.refreshToken);
   else await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export async function clearAuthTokens(): Promise<void> {
-  cachedAccessToken = null;
-  cachedRefreshToken = null;
   await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
   await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
 }
@@ -81,24 +77,36 @@ export class ServerpodClientError extends Error {
 
 let refreshInFlight: Promise<boolean> | null = null;
 
+/** Runs [fn] holding a cross-tab lock where the browser has one, so copies refresh one at a time. */
+async function withRefreshLock(fn: (usedAccessToken: string | null) => Promise<boolean>): Promise<boolean> {
+  const used = await getAccessToken();
+  const locks = (globalThis as { navigator?: { locks?: { request: (n: string, f: () => Promise<boolean>) => Promise<boolean> } } }).navigator?.locks;
+  return locks ? locks.request('wyrd-token-refresh', () => fn(used)) : fn(used);
+}
+
 /// Refreshes the access token using the stored refresh token. Serverpod's JWT refresh endpoint
 /// is itself unauthenticated (it takes the refresh token as an argument, not a bearer header).
 async function refreshAccessToken(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
+  refreshInFlight = withRefreshLock(async (usedAccessToken) => {
+    // another copy may have refreshed while this one waited for the lock
+    if ((await getAccessToken()) !== usedAccessToken) return true;
     const refreshToken = await getRefreshToken();
     if (!refreshToken) return false;
     try {
       const auth = await callEndpoint<AuthSuccess>('jwtRefresh', 'refreshAccessToken', { refreshToken }, { authenticated: false });
       await storeAuthSuccess(auth);
       return true;
-    } catch {
+    } catch (err) {
+      // a network failure isn't an expired session -- keep the tokens and let the call fail
+      if (!(err instanceof ServerpodClientError)) return false;
+      // lost a race with another copy that already rotated the token: use its result
+      if ((await getRefreshToken()) !== refreshToken) return true;
       await clearAuthTokens();
+      expiredListeners.forEach((cb) => cb());
       return false;
-    } finally {
-      refreshInFlight = null;
     }
-  })();
+  }).finally(() => { refreshInFlight = null; });
   return refreshInFlight;
 }
 
