@@ -12,6 +12,9 @@ import type {
   FeedItem,
   GrowthSnapshot,
   GrowthRange,
+  Firing,
+  NeuralNetwork,
+  ConceptExample,
   Sighting,
   ConceptDetail,
   LexiconStats,
@@ -117,7 +120,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
 
 interface SpReasoningNote {
   timestamp: string;
-  kind: 'reasoning' | 'self';
+  kind: 'reasoning' | 'self' | 'firing';
   content: string;
 }
 
@@ -212,9 +215,9 @@ function adaptGrowthSnapshot(g: SpGrowthSnapshot): GrowthSnapshot {
 }
 
 interface SpDiaryEntry { date: string; timestamp: string; content: string }
-interface SpDreamEntry { timestamp: string; content: string; sourceBlockIds: number[] }
+interface SpDreamEntry { id?: number; timestamp: string; content: string; sourceBlockIds: number[] }
 function adaptDreamEntry(d: SpDreamEntry): DreamEntry {
-  return { timestamp: d.timestamp, content: d.content, sourceBlockIds: d.sourceBlockIds.map(String) };
+  return { id: d.id, timestamp: d.timestamp, content: d.content, sourceBlockIds: d.sourceBlockIds.map(String) };
 }
 
 interface SpConceptNode { id: string; count: number }
@@ -276,8 +279,17 @@ export const api = {
   // timestamp-plus-kind shape the old filenames had, since the UI keys and labels by it.
   reasoning: (limit = 50): Promise<ReasoningNote[]> =>
     callEndpoint<SpReasoningNote[]>('reasoning', 'getNotes', { limit }, { authenticated: false }).then((ns) =>
-      ns.map((n) => ({ file: `${n.timestamp.replace(/[:.]/g, '-')}${n.kind === 'self' ? '-self' : ''}.md`, content: n.content })),
+      ns.map((n) => {
+        let firing: Firing | undefined;
+        if (n.kind === 'firing') { try { firing = JSON.parse(n.content) as Firing; } catch { /* malformed: shown as text */ } }
+        return { file: `${n.timestamp.replace(/[:.]/g, '-')}${n.kind === 'self' ? '-self' : n.kind === 'firing' ? '-firing' : ''}.md`, content: n.content, kind: n.kind, timestamp: n.timestamp, firing };
+      }),
     ),
+  reasoningNetwork: (limit = 60) =>
+    callEndpoint<NeuralNetwork>('reasoning', 'getNetwork', { limit }, { authenticated: false }),
+  /** The memories a dream was made of: its stars. */
+  dreamStars: (dreamId: number) =>
+    callEndpoint<ConceptExample[]>('dream', 'getStars', { dreamId }, { authenticated: false }),
   triggerReasoning: () =>
     callEndpoint<boolean>('reasoning', 'trigger', {}, { authenticated: false }).then((ran) => ({ ran })),
   reasoningNext: (): Promise<NextTick> => Promise.resolve({ nextTickAt: Date.now() + 30000, cycleMs: 30000 }),

@@ -146,8 +146,8 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
               {notes.length === 0 ? <Mono style={styles.detailEmpty}>no reasoning notes yet</Mono> : null}
               {notes.slice(0, 3).map((n, i) => (
                 <View key={n.file} style={[styles.detailRow, i > 0 && styles.detailRule]}>
-                  <Mono style={styles.detailMeta}>{/-self\.md$/.test(n.file) ? 'SELF-QUESTION' : 'REASONING PASS'}</Mono>
-                  <Mono style={styles.detailText}>{firstLineFromMarkdown(n.content, 320)}</Mono>
+                  <Mono style={styles.detailMeta}>{n.kind === 'firing' ? 'NEURAL FIRING' : /-self\.md$/.test(n.file) ? 'SELF-QUESTION' : 'REASONING PASS'}</Mono>
+                  <Mono style={styles.detailText}>{n.firing?.summary ?? firstLineFromMarkdown(n.content, 320)}</Mono>
                 </View>
               ))}
             </DetailCard>

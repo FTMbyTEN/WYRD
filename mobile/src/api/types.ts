@@ -31,15 +31,34 @@ export interface DiaryEntry {
 }
 
 export interface DreamEntry {
+  id?: number;
   timestamp: string;
   content: string;
   sourceBlockIds: string[];
 }
 
+/** One neural firing (see the server's ReasoningService): the idea that fired, the path the
+ *  signal took, the synapses it crossed (strength before/after) and a plain-English summary. */
+export interface Firing {
+  seed: string;
+  path: string[];
+  activated: { id: string; a: number }[];
+  synapses: { a: string; b: string; before: number; after: number }[];
+  degree: number;
+  meaning?: string;
+  summary: string;
+}
+
 export interface ReasoningNote {
   file: string;
-  content: string; // raw markdown
+  content: string; // raw markdown, or JSON for kind 'firing'
+  kind?: 'reasoning' | 'self' | 'firing';
+  timestamp?: string;
+  firing?: Firing;
 }
+
+export interface Synapse { a: string; b: string; weight: number; fires: number; lastFired: string }
+export interface NeuralNetwork { neurons: ConceptNode[]; synapses: Synapse[]; totalSynapses: number }
 
 export interface SelfConfigChange {
   key: 'toneNote' | 'replyLengthMax' | 'curiosityLevel';

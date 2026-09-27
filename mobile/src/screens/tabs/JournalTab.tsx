@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
-import { useDiary, useDreams, useReasoning } from '../../api/hooks';
+import { useDiary } from '../../api/hooks';
 import { FeedTab } from './FeedTab';
+import { DreamsCosmos } from '../../components/DreamsCosmos';
+import { NeuralReasoning } from '../../components/NeuralReasoning';
 
 type Journal = 'DIARY' | 'DREAMS' | 'REASONING' | 'FEED';
 const JOURNALS: Journal[] = ['DIARY', 'DREAMS', 'REASONING', 'FEED'];
@@ -17,8 +19,6 @@ export function JournalTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: {
 }) {
   const [journal, setJournal] = useState<Journal>('DIARY');
   const { entries: diary } = useDiary();
-  const { entries: dreams } = useDreams();
-  const { notes: reasoning } = useReasoning();
   const [diaryI, setDiaryI] = useState(0);
   const entry = diary[diaryI];
 
@@ -39,37 +39,9 @@ export function JournalTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: {
         <FeedTab onOpenConcept={onOpenConcept} onOpenGrowth={onOpenGrowth} onOpenGlobe={onOpenGlobe} />
       )}
 
-      {journal === 'DREAMS' && (
-        <ScrollView contentContainerStyle={styles.content}>
-          <Display style={styles.heading}>{'>_ DREAMS'}</Display>
-          <Mono style={styles.subheading}>old memory fragments blending during idle stretches</Mono>
-          <View style={{ marginTop: 16, gap: 14 }}>
-            {dreams.length === 0 && <Mono style={styles.empty}>no dreams yet — they only surface after a genuine idle stretch</Mono>}
-            {dreams.map((d) => (
-              <View key={d.timestamp} style={styles.dreamRow}>
-                <Mono style={styles.dreamTime}>{new Date(d.timestamp).toTimeString().slice(0, 5)}</Mono>
-                <Mono style={styles.dreamText}>{d.content}</Mono>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      )}
+      {journal === 'DREAMS' && <DreamsCosmos />}
 
-      {journal === 'REASONING' && (
-        <ScrollView contentContainerStyle={styles.content}>
-          <Display style={styles.heading}>{'>_ REASONING_LOG'}</Display>
-          <Mono style={styles.subheading}>tracked in the backend, viewable on demand</Mono>
-          <View style={{ marginTop: 16, gap: 14 }}>
-            {reasoning.length === 0 && <Mono style={styles.empty}>nothing logged yet</Mono>}
-            {reasoning.map((r) => (
-              <View key={r.file} style={styles.reasoningCard}>
-                <Mono style={styles.reasoningFile}>{r.file}</Mono>
-                <Mono style={styles.reasoningBody}>{r.content}</Mono>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      )}
+      {journal === 'REASONING' && <NeuralReasoning />}
 
       {journal === 'DIARY' && (
         <>
