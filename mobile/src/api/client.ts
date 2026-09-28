@@ -1,5 +1,5 @@
 import { callEndpoint, ServerpodClientError, SERVERPOD_BASE_URL } from './serverpodClient';
-import type {
+import type { ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
   AlertNote,
   ChatResult,
   ConceptsGraph,
@@ -124,7 +124,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     chosenPath: 'serverpod',
     mind: adaptMind(r.mind),
     netFetched: false,
-    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'open_drone')
+    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'open_drone' || r.action.type === 'open_book')
       ? (r.action as ChatResult['action'])
       : null,
   };
@@ -351,6 +351,17 @@ export const api = {
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
   /** Growth averaged over a readable span; see GrowthEndpoint.getHistory. */
   learning: () => callEndpoint<LearningStats>('growth', 'getLearning', {}, { authenticated: false }),
+  libraryList: () => callEndpoint<ReadingItem[]>('library', 'list', {}),
+  libraryReadOn: (id: number, restart = false, part?: number) =>
+    callEndpoint<ReadingSlice>('library', 'readOn', part == null ? { id, restart } : { id, restart, part }),
+  libraryCurrent: (id: number) => callEndpoint<ReadingSlice>('library', 'current', { id }),
+  libraryContents: (id: number) => callEndpoint<WorkPartInfo[]>('library', 'contents', { id }),
+  libraryOpenWork: (source: string, id: string) => callEndpoint<ReadingSlice | null>('library', 'openWork', { source, id }),
+  libraryTextbooks: () => callEndpoint<WorkHit[]>('library', 'textbooks', {}),
+  librarySearchWikisource: (lang: string, query: string) => callEndpoint<WorkHit[]>('library', 'searchWikisource', { lang, query }),
+  librarySearchBooks: (query: string) => callEndpoint<WorkHit[]>('library', 'searchBooks', { query }),
+  libraryOpenBook: (query: string) => callEndpoint<ReadingSlice | null>('library', 'openBook', { query }),
+  libraryRemove: (id: number) => callEndpoint<void>('library', 'remove', { id }),
   judgementReport: () => callEndpoint<JudgementReport>('feed', 'getJudgementReport', {}, { authenticated: false }),
   trust: () => callEndpoint<TrustReport>('feed', 'getTrust', {}, { authenticated: false }),
   filterReport: () => callEndpoint<FilterReport>('feed', 'getFilterReport', {}, { authenticated: false }),

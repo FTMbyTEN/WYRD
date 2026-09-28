@@ -138,6 +138,16 @@ export interface TrustReport {
 
 export interface JudgementReport { checked: number; passed: number; softened: number; corrected: number; blocked: number; reasons: Record<string, number> }
 
+export type WorkSource = 'gutenberg' | 'openstax' | 'wikisource' | 'page';
+export interface ReadingItem {
+  id: number; url: string; title: string; kind: 'book' | 'page' | 'textbook'; nextOffset: number | null; total: number;
+  source?: WorkSource | null; author?: string | null; partIndex?: number | null; partCount?: number | null;
+  partTitle?: string | null; partUrl?: string | null; startedAt: string; updatedAt: string;
+}
+export interface WorkHit { source: WorkSource; id: string; title: string; author?: string | null; subjects: string[]; coverUrl?: string | null; language?: string | null; blurb?: string | null }
+export interface WorkPartInfo { index: number; title: string; url: string }
+export interface ReadingSlice { item: ReadingItem; text: string; offset: number; finished: boolean }
+
 export type GrowthRange = 'day' | 'week' | 'month' | 'all';
 
 export interface ConceptExample {
@@ -210,6 +220,7 @@ export type ChatAction =
   | { type: 'open_world_map'; country: string | null }
   | { type: 'preview_app'; html: string }
   | { type: 'open_drone' }
+  | { type: 'open_book'; readingItemId: number }
   | null;
 
 export interface ChatResult {

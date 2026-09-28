@@ -6,6 +6,7 @@ import { WyrdTab } from './tabs/WyrdTab';
 import { JournalTab } from './tabs/JournalTab';
 import { YouTab } from './tabs/YouTab';
 import { DroneTab } from './tabs/DroneTab';
+import { AcademyTab } from './tabs/AcademyTab';
 import { AlertsOverlay } from './overlays/AlertsOverlay';
 import { DialogueLinkOverlay } from './overlays/DialogueLinkOverlay';
 import { BrainOverlay } from './overlays/BrainOverlay';
@@ -25,6 +26,8 @@ type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'a
 
 export function AppShell() {
   const [tab, setTab] = useState<TabKey>('wyrd');
+  // a book Dialogue Link pulled up: the Academy opens it (behind the chat, which stays open)
+  const [bookFocus, setBookFocus] = useState<{ id: number; at: number } | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [tts, setTts] = useState(false);
   const [globeFocus, setGlobeFocus] = useState<string | null>(null);
@@ -54,7 +57,7 @@ export function AppShell() {
           onOpenCop={() => setOverlay('cop')}
         />
 
-        <View style={[{ flex: 1, minHeight: 0 }, desktop && tab !== 'wyrd' && styles.readable]}>
+        <View style={[{ flex: 1, minHeight: 0 }, desktop && tab !== 'wyrd' && tab !== 'academy' && styles.readable]}>
           {tab === 'wyrd' && (
             <WyrdTab onOpenBrain={() => setOverlay('brain')} onOpenLink={() => setOverlay('link')} />
           )}
@@ -65,6 +68,7 @@ export function AppShell() {
               onOpenGlobe={() => { setGlobeFocus(null); setOverlay('globe'); }}
             />
           )}
+          {tab === 'academy' && <AcademyTab focus={bookFocus} onAsk={() => setOverlay('link')} />}
           {tab === 'drone' && <DroneTab />}
           {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => setOverlay('cop')} />}
         </View>
@@ -81,6 +85,7 @@ export function AppShell() {
         onOpenGlobe={(country) => { setGlobeFocus(country); setOverlay('globe'); }}
         onOpenAppPreview={(html) => { setAppPreviewHtml(html); setOverlay('appPreview'); }}
         onOpenDrone={() => { setOverlay(null); setTab('drone'); }}
+        onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); setTab('academy'); }}
       />
       <BrainOverlay visible={overlay === 'brain'} onClose={close} />
       <GlobeOverlay visible={overlay === 'globe'} onClose={close} focusCountryName={globeFocus} />

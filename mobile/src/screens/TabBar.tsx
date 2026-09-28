@@ -4,17 +4,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Mono } from '../components/ui';
 import { colors } from '../theme';
+import { AcademyIcon } from './academy/Campus';
 
-export type TabKey = 'wyrd' | 'journal' | 'drone' | 'you';
+export type TabKey = 'wyrd' | 'journal' | 'academy' | 'drone' | 'you';
 
 const TABS: { key: TabKey; label: string; Icon: (p: { color: string }) => React.ReactElement }[] = [
   { key: 'wyrd', label: 'WYRD', Icon: MindIcon },
   { key: 'journal', label: 'JOURNAL', Icon: JournalIcon },
+  { key: 'academy', label: 'ACADEMY', Icon: AcademyIcon },
   { key: 'drone', label: 'DRONE', Icon: DroneIcon },
   { key: 'you', label: 'YOU', Icon: YouIcon },
 ];
 
-/** Four tabs, each a line icon over a label; the active one sits in a solid ink pill. Bottom bar
+/** Five tabs, each a line icon over a label; the active one sits in a solid ink pill. Bottom bar
  *  on phones/tablets; `vertical` is the desktop sidebar (icon beside label, full-height rail). */
 export function TabBar({ active, onChange, vertical }: { active: TabKey; onChange: (t: TabKey) => void; vertical?: boolean }) {
   const insets = useSafeAreaInsets();

@@ -21,12 +21,14 @@ interface Props {
   onOpenGlobe: (countryName: string | null) => void;
   onOpenAppPreview: (html: string) => void;
   onOpenDrone: () => void;
+  onOpenBook: (readingItemId: number) => void;
 }
 
 const SUGGESTIONS = [
   'What are you thinking about right now?',
   'What did you learn today?',
   'Build me a tip calculator',
+  'Find me a physics textbook',
   'Show me Japan on the globe',
   'Plan a short drone flight',
 ];
@@ -36,7 +38,7 @@ const SUGGESTIONS = [
  *  (`open_world_map` / `preview_app`) routed to the real overlays. Your message shows the moment
  *  you send it, with WYRD "thinking" until the reply lands. The mic is real speech-to-text
  *  on web (util/speechInput.ts); spoken replies are real via expo-speech. */
-export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone }: Props) {
+export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook }: Props) {
   const { turns } = useConversations(60);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
@@ -55,7 +57,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     if (action.type === 'open_world_map') onOpenGlobe(action.country);
     else if (action.type === 'preview_app') onOpenAppPreview(action.html);
     else if (action.type === 'open_drone') onOpenDrone();
-  }, [onOpenGlobe, onOpenAppPreview, onOpenDrone]);
+    else if (action.type === 'open_book') onOpenBook(action.readingItemId);
+  }, [onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook]);
 
   const send = async (override?: string) => {
     const text = (override ?? draft).trim();
