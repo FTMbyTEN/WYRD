@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { FENCE_M, MissionMap, toLocal } from '../../components/MissionMap';
 import { Display, Mono } from '../../components/ui';
@@ -11,9 +11,23 @@ import { timeAgo } from '../../util/time';
 const STALE_MS = 10000;
 
 type LinkStatus = 'LIVE' | 'STALE' | 'OFFLINE';
-function linkStatus(state: DroneState | null | undefined): LinkStatus {
+
+/** LIVE if the drone's report timestamp changed within STALE_MS *by this device's clock* --
+ *  comparing the server's timestamp to the device clock made a live drone look stale whenever
+ *  the two clocks disagreed by more than a few seconds. */
+function useLinkStatus(state: DroneState | null | undefined): LinkStatus {
+  const seen = useRef<{ updatedAt: string | null; at: number }>({ updatedAt: null, at: 0 });
+  const [, tick] = useState(0);
+  if (state?.updatedAt && state.updatedAt !== seen.current.updatedAt) {
+    // the first report seen proves nothing about freshness; the next change does (~2s when live)
+    seen.current = { updatedAt: state.updatedAt, at: seen.current.updatedAt === null ? 0 : Date.now() };
+  }
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 2000);
+    return () => clearInterval(t);
+  }, []);
   if (!state || !state.connected) return 'OFFLINE';
-  return Date.now() - new Date(state.updatedAt).getTime() > STALE_MS ? 'STALE' : 'LIVE';
+  return seen.current.at && Date.now() - seen.current.at <= STALE_MS ? 'LIVE' : 'STALE';
 }
 
 export function DroneTab() {
@@ -22,7 +36,7 @@ export function DroneTab() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const status = linkStatus(state);
+  const status = useLinkStatus(state);
   const active = missions.find((m) => m.kind === 'mission' && ['pending', 'sent', 'running'].includes(m.status));
 
   const fromHome = useMemo(() => {
