@@ -100,7 +100,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
       const cx = width / 2, cy = height / 2;
       const cy0 = Math.cos(yaw), sy0 = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
       const breathe = Math.sin(now * 0.0016) * 0.06;
-      const size = 1.0 + intensity * 0.5;
+      const size = 1.9 + intensity * 0.6; // bolder dots (was 1.0)
 
       for (let b = 0; b < BUCKETS; b++) bucketPoints[b].length = 0;
 
@@ -112,7 +112,7 @@ export function makeVortexEngine(onShape?: (name: string) => void): VortexEngine
         if (d <= 0.4) continue;
         const k = F / d;
         const sx = cx + x1 * k, sy = cy - y1 * k;
-        const a = Math.max(0.05, Math.min(1, (0.55 + breathe + intensity * 0.2) * (1.9 / d)));
+        const a = Math.max(0.2, Math.min(1, (0.9 + breathe + intensity * 0.2) * (1.9 / d))); // darker, still shaded by depth
         const bucket = Math.min(BUCKETS - 1, Math.max(0, Math.round(a * (BUCKETS - 1))));
         bucketPoints[bucket].push({ x: sx, y: sy });
       }
