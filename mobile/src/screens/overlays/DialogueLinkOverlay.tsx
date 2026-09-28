@@ -44,6 +44,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   const [camOpen, setCamOpen] = useState(false);
   // replies WYRD gave from its own learned answers this session, marked in the thread
   const [fromMemory, setFromMemory] = useState<Set<string>>(() => new Set());
+  // replies the judgement gate changed this session: reply text -> verdict
+  const [judged, setJudged] = useState<Map<string, string>>(() => new Map());
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const sending = pending !== null;
@@ -66,6 +68,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
+      if (result.judgement) setJudged((m) => new Map(m).set(result.reply, result.judgement!));
       wyrdStream.publish('chat', { id: result.turnId, userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
@@ -231,7 +234,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         {turns.map((t, i) => (
           <View key={`${t.timestamp}-${i}`} style={styles.turn}>
             {t.userText ? <Bubble mine text={t.userText} at={t.timestamp} /> : null}
-            {t.botText ? <Bubble text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} turnId={t.id} rating={t.rating ?? null} /> : null}
+            {t.botText ? <Bubble text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} /> : null}
           </View>
         ))}
 
@@ -266,7 +269,7 @@ function timeLabel(iso: string) {
   return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5);
 }
 
-function Bubble({ text, at, mine, recalled, turnId, rating }: { text: string; at: string; mine?: boolean; recalled?: boolean; turnId?: number; rating?: number | null }) {
+function Bubble({ text, at, mine, recalled, judged, turnId, rating }: { text: string; at: string; mine?: boolean; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null }) {
   if (mine) {
     return (
       <View style={styles.mineRow}>
@@ -298,7 +301,7 @@ function Bubble({ text, at, mine, recalled, turnId, rating }: { text: string; at
           )}
         </View>
         <View style={styles.metaRow}>
-          <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}{recalled ? ' · ↺ from memory, no AI call' : ''}</Mono>
+          <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}{recalled ? ' · ↺ from memory, no AI call' : ''}{judged ? ` · ⚖ ${judged === 'softened' ? 'worth double-checking' : judged === 'corrected' ? 'corrected' : 'held back'}` : ''}</Mono>
           {turnId != null && <Thumbs turnId={turnId} initial={rating ?? null} />}
         </View>
       </View>

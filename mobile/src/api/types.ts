@@ -136,6 +136,8 @@ export interface TrustReport {
   evidence: number;
 }
 
+export interface JudgementReport { checked: number; passed: number; softened: number; corrected: number; blocked: number; reasons: Record<string, number> }
+
 export type GrowthRange = 'day' | 'week' | 'month' | 'all';
 
 export interface ConceptExample {
@@ -216,6 +218,8 @@ export interface ChatResult {
   fromMemory?: boolean;
   /** the conversation turn, so this reply can be rated */
   turnId?: number;
+  /** set when the reply gate changed the reply: softened, corrected or blocked */
+  judgement?: string;
   block: { timestamp: string; [k: string]: unknown };
   comparison: string;
   candidateCount: number;

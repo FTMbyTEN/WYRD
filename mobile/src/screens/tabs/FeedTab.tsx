@@ -5,6 +5,7 @@ import { HoloButton } from '../../components/Holo';
 import { VocabularyPanel } from '../../components/VocabularyPanel';
 import { FilterCard } from '../../components/FilterCard';
 import { TrustCard } from '../../components/TrustCard';
+import { JudgementCard } from '../../components/JudgementCard';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
 import { useFeed, useLexicon } from '../../api/hooks';
@@ -34,6 +35,7 @@ export function FeedTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: Props) {
 
       <FilterCard />
       <TrustCard />
+      <JudgementCard />
 
       <View style={styles.feedHeadRow}>
         <Mono style={styles.label}>LIVE DATA FEED</Mono>

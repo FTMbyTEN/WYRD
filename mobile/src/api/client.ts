@@ -12,6 +12,7 @@ import type {
   FeedItem,
   GrowthSnapshot,
   GrowthRange,
+  JudgementReport,
   TrustReport,
   FilterReport,
   LearningStats,
@@ -107,6 +108,7 @@ interface SpChatReply {
   reply: string;
   fromMemory?: boolean | null;
   turnId?: number | null;
+  judgement?: string | null;
   mind: SpMind;
   action: SpChatAction | null;
 }
@@ -115,6 +117,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     reply: r.reply,
     fromMemory: r.fromMemory ?? false,
     turnId: r.turnId ?? undefined,
+    judgement: r.judgement ?? undefined,
     block: { timestamp: r.mind.updatedAt },
     comparison: '',
     candidateCount: 1,
@@ -348,6 +351,7 @@ export const api = {
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
   /** Growth averaged over a readable span; see GrowthEndpoint.getHistory. */
   learning: () => callEndpoint<LearningStats>('growth', 'getLearning', {}, { authenticated: false }),
+  judgementReport: () => callEndpoint<JudgementReport>('feed', 'getJudgementReport', {}, { authenticated: false }),
   trust: () => callEndpoint<TrustReport>('feed', 'getTrust', {}, { authenticated: false }),
   filterReport: () => callEndpoint<FilterReport>('feed', 'getFilterReport', {}, { authenticated: false }),
   growthHistory: (range: GrowthRange) =>
