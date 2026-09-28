@@ -104,6 +104,8 @@ export interface Sighting {
   question: string | null;
 }
 
+export interface LearningStats { answers: number; shared: number; reuses: number; improved: number }
+
 export type GrowthRange = 'day' | 'week' | 'month' | 'all';
 
 export interface ConceptExample {
@@ -180,6 +182,8 @@ export type ChatAction =
 
 export interface ChatResult {
   reply: string;
+  /** answered from a learned answer, without calling the AI */
+  fromMemory?: boolean;
   block: { timestamp: string; [k: string]: unknown };
   comparison: string;
   candidateCount: number;

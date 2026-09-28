@@ -12,6 +12,7 @@ import type {
   FeedItem,
   GrowthSnapshot,
   GrowthRange,
+  LearningStats,
   Firing,
   NeuralNetwork,
   ConceptExample,
@@ -100,12 +101,14 @@ interface SpChatAction {
 }
 interface SpChatReply {
   reply: string;
+  fromMemory?: boolean | null;
   mind: SpMind;
   action: SpChatAction | null;
 }
 function adaptChatResult(r: SpChatReply): ChatResult {
   return {
     reply: r.reply,
+    fromMemory: r.fromMemory ?? false,
     block: { timestamp: r.mind.updatedAt },
     comparison: '',
     candidateCount: 1,
@@ -336,6 +339,7 @@ export const api = {
   },
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
   /** Growth averaged over a readable span; see GrowthEndpoint.getHistory. */
+  learning: () => callEndpoint<LearningStats>('growth', 'getLearning', {}, { authenticated: false }),
   growthHistory: (range: GrowthRange) =>
     callEndpoint<SpGrowthSnapshot[]>('growth', 'getHistory', { range }, { authenticated: false }).then((es) => es.map(adaptGrowthSnapshot)),
   conceptDetail: (topic: string) =>

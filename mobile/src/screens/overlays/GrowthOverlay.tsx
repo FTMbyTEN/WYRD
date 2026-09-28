@@ -5,7 +5,7 @@ import { OverlayShell } from './OverlayShell';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
-import type { GrowthRange, GrowthSnapshot } from '../../api/types';
+import type { GrowthRange, GrowthSnapshot, LearningStats } from '../../api/types';
 
 const RANGES: { key: GrowthRange; label: string; phrase: string }[] = [
   { key: 'day', label: '24 HOURS', phrase: 'In the last 24 hours' },
@@ -72,6 +72,11 @@ export function GrowthOverlay({ visible, onClose }: { visible: boolean; onClose:
   const [range, setRange] = useState<GrowthRange>('day');
   const [data, setData] = useState<GrowthSnapshot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [learning, setLearning] = useState<LearningStats | null>(null);
+
+  useEffect(() => {
+    if (visible) api.learning().then(setLearning).catch(() => {});
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -112,6 +117,21 @@ export function GrowthOverlay({ visible, onClose }: { visible: boolean; onClose:
           </View>
         )}
 
+        {learning && (
+          <View style={styles.learn}>
+            <Mono style={styles.cardTitle}>LEARNING FROM ITS OWN ANSWERS</Mono>
+            <View style={styles.learnRow}>
+              <LearnStat v={learning.answers} k="answers learned" />
+              <LearnStat v={learning.reuses} k="reused (AI calls saved)" />
+              <LearnStat v={learning.improved} k="answers improved" />
+              <LearnStat v={learning.shared} k="shared with everyone" />
+            </View>
+            <Mono style={styles.explain}>
+              Every good answer WYRD gives is kept. When the same question comes up again it answers from memory instead of calling the AI. If someone corrects it, that answer is retired and relearned, so each answer keeps getting better.
+            </Mono>
+          </View>
+        )}
+
         {data && data.length > 1 && (
           <View style={styles.grid}>
             {METRICS.map((m) => <MetricCard key={m.key} metric={m} data={data} />)}
@@ -125,6 +145,15 @@ export function GrowthOverlay({ visible, onClose }: { visible: boolean; onClose:
         )}
       </ScrollView>
     </OverlayShell>
+  );
+}
+
+function LearnStat({ v, k }: { v: number; k: string }) {
+  return (
+    <View style={styles.learnStat}>
+      <Display style={styles.learnValue}>{v.toLocaleString()}</Display>
+      <Mono style={styles.level}>{k}</Mono>
+    </View>
   );
 }
 
@@ -247,5 +276,9 @@ const styles = StyleSheet.create({
   value: { fontSize: 30, color: colors.mint },
   level: { fontSize: 11, color: colors.greenDim },
   explain: { fontSize: 11, lineHeight: 16, color: colors.greenDim, marginTop: 4 },
+  learn: { borderWidth: 1, borderColor: colors.green, padding: 12, gap: 8 },
+  learnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  learnStat: { minWidth: 120 },
+  learnValue: { fontSize: 26, color: colors.mint },
   foot: { fontSize: 10, lineHeight: 15, color: colors.greenBorder },
 });

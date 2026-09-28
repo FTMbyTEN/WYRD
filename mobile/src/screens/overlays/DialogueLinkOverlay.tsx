@@ -42,6 +42,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState<{ text: string; at: string } | null>(null);
   const [camOpen, setCamOpen] = useState(false);
+  // replies WYRD gave from its own learned answers this session, marked in the thread
+  const [fromMemory, setFromMemory] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const sending = pending !== null;
@@ -63,6 +65,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       const result = await api.chat(text);
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
+      if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
       wyrdStream.publish('chat', { userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
@@ -228,7 +231,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         {turns.map((t, i) => (
           <View key={`${t.timestamp}-${i}`} style={styles.turn}>
             {t.userText ? <Bubble mine text={t.userText} at={t.timestamp} /> : null}
-            {t.botText ? <Bubble text={t.botText} at={t.timestamp} /> : null}
+            {t.botText ? <Bubble text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} /> : null}
           </View>
         ))}
 
@@ -263,7 +266,7 @@ function timeLabel(iso: string) {
   return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5);
 }
 
-function Bubble({ text, at, mine }: { text: string; at: string; mine?: boolean }) {
+function Bubble({ text, at, mine, recalled }: { text: string; at: string; mine?: boolean; recalled?: boolean }) {
   if (mine) {
     return (
       <View style={styles.mineRow}>
@@ -294,7 +297,7 @@ function Bubble({ text, at, mine }: { text: string; at: string; mine?: boolean }
             ),
           )}
         </View>
-        <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}</Mono>
+        <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}{recalled ? ' · ↺ from memory, no AI call' : ''}</Mono>
       </View>
     </View>
   );
