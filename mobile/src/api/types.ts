@@ -52,7 +52,7 @@ export interface Firing {
 export interface ReasoningNote {
   file: string;
   content: string; // raw markdown, or JSON for kind 'firing'
-  kind?: 'reasoning' | 'self' | 'firing';
+  kind?: 'reasoning' | 'self' | 'firing' | 'sleep';
   timestamp?: string;
   firing?: Firing;
 }

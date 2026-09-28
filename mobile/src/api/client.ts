@@ -123,7 +123,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
 
 interface SpReasoningNote {
   timestamp: string;
-  kind: 'reasoning' | 'self' | 'firing';
+  kind: 'reasoning' | 'self' | 'firing' | 'sleep';
   content: string;
 }
 

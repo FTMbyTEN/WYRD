@@ -32,7 +32,7 @@ export function NeuralReasoning() {
 
   const firings = notes.filter((n) => n.kind === 'firing' && n.firing);
   const latest = firings[0]?.firing ?? null;
-  const shown = notes.filter((n) => n.kind === 'firing' || n.kind === 'self').slice(0, 20);
+  const shown = notes.filter((n) => n.kind === 'firing' || n.kind === 'self' || n.kind === 'sleep').slice(0, 20);
   const strongest = net?.synapses[0];
 
   return (
@@ -58,7 +58,7 @@ export function NeuralReasoning() {
 
       <Mono style={styles.section}>WHAT WYRD HAS BEEN THINKING</Mono>
       {shown.length === 0 && <Mono style={styles.muted}>Nothing yet.</Mono>}
-      {shown.map((n) => (n.kind === 'firing' && n.firing ? <FiringCard key={n.file} note={n} f={n.firing} /> : <SelfCard key={n.file} note={n} />))}
+      {shown.map((n) => (n.kind === 'firing' && n.firing ? <FiringCard key={n.file} note={n} f={n.firing} /> : n.kind === 'sleep' ? <SleepCard key={n.file} note={n} /> : <SelfCard key={n.file} note={n} />))}
     </ScrollView>
   );
 }
@@ -192,6 +192,18 @@ function FiringCard({ note, f }: { note: ReasoningNote; f: Firing }) {
   );
 }
 
+/** A night's consolidation (see the server's SleepService). */
+function SleepCard({ note }: { note: ReasoningNote }) {
+  let summary = note.content;
+  try { summary = (JSON.parse(note.content) as { summary?: string }).summary ?? summary; } catch { /* plain text */ }
+  return (
+    <View style={[styles.card, styles.sleepCard]}>
+      <Mono style={styles.cardMeta}>☾ SLEEP · CONSOLIDATION{note.timestamp ? ' · ' + timeAgo(note.timestamp) : ''}</Mono>
+      <Mono style={styles.cardText}>{summary}</Mono>
+    </View>
+  );
+}
+
 function SelfCard({ note }: { note: ReasoningNote }) {
   const q = note.content.match(/^Q:\s*(.+)$/m)?.[1];
   const a = note.content.match(/^A:\s*([\s\S]+?)(\n\n|$)/m)?.[1];
@@ -226,6 +238,7 @@ const styles = StyleSheet.create({
   section: { fontSize: 10, letterSpacing: 2, color: colors.greenDim, marginTop: 8 },
   muted: { fontSize: 12, color: colors.greenDim },
   card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 12, gap: 8 },
+  sleepCard: { borderStyle: 'dashed', borderColor: colors.green },
   cardMeta: { fontSize: 9, letterSpacing: 1.8, color: colors.greenDim },
   cardText: { fontSize: 12.5, lineHeight: 19, color: colors.mint },
   q: { fontSize: 13, lineHeight: 19, color: colors.mint, fontWeight: 'bold' },
