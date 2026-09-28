@@ -1,5 +1,6 @@
-import React from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { notify } from '../../util/dialog';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
@@ -7,10 +8,14 @@ import { FaceMark } from '../../components/FaceMark';
 import { api } from '../../api/client';
 import { useAuth } from '../../api/AuthContext';
 import { useConversations, useMind, useProfile } from '../../api/hooks';
+import type { QuizStats, ReadingItem } from '../../api/types';
+
+const DAY = 86400000;
+const serif = Platform.select({ web: 'Georgia, "Iowan Old Style", "Noto Serif", "Times New Roman", serif', ios: 'Georgia', default: 'serif' });
 
 function daysSince(iso: string | undefined) {
   if (!iso) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / DAY));
 }
 
 interface Props {
@@ -19,14 +24,26 @@ interface Props {
   onOpenCop: () => void;
 }
 
-/** Your profile with WYRD: who you are to it, what it has learned about you, and your settings. */
+/** YOU: who you are to WYRD. Your mark and your history together, when you talk, everything
+ *  it has learned about you (kept private), what you're reading, and your settings and data. */
 export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
+  const { width } = useWindowDimensions();
+  const wide = width >= 1000;
   const { email, logout } = useAuth();
-  const { profile } = useProfile();
-  const { total: msgCount } = useConversations();
+  const { profile, reload: reloadProfile } = useProfile();
+  const { turns, total: msgCount, reload: reloadTurns } = useConversations(200);
   const { mind } = useMind();
   const facts = profile?.facts ?? [];
   const days = daysSince(profile?.firstSeen);
+  const name = (email ?? '—').split('@')[0];
+
+  const [reading, setReading] = useState<ReadingItem[]>([]);
+  const [quiz, setQuiz] = useState<QuizStats | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(0); // 0 closed, 1 asking, 2 working
+  useEffect(() => {
+    api.libraryList().then(setReading).catch(() => {});
+    api.libraryQuizStats().then(setQuiz).catch(() => {});
+  }, []);
 
   const exportData = async () => {
     try {
@@ -37,155 +54,350 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
     }
   };
 
+  const deleteData = async () => {
+    setConfirmDelete(2);
+    try {
+      await api.deleteAccount();
+      notify('Deleted', 'Everything WYRD kept about you — conversations, facts, photos, reading and quizzes — has been deleted.');
+      reloadProfile(); reloadTurns(); setReading([]); setQuiz(null);
+    } catch {
+      notify('Delete failed', 'Could not reach WYRD. Nothing was deleted; try again.');
+    } finally {
+      setConfirmDelete(0);
+    }
+  };
 
-  return (
-    <ScrollView contentContainerStyle={styles.page}>
-      {/* identity */}
-      <View style={styles.identity}>
-        <View style={styles.avatar}>
-          <FaceMark mode="scan" />
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Mono style={styles.eyebrow}>SIGNED IN AS</Mono>
-          <Display numberOfLines={1} style={styles.name}>{(email ?? '—').split('@')[0]}</Display>
-          <Mono numberOfLines={1} style={styles.email}>{email ?? ''}</Mono>
-        </View>
-      </View>
+  const quizPct = quiz && quiz.total ? Math.round((quiz.correct / quiz.total) * 100) : null;
+  const stats: [string, string][] = [
+    [msgCount.toLocaleString(), 'MESSAGES'],
+    [String(facts.length), 'THINGS IT KNOWS'],
+    [String(days), days === 1 ? 'DAY TOGETHER' : 'DAYS TOGETHER'],
+    [String(profile?.visitCount ?? 0), 'VISITS'],
+    [String(reading.length), 'ON YOUR DESK'],
+    [quizPct == null ? '—' : `${quizPct}%`, 'QUIZ SCORE'],
+  ];
 
-      {/* at a glance */}
-      <View style={styles.stats}>
-        <Stat value={msgCount.toLocaleString()} label="MESSAGES" />
-        <View style={styles.statRule} />
-        <Stat value={String(facts.length)} label="FACTS KNOWN" />
-        <View style={styles.statRule} />
-        <Stat value={String(days)} label={days === 1 ? 'DAY' : 'DAYS'} />
-      </View>
+  const left = (
+    <>
+      <Section title="WHEN YOU TALK" note={turns.length ? `your last ${turns.length} messages` : undefined}>
+        <Activity stamps={turns.map((t) => t.timestamp)} />
+      </Section>
+      <Section title="WHAT WYRD KNOWS ABOUT YOU" note={`${facts.length} ${facts.length === 1 ? 'fact' : 'facts'} · private to you`}>
+        <Facts facts={facts} />
+      </Section>
+    </>
+  );
 
-      {/* what WYRD knows */}
-      <Section title="WHAT WYRD KNOWS ABOUT YOU">
-        {facts.length === 0 ? (
-          <Mono style={styles.muted}>
-            Nothing yet. Tell it about yourself in DIALOGUE_LINK and it will remember, privately.
-          </Mono>
+  const right = (
+    <>
+      <Section title="YOUR READING">
+        {reading.length === 0 ? (
+          <Mono style={styles.muted}>Nothing on your desk yet. The Academy has 75,000 free books, open textbooks and texts in 15 languages.</Mono>
         ) : (
-          facts.slice(0, 12).map((f, i) => (
-            <View key={`${i}-${f}`} style={[styles.factRow, i > 0 && styles.rowRule]}>
-              <Mono style={styles.factIndex}>{String(i + 1).padStart(2, '0')}</Mono>
-              <Mono style={styles.factText}>{f}</Mono>
+          reading.slice(0, 4).map((r) => (
+            <View key={r.id} style={styles.readRow}>
+              <Text numberOfLines={1} style={[styles.readTitle, { fontFamily: serif }]}>{r.title.replace(/\s*\|.*$/, '')}</Text>
+              <View style={styles.readTrack}><View style={[styles.readFill, { flex: progress(r) }]} /><View style={{ flex: 1 - progress(r) }} /></View>
+              <Mono style={styles.readPct}>{Math.round(progress(r) * 100)}%</Mono>
             </View>
           ))
         )}
-        {facts.length > 12 ? <Mono style={styles.muted}>+ {facts.length - 12} more in your export</Mono> : null}
       </Section>
 
-      {/* settings */}
       <Section title="SETTINGS">
-        <Row title="Spoken replies" detail="WYRD reads its chat replies aloud">
-          <Switch
-            value={tts}
-            onValueChange={onToggleTts}
-            trackColor={{ false: colors.greenBorderDim, true: colors.green }}
-            thumbColor={colors.black}
-          />
-        </Row>
-        <Row title="COP oversight" detail="Every change WYRD made to itself, independently reviewed" onPress={onOpenCop} ruled />
-        <Row
-          title="Export my data"
-          detail={`Your private thread and facts${mind ? ` · shared memory holds ${mind.digest.totalTopics.toLocaleString()} topics` : ''}`}
-          onPress={exportData}
-          ruled
-        />
+        <Setting icon={<SpeakerIcon />} title="Spoken replies" detail="WYRD reads its chat replies aloud">
+          <Switch value={tts} onValueChange={onToggleTts} trackColor={{ false: colors.greenBorderDim, true: colors.mint }} thumbColor="#fff" />
+        </Setting>
+        <Setting icon={<ShieldIcon />} title="COP oversight" detail="Every change WYRD made to itself, independently reviewed" onPress={onOpenCop} />
+      </Section>
+
+      <Section title="YOUR DATA">
+        <Setting icon={<BoxIcon />} title="Export my data" detail="Conversations, facts, photos, reading and quizzes, as a file" onPress={exportData} />
+        {confirmDelete === 0 ? (
+          <Setting icon={<BinIcon />} title="Delete my data" detail="Erase everything WYRD kept about you. Your login stays." onPress={() => setConfirmDelete(1)} danger />
+        ) : (
+          <View style={styles.confirm}>
+            <Mono style={styles.confirmText}>
+              This permanently deletes your conversations, the facts WYRD learned, your photos, your reading and your quizzes. It can't be undone.
+            </Mono>
+            <View style={styles.confirmRow}>
+              <Pressable disabled={confirmDelete === 2} onPress={deleteData} style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}>
+                <Mono style={styles.deleteText}>{confirmDelete === 2 ? 'DELETING…' : 'YES, DELETE EVERYTHING'}</Mono>
+              </Pressable>
+              <Pressable onPress={() => setConfirmDelete(0)} style={({ pressed }) => [styles.keepBtn, pressed && styles.pressed]}>
+                <Mono style={styles.keepText}>KEEP IT</Mono>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </Section>
 
       <Pressable onPress={logout} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
         <Mono style={styles.logoutText}>LOG OUT</Mono>
       </Pressable>
+    </>
+  );
+
+  return (
+    <ScrollView contentContainerStyle={[styles.page, wide && styles.pageWide]}>
+      {/* hero */}
+      <View style={[styles.hero, wide && styles.heroWide]}>
+        <View style={styles.markWrap}>
+          <Rings />
+          <View style={styles.mark}><FaceMark mode="scan" /></View>
+        </View>
+        <View style={{ flex: 1, minWidth: 220, gap: 4 }}>
+          <Mono style={styles.eyebrow}>YOU, TO WYRD</Mono>
+          <Display numberOfLines={1} style={[styles.name, wide && { fontSize: 54, lineHeight: 58 }]}>{name}</Display>
+          <Mono numberOfLines={1} style={styles.email}>{email ?? ''}</Mono>
+          <Text style={[styles.since, { fontFamily: serif }]}>
+            {profile?.firstSeen
+              ? `Together since ${new Date(profile.firstSeen).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}${mind ? ` — WYRD is feeling ${mind.mood} today.` : '.'}`
+              : 'Say hello in Dialogue Link and WYRD will start to know you.'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.stats}>
+        {stats.map(([v, k]) => (
+          <View key={k} style={[styles.stat, wide ? { flexBasis: '15%' } : { flexBasis: '31%' }]}>
+            <Display style={styles.statValue}>{v}</Display>
+            <Mono style={styles.statLabel}>{k}</Mono>
+          </View>
+        ))}
+      </View>
+
+      {wide ? (
+        <View style={styles.cols}>
+          <View style={{ flex: 1.2, gap: 22, minWidth: 0 }}>{left}</View>
+          <View style={{ flex: 1, gap: 22, minWidth: 0 }}>{right}</View>
+        </View>
+      ) : (
+        <View style={{ gap: 22 }}>{left}{right}</View>
+      )}
+
       <Mono style={styles.footnote}>
-        Your conversations and facts are private to you. WYRD's mind, diary and drone are shared by everyone.
+        Your conversations, facts, photos and reading are private to you. WYRD's mind, diary, dreams and drone are shared by everyone.
       </Mono>
     </ScrollView>
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={styles.stat}>
-      <Display style={styles.statValue}>{value}</Display>
-      <Mono style={styles.statLabel}>{label}</Mono>
-    </View>
-  );
+const inParts = (i: ReadingItem) => i.source === 'openstax' || i.source === 'wikisource';
+function progress(i: ReadingItem) {
+  const within = i.total ? Math.min(1, (i.nextOffset ?? i.total) / i.total) : 1;
+  return inParts(i) ? Math.min(1, ((i.partIndex ?? 0) + within) / Math.max(1, i.partCount ?? 1)) : within;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Mono style={styles.eyebrow}>{title}</Mono>
-      <View style={styles.card}>{children}</View>
+      <View style={styles.sectionHead}>
+        <Mono style={styles.sectionTitle}>{title}</Mono>
+        <View style={styles.rule} />
+        {note ? <Mono style={styles.note}>{note}</Mono> : null}
+      </View>
+      {children}
     </View>
   );
 }
 
-function Row({ title, detail, onPress, ruled, children }: {
-  title: string;
-  detail: string;
-  onPress?: () => void;
-  ruled?: boolean;
-  children?: React.ReactNode;
+/** When you talk to WYRD: the last 12 weeks by day, and your hours of the day. */
+function Activity({ stamps }: { stamps: string[] }) {
+  const { byDay, byHour, max, peak, streak } = useMemo(() => {
+    const d = new Map<string, number>();
+    const h = new Array(24).fill(0) as number[];
+    for (const s of stamps) {
+      const t = new Date(s);
+      if (Number.isNaN(t.getTime())) continue;
+      const k = t.toDateString();
+      d.set(k, (d.get(k) ?? 0) + 1);
+      h[t.getHours()]++;
+    }
+    let st = 0;
+    for (let t = new Date(); d.has(t.toDateString()); t = new Date(t.getTime() - DAY)) st++;
+    return { byDay: d, byHour: h, max: Math.max(1, ...d.values()), peak: h.indexOf(Math.max(...h)), streak: st };
+  }, [stamps]);
+
+  if (!stamps.length) return <Mono style={styles.muted}>No conversations yet. Your rhythm with WYRD will show here.</Mono>;
+
+  const weeks = 12;
+  const end = new Date();
+  const start = new Date(end.getTime() - (weeks * 7 - 1) * DAY);
+  start.setDate(start.getDate() - start.getDay());
+  const hourMax = Math.max(1, ...byHour);
+  const shade = (n: number) => (n === 0 ? '#f1f1ef' : n / max > 0.66 ? colors.mint : n / max > 0.33 ? '#6b6b6b' : '#b3b3b3');
+
+  return (
+    <View style={{ gap: 14 }}>
+      <View style={styles.heat}>
+        {[...Array(weeks + 1)].map((_, w) => (
+          <View key={w} style={{ gap: 3 }}>
+            {[...Array(7)].map((__, dd) => {
+              const t = new Date(start.getTime() + (w * 7 + dd) * DAY);
+              const n = byDay.get(t.toDateString()) ?? 0;
+              return <View key={dd} style={[styles.heatDay, { backgroundColor: shade(n), opacity: t > end ? 0.2 : 1 }]} />;
+            })}
+          </View>
+        ))}
+      </View>
+      <View>
+        <Svg width="100%" height={54} viewBox="0 0 240 54" preserveAspectRatio="none">
+          {byHour.map((n, h) => (
+            <Rect key={h} x={h * 10 + 1} y={46 - (n / hourMax) * 44} width={8} height={Math.max(1, (n / hourMax) * 44)} fill={h === peak ? colors.mint : '#bdbdbd'} />
+          ))}
+          <Rect x={0} y={47} width={240} height={1} fill="#d0d0d0" />
+        </Svg>
+        <View style={styles.hourAxis}>
+          {['00', '06', '12', '18', '24'].map((l) => <Mono key={l} style={styles.axis}>{l}</Mono>)}
+        </View>
+      </View>
+      <Text style={[styles.insight, { fontFamily: serif }]}>
+        You talk most around {String(peak).padStart(2, '0')}:00{streak > 1 ? `, and you've talked ${streak} days running` : ''}.
+      </Text>
+    </View>
+  );
+}
+
+/** Facts as index cards: "Name: Dana" becomes a labelled card; anything else stands on its own. */
+function Facts({ facts }: { facts: string[] }) {
+  const [all, setAll] = useState(false);
+  if (!facts.length) {
+    return <Mono style={styles.muted}>Nothing yet. Tell WYRD about yourself in Dialogue Link — your name, what you study, what you love — and it will remember, privately.</Mono>;
+  }
+  const shown = all ? facts : facts.slice(0, 12);
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={styles.cards}>
+        {shown.map((f, i) => {
+          const m = f.match(/^([A-Za-z][\w '’-]{1,24}):\s*(.+)$/);
+          return (
+            <View key={`${i}-${f}`} style={[styles.factCard, i % 5 === 0 && styles.factCardTilt]}>
+              <Mono style={styles.factLabel}>{m ? m[1].toUpperCase() : `NOTE ${String(i + 1).padStart(2, '0')}`}</Mono>
+              <Text style={[styles.factText, { fontFamily: serif }]}>{m ? m[2] : f}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {facts.length > 12 && (
+        <Pressable onPress={() => setAll((v) => !v)}>
+          <Mono style={styles.more}>{all ? 'SHOW FEWER' : `SHOW ALL ${facts.length}`}</Mono>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function Setting({ icon, title, detail, onPress, danger, children }: {
+  icon: React.ReactNode; title: string; detail: string; onPress?: () => void; danger?: boolean; children?: React.ReactNode;
 }) {
   const body = (
     <>
+      <View style={[styles.settingIcon, danger && { borderColor: colors.danger }]}>{icon}</View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Mono style={styles.rowTitle}>{title}</Mono>
-        <Mono style={styles.rowDetail}>{detail}</Mono>
+        <Mono style={[styles.settingTitle, danger && { color: colors.danger }]}>{title}</Mono>
+        <Mono style={styles.settingDetail}>{detail}</Mono>
       </View>
-      {children ?? <Mono style={styles.chevron}>›</Mono>}
+      {children ?? <Mono style={[styles.chevron, danger && { color: colors.danger }]}>›</Mono>}
     </>
   );
   return onPress ? (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, ruled && styles.rowRule, pressed && styles.pressed]}>
-      {body}
-    </Pressable>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>{body}</Pressable>
   ) : (
-    <View style={[styles.row, ruled && styles.rowRule]}>{body}</View>
+    <View style={styles.setting}>{body}</View>
   );
 }
 
-const HAIRLINE = StyleSheet.hairlineWidth;
+function Rings() {
+  return (
+    <Svg width={128} height={128} style={StyleSheet.absoluteFill}>
+      <Circle cx={64} cy={64} r={62} stroke={colors.mint} strokeWidth={1} fill="none" />
+      <Circle cx={64} cy={64} r={56} stroke="#cfcfcf" strokeWidth={1} fill="none" strokeDasharray="2 4" />
+      {[...Array(24)].map((_, i) => {
+        const a = (i / 24) * Math.PI * 2;
+        return <Path key={i} d={`M${64 + Math.cos(a) * 62} ${64 + Math.sin(a) * 62} L${64 + Math.cos(a) * (i % 6 === 0 ? 54 : 58)} ${64 + Math.sin(a) * (i % 6 === 0 ? 54 : 58)}`} stroke={colors.mint} strokeWidth={1} />;
+      })}
+    </Svg>
+  );
+}
+
+const ic = { width: 16, height: 16, viewBox: '0 0 20 20' };
+function SpeakerIcon() {
+  return <Svg {...ic}><Path d="M3 8 H7 L12 4 V16 L7 12 H3 Z" stroke={colors.mint} strokeWidth={1.4} fill="none" /><Path d="M14.5 7 Q17 10 14.5 13" stroke={colors.mint} strokeWidth={1.4} fill="none" /></Svg>;
+}
+function ShieldIcon() {
+  return <Svg {...ic}><Path d="M10 2 L17 5 V10 Q17 15 10 18 Q3 15 3 10 V5 Z" stroke={colors.mint} strokeWidth={1.4} fill="none" /><Path d="M7 10 L9.3 12.3 L13.5 8" stroke={colors.mint} strokeWidth={1.4} fill="none" /></Svg>;
+}
+function BoxIcon() {
+  return <Svg {...ic}><Path d="M3 6 L10 2.5 L17 6 V14 L10 17.5 L3 14 Z M3 6 L10 9.5 L17 6 M10 9.5 V17.5" stroke={colors.mint} strokeWidth={1.3} fill="none" /></Svg>;
+}
+function BinIcon() {
+  return <Svg {...ic}><Path d="M4 6 H16 M8 6 V4 H12 V6 M5.5 6 L6.5 17 H13.5 L14.5 6" stroke={colors.danger} strokeWidth={1.4} fill="none" /></Svg>;
+}
 
 const styles = StyleSheet.create({
-  page: { padding: 16, paddingBottom: 40, gap: 18 },
+  page: { padding: 16, paddingBottom: 48, gap: 22 },
+  pageWide: { maxWidth: 1120, width: '100%', alignSelf: 'center', paddingHorizontal: 28 },
   eyebrow: { fontSize: 9, letterSpacing: 2.5, color: colors.greenDim },
-  muted: { fontSize: 11.5, lineHeight: 17, color: colors.greenDim, paddingVertical: 4 },
+  muted: { fontSize: 11.5, lineHeight: 17, color: colors.greenDim },
 
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 4 },
-  avatar: {
-    width: 64, height: 64, borderRadius: 32, overflow: 'hidden',
-    borderWidth: 1, borderColor: colors.green, alignItems: 'center', justifyContent: 'center',
-  },
-  name: { fontSize: 32, lineHeight: 34, color: colors.green, marginTop: 2 },
+  hero: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, paddingTop: 6 },
+  heroWide: { gap: 32, paddingVertical: 12 },
+  markWrap: { width: 128, height: 128, alignItems: 'center', justifyContent: 'center' },
+  mark: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  name: { fontSize: 38, lineHeight: 42, color: colors.mint },
   email: { fontSize: 11, color: colors.greenDim },
+  since: { fontSize: 15, lineHeight: 22, color: colors.mint, fontStyle: 'italic', marginTop: 4 },
 
-  stats: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.green,
+  stats: { flexDirection: 'row', flexWrap: 'wrap', borderTopWidth: 2, borderBottomWidth: 1, borderColor: colors.mint, paddingVertical: 12, rowGap: 12 },
+  stat: { flexGrow: 1, alignItems: 'center' },
+  statValue: { fontSize: 30, lineHeight: 32, color: colors.mint },
+  statLabel: { marginTop: 2, fontSize: 8.5, letterSpacing: 1.5, color: colors.greenDim, textAlign: 'center' },
+
+  cols: { flexDirection: 'row', gap: 32, alignItems: 'flex-start' },
+  section: { gap: 12 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sectionTitle: { fontSize: 10.5, letterSpacing: 2.4, color: colors.mint },
+  rule: { flex: 1, height: 1, backgroundColor: colors.greenBorderDim },
+  note: { fontSize: 9.5, color: colors.greenDim },
+
+  heat: { flexDirection: 'row', gap: 3, flexWrap: 'wrap' },
+  heatDay: { width: 16, height: 16 },
+  hourAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  axis: { fontSize: 8.5, color: colors.greenDim },
+  insight: { fontSize: 15, lineHeight: 22, color: colors.mint, fontStyle: 'italic' },
+
+  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  factCard: {
+    flexGrow: 1, flexBasis: 150, maxWidth: 260, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.greenBorderDim,
+    borderTopWidth: 3, borderTopColor: colors.mint, padding: 10, gap: 4,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
-  stat: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 28, lineHeight: 30, color: colors.green },
-  statLabel: { marginTop: 2, fontSize: 8.5, letterSpacing: 1.5, color: colors.greenDim },
-  statRule: { width: HAIRLINE, alignSelf: 'stretch', backgroundColor: colors.greenBorder },
+  factCardTilt: { transform: [{ rotate: '-1deg' }] },
+  factLabel: { fontSize: 8.5, letterSpacing: 1.6, color: colors.greenDim },
+  factText: { fontSize: 15, lineHeight: 21, color: colors.mint },
+  more: { fontSize: 10, letterSpacing: 1.6, color: colors.mint, textDecorationLine: 'underline' },
 
-  section: { gap: 8 },
-  card: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 4 },
-  factRow: { flexDirection: 'row', gap: 10, paddingVertical: 9 },
-  factIndex: { fontSize: 10, color: colors.greenBorder, paddingTop: 1 },
-  factText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.mint },
+  readRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  readTitle: { flex: 1.4, fontSize: 14, color: colors.mint },
+  readTrack: { flex: 1, flexDirection: 'row', height: 4, backgroundColor: colors.greenBorderDim },
+  readFill: { backgroundColor: colors.mint },
+  readPct: { width: 36, fontSize: 10, color: colors.greenDim, textAlign: 'right' },
 
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  rowRule: { borderTopWidth: HAIRLINE, borderTopColor: colors.greenBorder },
-  rowTitle: { fontSize: 13, color: colors.green },
-  rowDetail: { marginTop: 2, fontSize: 10.5, lineHeight: 15, color: colors.greenDim },
+  setting: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.greenBorderDim, padding: 12, backgroundColor: '#fff' },
+  settingIcon: { width: 34, height: 34, borderWidth: 1, borderColor: colors.mint, alignItems: 'center', justifyContent: 'center' },
+  settingTitle: { fontSize: 13, color: colors.mint },
+  settingDetail: { marginTop: 2, fontSize: 10.5, lineHeight: 15, color: colors.greenDim },
   chevron: { fontSize: 20, color: colors.greenDim },
   pressed: { opacity: 0.6 },
+
+  confirm: { borderWidth: 2, borderColor: colors.danger, padding: 12, gap: 10 },
+  confirmText: { fontSize: 11.5, lineHeight: 17, color: colors.danger },
+  confirmRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  deleteBtn: { backgroundColor: colors.danger, paddingHorizontal: 14, paddingVertical: 11 },
+  deleteText: { color: '#fff', fontSize: 10.5, letterSpacing: 1.6 },
+  keepBtn: { borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 14, paddingVertical: 10 },
+  keepText: { color: colors.mint, fontSize: 10.5, letterSpacing: 1.6 },
 
   logout: { borderWidth: 1, borderColor: colors.danger, paddingVertical: 13, alignItems: 'center' },
   logoutText: { fontSize: 11, letterSpacing: 2.5, color: colors.danger },

@@ -53,7 +53,6 @@ export function JournalTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: {
             {today.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()}
           </Mono>
         </View>
-        <Text style={[styles.mastTitle, { fontFamily: serif }, wide && { fontSize: 64, lineHeight: 70 }]}>The Journal of WYRD</Text>
         <View style={styles.mastRow}>
           <Mono style={styles.mastSide}>A MIND, KEPT IN ITS OWN WORDS</Mono>
           <Mono style={[styles.mastSide, { textAlign: 'right' }]}>

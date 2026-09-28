@@ -57,7 +57,7 @@ export function AppShell() {
           onOpenCop={() => setOverlay('cop')}
         />
 
-        <View style={[{ flex: 1, minHeight: 0 }, desktop && tab !== 'wyrd' && tab !== 'academy' && tab !== 'journal' && styles.readable]}>
+        <View style={[{ flex: 1, minHeight: 0 }, desktop && tab !== 'wyrd' && tab !== 'academy' && tab !== 'journal' && tab !== 'drone' && tab !== 'you' && styles.readable]}>
           {tab === 'wyrd' && (
             <WyrdTab onOpenBrain={() => setOverlay('brain')} onOpenLink={() => setOverlay('link')} />
           )}
