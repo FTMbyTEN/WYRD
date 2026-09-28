@@ -145,6 +145,8 @@ export interface ReadingItem {
   partTitle?: string | null; partUrl?: string | null; startedAt: string; updatedAt: string;
 }
 export interface WorkHit { source: WorkSource; id: string; title: string; author?: string | null; subjects: string[]; coverUrl?: string | null; language?: string | null; blurb?: string | null }
+export interface QuizQuestion { kind: 'cloze' | 'truefalse'; prompt: string; options: string[]; answer: number; explanation: string; keyword: string }
+export interface QuizStats { rounds: number; correct: number; total: number }
 export interface WorkPartInfo { index: number; title: string; url: string }
 export interface ReadingSlice { item: ReadingItem; text: string; offset: number; finished: boolean }
 

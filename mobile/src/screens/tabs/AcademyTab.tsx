@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensio
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
-import type { ReadingItem, ReadingSlice } from '../../api/types';
+import type { QuizStats, ReadingItem, ReadingSlice } from '../../api/types';
 import { BookCover } from '../academy/BookCover';
 import { ReadingRoom, cleanTitle, isFinished, progressOf } from '../academy/ReadingRoom';
 import { Skyline, WingDoors, type Wing } from '../academy/Skyline';
@@ -31,6 +31,8 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [welcome, setWelcome] = useState(0);
+  const [quizStats, setQuizStats] = useState<QuizStats | null>(null);
+  useEffect(() => { api.libraryQuizStats().then(setQuizStats).catch(() => {}); }, []);
 
   // a book Dialogue Link pulled up: show the passage it just shared, without moving on
   useEffect(() => {
@@ -99,6 +101,7 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
           <Stat v={reading.length} k="ON YOUR DESK" />
           <Stat v={finished.length} k="FINISHED" />
           <Stat v={textbooks} k="TEXTBOOKS" />
+          <Stat v={quizStats && quizStats.total ? `${Math.round((quizStats.correct / quizStats.total) * 100)}%` : '—'} k={quizStats?.rounds ? `QUIZ SCORE · ${quizStats.rounds}` : 'QUIZ SCORE'} />
         </View>
       </View>
 
@@ -116,6 +119,7 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
           onClose={() => setOpen(null)}
           onRemove={() => remove(open.item)}
           onAsk={onAsk}
+          onQuizStats={setQuizStats}
         />
       )}
 
@@ -183,7 +187,7 @@ const styles = StyleSheet.create({
   gateWide: { flexDirection: 'row', alignItems: 'flex-end' },
   welcome: { fontSize: 34, lineHeight: 38, minHeight: 76, color: colors.mint },
   lang: { fontSize: 9, letterSpacing: 2.4, color: colors.greenBorder },
-  stats: { flexDirection: 'row', gap: 22 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 22 },
   stat: { minWidth: 64 },
   statV: { fontSize: 30, color: colors.mint },
   statK: { fontSize: 8.5, letterSpacing: 1.6, color: colors.greenDim },

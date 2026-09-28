@@ -1,5 +1,5 @@
 import { callEndpoint, ServerpodClientError, SERVERPOD_BASE_URL } from './serverpodClient';
-import type { ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
+import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
   AlertNote,
   ChatResult,
   ConceptsGraph,
@@ -355,6 +355,10 @@ export const api = {
   libraryReadOn: (id: number, restart = false, part?: number) =>
     callEndpoint<ReadingSlice>('library', 'readOn', part == null ? { id, restart } : { id, restart, part }),
   libraryCurrent: (id: number) => callEndpoint<ReadingSlice>('library', 'current', { id }),
+  libraryQuiz: (id: number, passage: string) => callEndpoint<QuizQuestion[]>('library', 'quiz', { id, passage }),
+  libraryQuizDone: (id: number, correct: number, total: number, missed: string[]) =>
+    callEndpoint<QuizStats>('library', 'quizDone', { id, correct, total, missed }),
+  libraryQuizStats: () => callEndpoint<QuizStats>('library', 'quizStats', {}),
   libraryContents: (id: number) => callEndpoint<WorkPartInfo[]>('library', 'contents', { id }),
   libraryOpenWork: (source: string, id: string) => callEndpoint<ReadingSlice | null>('library', 'openWork', { source, id }),
   libraryTextbooks: () => callEndpoint<WorkHit[]>('library', 'textbooks', {}),

@@ -5,6 +5,9 @@ import { colors } from '../../theme';
 import { api } from '../../api/client';
 import type { ReadingItem, ReadingSlice, WorkPartInfo } from '../../api/types';
 import { BookCover } from './BookCover';
+import { Passage } from './Passage';
+import { QuizPanel } from './QuizPanel';
+import type { QuizStats } from '../../api/types';
 
 export const serif = Platform.select({ web: 'Georgia, "Iowan Old Style", "Noto Serif", "Times New Roman", serif', ios: 'Georgia', default: 'serif' });
 
@@ -40,7 +43,7 @@ function Attribution({ item }: { item: ReadingItem }) {
 
 /** Where reading happens: the passage in a book face, a thread of sections you can jump
  *  along, paper or night pages, and a focus mode that fills the screen. */
-export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, onRemove, onAsk }: {
+export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, onRemove, onAsk, onQuizStats }: {
   slice: ReadingSlice;
   busy: boolean;
   onNext: () => void;
@@ -49,6 +52,7 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
   onClose: () => void;
   onRemove: () => void;
   onAsk?: () => void;
+  onQuizStats?: (s: QuizStats) => void;
 }) {
   const item = slice.item;
   const narrow = useWindowDimensions().width < 600;
@@ -57,9 +61,11 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
   const [focus, setFocus] = useState(false);
   const [toc, setToc] = useState<WorkPartInfo[] | null>(null);
   const [showToc, setShowToc] = useState(false);
+  const [quiz, setQuiz] = useState(false);
   const parts = inParts(item);
 
   useEffect(() => { setToc(null); setShowToc(false); }, [item.id]);
+  useEffect(() => { setQuiz(false); }, [slice.offset, item.id, item.partIndex]);
   const openToc = async () => {
     setShowToc((v) => !v);
     if (!toc) setToc(await api.libraryContents(item.id).catch(() => []));
@@ -139,19 +145,15 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
 
       <ScrollView style={focus ? { flex: 1 } : undefined} contentContainerStyle={styles.paper}>
         {slice.text ? (
-          <Mono
-            selectable
-            style={[styles.passage, {
-              fontFamily: serif, fontSize: size, lineHeight: size * 1.7, color: ink,
-              writingDirection: rtl ? 'rtl' : 'ltr', textAlign: rtl ? 'right' : 'left',
-            }]}
-          >
-            {slice.text.trim()}
-          </Mono>
+          <Passage text={slice.text} font={serif} size={size} color={ink} muted={night ? '#999' : colors.greenDim} rtl={rtl} />
         ) : (
           <Mono style={[styles.pct, { textAlign: 'center' }]}>You've read all of it. Start over, or pick something new.</Mono>
         )}
       </ScrollView>
+
+      {quiz && slice.text ? (
+        <QuizPanel itemId={item.id} passage={slice.text} night={night} onClose={() => setQuiz(false)} onNext={slice.finished ? undefined : () => { setQuiz(false); onNext(); }} onStats={onQuizStats} />
+      ) : null}
 
       <View style={styles.bar}>
         {!slice.finished ? (
@@ -161,6 +163,7 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
         ) : (
           <Mono style={[styles.pct, { color: ink }]}>Finished. Well read.</Mono>
         )}
+        {slice.text ? <Ghost label={quiz ? 'HIDE QUIZ' : 'QUIZ ME'} onPress={() => setQuiz((v) => !v)} night={night} strong /> : null}
         {onAsk && !focus && <Ghost label="ASK WYRD ABOUT THIS" onPress={onAsk} night={night} />}
         {parts && <Ghost label="CONTENTS" onPress={openToc} night={night} />}
         <Ghost label="START OVER" onPress={onRestart} night={night} />
@@ -188,10 +191,10 @@ function Tool({ label, onPress, night }: { label: string; onPress: () => void; n
   );
 }
 
-function Ghost({ label, onPress, night, danger }: { label: string; onPress: () => void; night: boolean; danger?: boolean }) {
+function Ghost({ label, onPress, night, danger, strong }: { label: string; onPress: () => void; night: boolean; danger?: boolean; strong?: boolean }) {
   const c = danger ? colors.danger : night ? '#ddd' : colors.mint;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.ghost, { borderColor: danger ? colors.danger : night ? '#444' : colors.greenBorder }, pressed && { opacity: 0.6 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.ghost, { borderColor: danger ? colors.danger : strong ? c : night ? '#444' : colors.greenBorder }, strong && { borderWidth: 2 }, pressed && { opacity: 0.6 }]}>
       <Mono style={[styles.ghostText, { color: c }]}>{label}</Mono>
     </Pressable>
   );
