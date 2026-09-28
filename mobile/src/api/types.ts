@@ -126,6 +126,16 @@ export interface FilterReport {
   recent: QuarantinedItem[];
 }
 
+export interface TrustScore { id?: number; kind: string; key: string; good: number; bad: number; score: number; updatedAt: string }
+export interface TrustReport {
+  trustedSources: TrustScore[];
+  doubtedSources: TrustScore[];
+  trustedTopics: TrustScore[];
+  doubtedTopics: TrustScore[];
+  tracked: number;
+  evidence: number;
+}
+
 export type GrowthRange = 'day' | 'week' | 'month' | 'all';
 
 export interface ConceptExample {

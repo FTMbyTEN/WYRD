@@ -12,6 +12,7 @@ import type {
   FeedItem,
   GrowthSnapshot,
   GrowthRange,
+  TrustReport,
   FilterReport,
   LearningStats,
   Firing,
@@ -347,6 +348,7 @@ export const api = {
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
   /** Growth averaged over a readable span; see GrowthEndpoint.getHistory. */
   learning: () => callEndpoint<LearningStats>('growth', 'getLearning', {}, { authenticated: false }),
+  trust: () => callEndpoint<TrustReport>('feed', 'getTrust', {}, { authenticated: false }),
   filterReport: () => callEndpoint<FilterReport>('feed', 'getFilterReport', {}, { authenticated: false }),
   growthHistory: (range: GrowthRange) =>
     callEndpoint<SpGrowthSnapshot[]>('growth', 'getHistory', { range }, { authenticated: false }).then((es) => es.map(adaptGrowthSnapshot)),
