@@ -164,7 +164,7 @@ export function useConversations(limit = 50) {
   useEffect(
     () =>
       wyrdStream.subscribe('chat', (turn) => {
-        const t = turn as { userText: string; botText: string; timestamp: string };
+        const t = turn as { id?: number; userText: string; botText: string; timestamp: string };
         setData((prev) =>
           prev ? { total: prev.total + 1, turns: [...prev.turns, t] } : { total: 1, turns: [t] },
         );

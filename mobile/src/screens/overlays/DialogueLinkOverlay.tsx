@@ -66,7 +66,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
-      wyrdStream.publish('chat', { userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      wyrdStream.publish('chat', { id: result.turnId, userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
       if (tts && result.reply) speakAsWyrd(result.reply);
@@ -85,7 +85,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     setPending({ text: shown, at: new Date().toISOString() });
     try {
       const result = await api.photo(base64, caption || undefined, trackingNote);
-      wyrdStream.publish('chat', { userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       if (tts && result.reply) speakAsWyrd(result.reply);
       return result.reply;
@@ -231,7 +231,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         {turns.map((t, i) => (
           <View key={`${t.timestamp}-${i}`} style={styles.turn}>
             {t.userText ? <Bubble mine text={t.userText} at={t.timestamp} /> : null}
-            {t.botText ? <Bubble text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} /> : null}
+            {t.botText ? <Bubble text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} turnId={t.id} rating={t.rating ?? null} /> : null}
           </View>
         ))}
 
@@ -266,7 +266,7 @@ function timeLabel(iso: string) {
   return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5);
 }
 
-function Bubble({ text, at, mine, recalled }: { text: string; at: string; mine?: boolean; recalled?: boolean }) {
+function Bubble({ text, at, mine, recalled, turnId, rating }: { text: string; at: string; mine?: boolean; recalled?: boolean; turnId?: number; rating?: number | null }) {
   if (mine) {
     return (
       <View style={styles.mineRow}>
@@ -297,8 +297,35 @@ function Bubble({ text, at, mine, recalled }: { text: string; at: string; mine?:
             ),
           )}
         </View>
-        <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}{recalled ? ' · ↺ from memory, no AI call' : ''}</Mono>
+        <View style={styles.metaRow}>
+          <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}{recalled ? ' · ↺ from memory, no AI call' : ''}</Mono>
+          {turnId != null && <Thumbs turnId={turnId} initial={rating ?? null} />}
+        </View>
       </View>
+    </View>
+  );
+}
+
+/** 👍 / 👎 on one of WYRD's replies: trains the answer behind it (tap again to clear). */
+function Thumbs({ turnId, initial }: { turnId: number; initial: number | null }) {
+  const [rating, setRating] = useState<number | null>(initial);
+  const [thanks, setThanks] = useState(false);
+  const choose = (r: 1 | -1) => {
+    const next = rating === r ? 0 : r;
+    const before = rating;
+    setRating(next === 0 ? null : next);
+    setThanks(next !== 0);
+    api.rateReply(turnId, next).catch(() => setRating(before));
+  };
+  return (
+    <View style={styles.thumbs}>
+      <Pressable onPress={() => choose(1)} accessibilityLabel="Helpful reply" style={[styles.thumb, rating === 1 && styles.thumbOn]}>
+        <Mono style={[styles.thumbText, rating === 1 && styles.thumbTextOn]}>👍</Mono>
+      </Pressable>
+      <Pressable onPress={() => choose(-1)} accessibilityLabel="Unhelpful reply" style={[styles.thumb, rating === -1 && styles.thumbOn]}>
+        <Mono style={[styles.thumbText, rating === -1 && styles.thumbTextOn]}>👎</Mono>
+      </Pressable>
+      {thanks && rating != null && <Mono style={styles.thanks}>{rating === 1 ? 'noted — WYRD will reuse this' : 'noted — WYRD will rethink this'}</Mono>}
     </View>
   );
 }
@@ -370,6 +397,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13, paddingVertical: 10, borderRadius: 16, borderBottomLeftRadius: 4, gap: 8,
   },
   theirsText: { fontSize: 13.5, lineHeight: 20, color: colors.mint },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  thumbs: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  thumb: { borderWidth: 1, borderColor: 'transparent', borderRadius: 10, paddingHorizontal: 5, paddingVertical: 1, opacity: 0.55 },
+  thumbOn: { borderColor: colors.green, opacity: 1 },
+  thumbText: { fontSize: 11 },
+  thumbTextOn: {},
+  thanks: { fontSize: 9.5, color: colors.greenDim },
   timeLeft: { marginTop: 3, fontSize: 9, color: colors.greenBorder },
 
   code: { borderWidth: HAIRLINE, borderColor: colors.greenBorder, backgroundColor: 'rgba(0,0,0,0.035)', padding: 10, borderRadius: 6 },

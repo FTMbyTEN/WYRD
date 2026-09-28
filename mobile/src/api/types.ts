@@ -184,6 +184,8 @@ export interface ChatResult {
   reply: string;
   /** answered from a learned answer, without calling the AI */
   fromMemory?: boolean;
+  /** the conversation turn, so this reply can be rated */
+  turnId?: number;
   block: { timestamp: string; [k: string]: unknown };
   comparison: string;
   candidateCount: number;
@@ -194,6 +196,8 @@ export interface ChatResult {
 }
 
 export interface ConversationTurn {
+  id?: number;
+  rating?: number | null;
   userText?: string;
   botText?: string;
   timestamp: string;

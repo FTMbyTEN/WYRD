@@ -85,13 +85,15 @@ function adaptProfile(p: SpUserProfile): Profile {
 }
 
 interface SpConversationTurn {
+  id?: number;
+  rating?: number | null;
   authUserId: string;
   userText: string;
   botText: string;
   timestamp: string;
 }
 function adaptConversationTurn(t: SpConversationTurn): ConversationTurn {
-  return { userText: t.userText, botText: t.botText, timestamp: t.timestamp };
+  return { id: t.id, rating: t.rating ?? null, userText: t.userText, botText: t.botText, timestamp: t.timestamp };
 }
 
 interface SpChatAction {
@@ -102,6 +104,7 @@ interface SpChatAction {
 interface SpChatReply {
   reply: string;
   fromMemory?: boolean | null;
+  turnId?: number | null;
   mind: SpMind;
   action: SpChatAction | null;
 }
@@ -109,6 +112,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
   return {
     reply: r.reply,
     fromMemory: r.fromMemory ?? false,
+    turnId: r.turnId ?? undefined,
     block: { timestamp: r.mind.updatedAt },
     comparison: '',
     candidateCount: 1,
@@ -253,6 +257,8 @@ export const api = {
   sightings: (limit = 3) => callEndpoint<Sighting[]>('photo', 'getSightings', { limit }),
   photo: (imageBase64Jpeg: string, caption?: string, trackingNote?: string) =>
     callEndpoint<SpChatReply>('photo', 'describe', { imageBase64Jpeg, caption: caption || null, trackingNote: trackingNote || null }).then(adaptChatResult),
+  /** 👍 1, 👎 -1, or 0 to clear, on one of WYRD's replies to you. */
+  rateReply: (turnId: number, rating: 1 | -1 | 0) => callEndpoint<void>('chat', 'rate', { turnId, rating }),
   conversations: async (limit = 50) => {
     const turns = await callEndpoint<SpConversationTurn[]>('chat', 'getHistory', { limit });
     return { total: turns.length, turns: turns.map(adaptConversationTurn) };
