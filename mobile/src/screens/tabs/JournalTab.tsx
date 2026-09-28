@@ -1,121 +1,388 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
-import { useDiary } from '../../api/hooks';
+import { useDiary, useMind } from '../../api/hooks';
+import type { DiaryEntry } from '../../api/types';
 import { FeedTab } from './FeedTab';
 import { DreamsCosmos } from '../../components/DreamsCosmos';
 import { NeuralReasoning } from '../../components/NeuralReasoning';
 
 type Journal = 'DIARY' | 'DREAMS' | 'REASONING' | 'FEED';
-const JOURNALS: Journal[] = ['DIARY', 'DREAMS', 'REASONING', 'FEED'];
 
-/** JOURNAL: everything WYRD writes (diary, dreams, reasoning) and everything it takes in (the net
- *  feed and vocabulary) in one tab, switched by the segmented control at the top. */
+const serif = Platform.select({ web: 'Georgia, "Iowan Old Style", "Noto Serif", "Times New Roman", serif', ios: 'Georgia', default: 'serif' });
+
+const SECTIONS: { key: Journal; name: string; what: string; Icon: (p: { c: string }) => React.ReactElement }[] = [
+  { key: 'DIARY', name: 'DIARY', what: 'what WYRD writes each day', Icon: PenIcon },
+  { key: 'DREAMS', name: 'DREAMS', what: 'memories recombined at night', Icon: MoonIcon },
+  { key: 'REASONING', name: 'REASONING', what: 'its mind, firing', Icon: NodesIcon },
+  { key: 'FEED', name: 'FEED', what: 'everything it takes in', Icon: WaveIcon },
+];
+
+const DAY = 86400000;
+const dateOf = (e: DiaryEntry) => new Date(`${e.date}T12:00:00`);
+const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
+/** JOURNAL: WYRD's notebook. A masthead with today's date and mood; folder tabs for the diary,
+ *  dreams, reasoning and feed; and the diary itself as a ruled notebook page, with a calendar of
+ *  the days it wrote and an index of every entry. */
 export function JournalTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: {
   onOpenConcept: () => void;
   onOpenGrowth: () => void;
   onOpenGlobe: () => void;
 }) {
+  const { width } = useWindowDimensions();
+  const wide = width >= 1000;
   const [journal, setJournal] = useState<Journal>('DIARY');
-  const { entries: diary } = useDiary();
-  const [diaryI, setDiaryI] = useState(0);
-  const entry = diary[diaryI];
+  const { entries: diary } = useDiary(120);
+  const { mind } = useMind();
+
+  const first = diary.length ? dateOf(diary[diary.length - 1]) : new Date();
+  const volume = Math.max(1, Math.floor((Date.now() - first.getTime()) / (DAY * 30)) + 1);
+  const today = new Date();
 
   return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.segRow}>
-        {JOURNALS.map((j) => {
-          const on = journal === j;
+    <ScrollView contentContainerStyle={[styles.page, wide && styles.pageWide]} stickyHeaderIndices={[]}>
+      {/* masthead */}
+      <View style={styles.masthead}>
+        <View style={styles.mastRule} />
+        <View style={styles.mastRow}>
+          <Mono style={styles.mastSide}>VOL. {volume} · NO. {diary.length}</Mono>
+          <Mono style={[styles.mastSide, { textAlign: 'right' }]}>
+            {today.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()}
+          </Mono>
+        </View>
+        <Text style={[styles.mastTitle, { fontFamily: serif }, wide && { fontSize: 64, lineHeight: 70 }]}>The Journal of WYRD</Text>
+        <View style={styles.mastRow}>
+          <Mono style={styles.mastSide}>A MIND, KEPT IN ITS OWN WORDS</Mono>
+          <Mono style={[styles.mastSide, { textAlign: 'right' }]}>
+            {mind ? `MOOD · ${mind.mood.toUpperCase()}${mind.focusTopic ? ` · THINKING ABOUT ${mind.focusTopic.toUpperCase()}` : ''}` : ''}
+          </Mono>
+        </View>
+        <View style={styles.mastRuleDouble} />
+      </View>
+
+      {/* folder tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.tabs}>
+        {SECTIONS.map(({ key, name, what, Icon }) => {
+          const on = key === journal;
           return (
-            <Pressable key={j} onPress={() => setJournal(j)} style={[styles.segBtn, on && styles.segBtnOn]}>
-              <Mono style={[styles.segText, on && styles.segTextOn]}>{j}</Mono>
+            <Pressable
+              key={key}
+              onPress={() => setJournal(key)}
+              style={({ pressed }) => [styles.tab, on && styles.tabOn, pressed && !on && { opacity: 0.7 }]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+            >
+              <Icon c={on ? colors.mint : colors.greenDim} />
+              <View style={{ flexShrink: 1 }}>
+                <Mono style={[styles.tabName, on && { color: colors.mint }]}>{name}</Mono>
+                {wide && <Mono numberOfLines={1} style={styles.tabWhat}>{what}</Mono>}
+              </View>
+              {key === 'DIARY' && diary.length > 0 && <Mono style={[styles.count, on && styles.countOn]}>{diary.length}</Mono>}
             </Pressable>
           );
         })}
+      </ScrollView>
+
+      <View style={[styles.sheet, !wide && { padding: 8 }]}>
+        {journal === 'DIARY' && <Diary entries={diary} wide={wide} />}
+        {journal === 'DREAMS' && <View style={styles.embed}><DreamsCosmos /></View>}
+        {journal === 'REASONING' && <View style={styles.embed}><NeuralReasoning /></View>}
+        {journal === 'FEED' && (
+          <View style={[styles.embed, { maxWidth: 900, alignSelf: 'center', width: '100%' }]}>
+            <FeedTab onOpenConcept={onOpenConcept} onOpenGrowth={onOpenGrowth} onOpenGlobe={onOpenGlobe} />
+          </View>
+        )}
       </View>
+    </ScrollView>
+  );
+}
 
-      {journal === 'FEED' && (
-        <FeedTab onOpenConcept={onOpenConcept} onOpenGrowth={onOpenGrowth} onOpenGlobe={onOpenGlobe} />
-      )}
+// ---------------------------------------------------------------------------------------------
+// the diary
 
-      {journal === 'DREAMS' && <DreamsCosmos />}
+function Diary({ entries, wide }: { entries: DiaryEntry[]; wide: boolean }) {
+  const [i, setI] = useState(0);
+  const entry = entries[i];
+  useEffect(() => { if (i >= entries.length && entries.length) setI(0); }, [entries.length, i]);
 
-      {journal === 'REASONING' && <NeuralReasoning />}
+  // turning to another entry: a short fade
+  const turn = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    turn.setValue(0);
+    Animated.timing(turn, { toValue: 1, duration: 320, useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [i, turn]);
 
-      {journal === 'DIARY' && (
-        <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRail}>
-            {diary.map((d, i) => {
-              const active = i === diaryI;
-              return (
-                <Pressable
-                  key={d.date}
-                  onPress={() => setDiaryI(i)}
-                  style={[
-                    styles.dateChip,
-                    { borderColor: active ? colors.green : colors.greenBorder, backgroundColor: active ? 'rgba(0,0,0,0.048)' : 'rgba(255,255,255,0.7)' },
-                  ]}
-                >
-                  <Mono style={{ fontSize: 10, letterSpacing: 1, color: active ? colors.green : colors.greenDim }}>
-                    {i === 0 ? 'TODAY' : new Date(d.date).toDateString().slice(0, 3).toUpperCase()}
-                  </Mono>
-                  <Mono style={{ fontSize: 9, opacity: 0.75, color: active ? colors.green : colors.greenDim }}>{d.date.slice(5)}</Mono>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <ScrollView contentContainerStyle={styles.content}>
-            <Display style={styles.heading}>{'>_ DIARY'}</Display>
-            <Mono style={styles.subheading}>one real entry per day, written by WYRD itself</Mono>
-            {entry ? (
-              <>
-                <View style={styles.entryHeadRow}>
-                  <Display style={styles.entryDate}>{entry.date}</Display>
-                  <Mono style={styles.entryMeta}>
-                    WRITTEN {new Date(entry.timestamp).toTimeString().slice(0, 5)} · UNPROMPTED
-                  </Mono>
-                </View>
-                <Mono style={styles.entryText}>{entry.content}</Mono>
-                <Mono style={styles.entryCount}>ENTRY {diaryI + 1} OF {diary.length} RETAINED</Mono>
-              </>
-            ) : (
-              <Mono style={styles.empty}>no diary entry yet — one gets written once real memory exists</Mono>
-            )}
-          </ScrollView>
-        </>
-      )}
+  if (!entries.length) {
+    return (
+      <View style={styles.emptyBox}>
+        <PenIcon c={colors.greenBorder} size={40} />
+        <Text style={[styles.emptyTitle, { fontFamily: serif }]}>The first page is still blank.</Text>
+        <Mono style={styles.muted}>WYRD writes one entry a day, once it has lived enough of one to write about.</Mono>
+      </View>
+    );
+  }
+
+  const index = (
+    <View style={{ gap: 18 }}>
+      <Calendar entries={entries} selected={entry} onPick={(e) => setI(entries.indexOf(e))} />
+      <View style={{ gap: 6 }}>
+        <Mono style={styles.label}>INDEX · {entries.length} ENTRIES</Mono>
+        <ScrollView style={{ maxHeight: wide ? 420 : 220 }} nestedScrollEnabled>
+          {entries.map((e, k) => {
+            const on = k === i;
+            return (
+              <Pressable key={e.timestamp} onPress={() => setI(k)} style={({ pressed }) => [styles.indexRow, on && styles.indexRowOn, pressed && { opacity: 0.7 }]}>
+                <Mono style={[styles.indexDate, on && { color: '#fff' }]}>{dateOf(e).toLocaleDateString(undefined, { day: '2-digit', month: 'short' }).toUpperCase()}</Mono>
+                <Text numberOfLines={1} style={[styles.indexLine, { fontFamily: serif }, on && { color: '#fff' }]}>{e.content.split(/(?<=[.!?])\s/)[0]}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={[styles.diary, wide && styles.diaryWide]}>
+      {wide && <View style={styles.side}>{index}</View>}
+      <View style={{ flex: 1, minWidth: 0, gap: 14 }}>
+        <Animated.View style={{ opacity: turn, transform: [{ translateY: turn.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
+          <NotebookPage entry={entry} number={entries.length - i} narrow={!wide} />
+        </Animated.View>
+        <View style={styles.pager}>
+          <Pressable disabled={i >= entries.length - 1} onPress={() => setI(i + 1)} style={({ pressed }) => [styles.pageBtn, i >= entries.length - 1 && { opacity: 0.3 }, pressed && { opacity: 0.6 }]}>
+            <Mono style={styles.pageBtnText}>← EARLIER</Mono>
+          </Pressable>
+          <Mono style={styles.muted}>ENTRY {entries.length - i} OF {entries.length}</Mono>
+          <Pressable disabled={i === 0} onPress={() => setI(i - 1)} style={({ pressed }) => [styles.pageBtn, i === 0 && { opacity: 0.3 }, pressed && { opacity: 0.6 }]}>
+            <Mono style={styles.pageBtnText}>LATER →</Mono>
+          </Pressable>
+        </View>
+        {!wide && index}
+      </View>
     </View>
   );
 }
 
+/** One entry on a ruled notebook page: a red-less margin line, the date, and the words. */
+function NotebookPage({ entry, number, narrow }: { entry: DiaryEntry; number: number; narrow?: boolean }) {
+  const margin = narrow ? 30 : 54;
+  const d = dateOf(entry);
+  const written = new Date(entry.timestamp);
+  const n = words(entry.content);
+  const text = entry.content.trim();
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  // the most striking line, pulled out: the longest sentence that isn't the first
+  const pull = sentences.length > 2 ? [...sentences.slice(1)].sort((a, b) => b.length - a.length)[0] : null;
+  const LINE = 30;
+
+  return (
+    <View style={[styles.notebook, narrow && { paddingLeft: 44, paddingRight: 16 }]}>
+      {/* ruling */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg width="100%" height="100%">
+          {[...Array(60)].map((_, k) => (
+            <Line key={k} x1="0" x2="100%" y1={118 + k * LINE} y2={118 + k * LINE} stroke="#e4e4e2" strokeWidth={1} />
+          ))}
+          <Line x1={margin} x2={margin} y1="0" y2="100%" stroke="#bdbdbd" strokeWidth={1} />
+          <Line x1={margin + 4} x2={margin + 4} y1="0" y2="100%" stroke="#dcdcdc" strokeWidth={1} />
+        </Svg>
+        {/* binding holes */}
+        {!narrow && [0.15, 0.5, 0.85].map((t) => <View key={t} style={[styles.hole, { top: `${t * 100}%` as `${number}%` }]} />)}
+      </View>
+
+      <View style={styles.pageHead}>
+        <View style={{ flex: 1 }}>
+          <Mono style={styles.label}>{d.toLocaleDateString(undefined, { weekday: 'long' }).toUpperCase()}</Mono>
+          <Display style={[styles.bigDate, narrow && { fontSize: 26, lineHeight: 30 }]}>{d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</Display>
+        </View>
+        <View style={styles.stamp}>
+          <Mono style={styles.stampNo}>№ {number}</Mono>
+          <Mono style={styles.stampTime}>{written.toTimeString().slice(0, 5)}</Mono>
+        </View>
+      </View>
+
+      <Text selectable style={[styles.entryText, { fontFamily: serif, lineHeight: LINE }, narrow && { fontSize: 16 }]}>
+        <Text style={styles.dropCap}>{text.charAt(0)}</Text>
+        {text.slice(1)}
+      </Text>
+
+      {pull && pull.length > 40 && (
+        <View style={styles.pull}>
+          <Text style={[styles.pullText, { fontFamily: serif }]}>“{pull.replace(/[.!?]$/, '')}”</Text>
+        </View>
+      )}
+
+      <View style={styles.signoff}>
+        <Text style={[styles.sig, { fontFamily: serif }]}>— W.</Text>
+        <Mono style={styles.muted}>{n} WORDS · WRITTEN UNPROMPTED AT {written.toTimeString().slice(0, 5)}</Mono>
+      </View>
+    </View>
+  );
+}
+
+/** Twelve weeks of days; a filled square is a day WYRD wrote. */
+function Calendar({ entries, selected, onPick }: { entries: DiaryEntry[]; selected?: DiaryEntry; onPick: (e: DiaryEntry) => void }) {
+  const byDay = useMemo(() => {
+    const m = new Map<string, DiaryEntry>();
+    for (const e of entries) if (!m.has(e.date)) m.set(e.date, e);
+    return m;
+  }, [entries]);
+  const weeks = 12;
+  const end = new Date();
+  end.setHours(12, 0, 0, 0);
+  const start = new Date(end.getTime() - ((weeks * 7 - 1) - ((6 - end.getDay() + 7) % 7)) * DAY);
+  start.setDate(start.getDate() - start.getDay()); // back to Sunday
+  const cols: Date[][] = [];
+  for (let w = 0; w < weeks; w++) cols.push([...Array(7)].map((_, d) => new Date(start.getTime() + (w * 7 + d) * DAY)));
+  const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const streak = (() => {
+    let n = 0;
+    for (let d = new Date(end); byDay.has(key(d)); d = new Date(d.getTime() - DAY)) n++;
+    return n;
+  })();
+
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Mono style={styles.label}>THE LAST 12 WEEKS</Mono>
+        <Mono style={styles.label}>{streak > 1 ? `${streak}-DAY STREAK` : `${byDay.size} DAYS WRITTEN`}</Mono>
+      </View>
+      <View style={styles.cal}>
+        {cols.map((col, w) => (
+          <View key={w} style={styles.calCol}>
+            {col.map((d) => {
+              const e = byDay.get(key(d));
+              const on = selected && e && e.date === selected.date;
+              const future = d.getTime() > end.getTime();
+              return (
+                <Pressable
+                  key={key(d)}
+                  disabled={!e}
+                  onPress={() => e && onPick(e)}
+                  accessibilityLabel={e ? `Entry for ${key(d)}` : undefined}
+                  style={[styles.calDay, e ? styles.calDayOn : null, on && styles.calDaySel, future && { opacity: 0.25 }]}
+                />
+              );
+            })}
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+        <View style={[styles.calDay, { width: 10, height: 10 }]} /><Mono style={styles.legend}>no entry</Mono>
+        <View style={[styles.calDay, styles.calDayOn, { width: 10, height: 10 }]} /><Mono style={styles.legend}>an entry</Mono>
+        <View style={[styles.calDay, styles.calDaySel, { width: 10, height: 10 }]} /><Mono style={styles.legend}>reading</Mono>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// icons
+
+function PenIcon({ c, size = 18 }: { c: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20">
+      <Path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z" stroke={c} strokeWidth={1.4} fill="none" strokeLinejoin="round" />
+      <Line x1="11.5" y1="5.5" x2="14.5" y2="8.5" stroke={c} strokeWidth={1.4} />
+      <Line x1="3" y1="18" x2="17" y2="18" stroke={c} strokeWidth={1.4} />
+    </Svg>
+  );
+}
+function MoonIcon({ c }: { c: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 20 20">
+      <Path d="M13 3 A7 7 0 1 0 17 13 A5.5 5.5 0 1 1 13 3 Z" stroke={c} strokeWidth={1.4} fill="none" />
+      <Circle cx="15.5" cy="4.5" r="0.9" fill={c} />
+    </Svg>
+  );
+}
+function NodesIcon({ c }: { c: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 20 20">
+      <Line x1="5" y1="6" x2="14" y2="5" stroke={c} strokeWidth={1.3} />
+      <Line x1="5" y1="6" x2="10" y2="15" stroke={c} strokeWidth={1.3} />
+      <Line x1="14" y1="5" x2="10" y2="15" stroke={c} strokeWidth={1.3} />
+      <Circle cx="5" cy="6" r="2.2" fill={c} /><Circle cx="14" cy="5" r="2.2" fill={c} /><Circle cx="10" cy="15" r="2.2" fill={c} />
+    </Svg>
+  );
+}
+function WaveIcon({ c }: { c: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 20 20">
+      <Path d="M2 10 Q5 4 8 10 T14 10 T20 10" stroke={c} strokeWidth={1.4} fill="none" />
+      <Rect x="2" y="14" width="16" height="1.4" fill={c} />
+    </Svg>
+  );
+}
+
 const styles = StyleSheet.create({
-  segRow: {
-    flexDirection: 'row', margin: 14, marginBottom: 0, padding: 3,
-    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999,
+  page: { padding: 16, paddingBottom: 48, gap: 0 },
+  pageWide: { maxWidth: 1120, width: '100%', alignSelf: 'center', paddingHorizontal: 28 },
+  muted: { fontSize: 10, letterSpacing: 1, color: colors.greenDim },
+  label: { fontSize: 9, letterSpacing: 2, color: colors.greenDim },
+
+  masthead: { gap: 6, marginBottom: 18 },
+  mastRule: { height: 3, backgroundColor: colors.mint },
+  mastRuleDouble: { height: 5, borderTopWidth: 1, borderBottomWidth: 2, borderColor: colors.mint },
+  mastRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
+  mastSide: { fontSize: 9, letterSpacing: 1.8, color: colors.greenDim, flexShrink: 1 },
+  mastTitle: { fontSize: 38, lineHeight: 44, color: colors.mint, textAlign: 'center', fontWeight: '700', letterSpacing: -0.5, marginVertical: 4 },
+
+  tabs: { flexDirection: 'row', gap: 4, paddingLeft: 8, alignItems: 'flex-end' },
+  tab: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderBottomWidth: 0, borderColor: colors.greenBorderDim, backgroundColor: '#f1f1ef',
+    borderTopLeftRadius: 8, borderTopRightRadius: 8, marginBottom: -1, flexShrink: 1,
   },
-  segBtn: { flex: 1, borderRadius: 999, paddingVertical: 8, alignItems: 'center' },
-  segBtnOn: { backgroundColor: colors.green },
-  segText: { fontSize: 9.5, letterSpacing: 1.5, color: colors.greenDim },
-  segTextOn: { color: colors.black },
-  content: { padding: 18, paddingBottom: 40 },
-  heading: { fontSize: 20, letterSpacing: 1 },
-  subheading: { marginTop: 2, fontSize: 9.5, letterSpacing: 1, color: colors.greenDim },
-  empty: { marginTop: 16, fontSize: 11.5, color: colors.greenBorderDim },
-  dreamRow: { borderLeftWidth: 2, borderLeftColor: colors.greenBorder, paddingLeft: 12 },
-  dreamTime: { fontSize: 9, letterSpacing: 1, color: colors.greenDim },
-  dreamText: { marginTop: 4, fontSize: 13.5, lineHeight: 23, color: colors.mintBright, fontStyle: 'italic' },
-  reasoningCard: { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 4, padding: 12 },
-  reasoningFile: { fontSize: 9, letterSpacing: 1, color: colors.greenBorderDim },
-  reasoningBody: { marginTop: 5, fontSize: 12, lineHeight: 18, color: colors.mint },
-  dateRail: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim, paddingHorizontal: 14, paddingVertical: 10 },
-  dateChip: { borderWidth: 1, borderRadius: 2, paddingHorizontal: 11, paddingVertical: 8, marginRight: 7 },
-  entryHeadRow: {
-    marginTop: 18, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-    gap: 10, borderBottomWidth: 1, borderBottomColor: colors.greenBorder, paddingBottom: 10,
+  tabOn: { backgroundColor: '#fff', borderColor: colors.mint, zIndex: 2, paddingVertical: 12 },
+  tabName: { fontSize: 10.5, letterSpacing: 2, color: colors.greenDim },
+  tabWhat: { fontSize: 9, color: colors.greenBorder },
+  count: { fontSize: 9, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorderDim, paddingHorizontal: 5, borderRadius: 8 },
+  countOn: { color: '#fff', backgroundColor: colors.mint, borderColor: colors.mint },
+  sheet: { borderWidth: 1, borderColor: colors.mint, backgroundColor: '#fff', padding: 16, minHeight: 420 },
+  embed: { minHeight: 560 },
+
+  diary: { gap: 18 },
+  diaryWide: { flexDirection: 'row', gap: 28, alignItems: 'flex-start' },
+  side: { width: 300, gap: 18 },
+
+  notebook: {
+    backgroundColor: '#fdfdfb', borderWidth: 1, borderColor: colors.greenBorderDim, paddingLeft: 76, paddingRight: 28, paddingTop: 22, paddingBottom: 26,
+    overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 },
   },
-  entryDate: { fontSize: 30, lineHeight: 30 },
-  entryMeta: { fontSize: 10, letterSpacing: 1, color: colors.greenDim },
-  entryText: { marginTop: 16, fontSize: 14, lineHeight: 24.5, color: colors.mint },
-  entryCount: { marginTop: 22, textAlign: 'center', fontSize: 9.5, letterSpacing: 1, color: colors.greenBorderDim },
+  hole: { position: 'absolute', left: 18, width: 14, height: 14, borderRadius: 7, backgroundColor: '#eeeeec', borderWidth: 1, borderColor: '#d6d6d4' },
+  pageHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 90 },
+  bigDate: { fontSize: 36, lineHeight: 40, color: colors.mint },
+  stamp: { borderWidth: 2, borderColor: colors.mint, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', transform: [{ rotate: '4deg' }] },
+  stampNo: { fontSize: 13, color: colors.mint, letterSpacing: 1 },
+  stampTime: { fontSize: 9, color: colors.greenDim, letterSpacing: 1.4 },
+  entryText: { fontSize: 18, color: colors.mint, marginTop: 2 },
+  dropCap: { fontSize: 44, fontWeight: '700' },
+  pull: { marginTop: 22, borderLeftWidth: 3, borderLeftColor: colors.mint, paddingLeft: 16, paddingVertical: 6 },
+  pullText: { fontSize: 20, lineHeight: 28, fontStyle: 'italic', color: colors.mint },
+  signoff: { marginTop: 24, gap: 4, alignItems: 'flex-end' },
+  sig: { fontSize: 22, fontStyle: 'italic', color: colors.mint },
+
+  pager: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  pageBtn: { borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 14, paddingVertical: 9 },
+  pageBtnText: { fontSize: 10, letterSpacing: 1.6, color: colors.mint },
+
+  cal: { flexDirection: 'row', gap: 3 },
+  calCol: { gap: 3 },
+  calDay: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#fff' },
+  calDayOn: { backgroundColor: '#8a8a8a', borderColor: '#8a8a8a' },
+  calDaySel: { backgroundColor: colors.mint, borderColor: colors.mint },
+  legend: { fontSize: 9, color: colors.greenDim, marginLeft: -6 },
+
+  indexRow: { flexDirection: 'row', gap: 10, paddingVertical: 7, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#efefed', alignItems: 'center' },
+  indexRowOn: { backgroundColor: colors.mint },
+  indexDate: { fontSize: 9.5, letterSpacing: 1, color: colors.greenDim, width: 52 },
+  indexLine: { flex: 1, fontSize: 13, color: colors.mint },
+
+  emptyBox: { alignItems: 'center', gap: 10, paddingVertical: 60 },
+  emptyTitle: { fontSize: 24, color: colors.mint, fontStyle: 'italic' },
 });

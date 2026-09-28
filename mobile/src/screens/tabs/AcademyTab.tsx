@@ -9,6 +9,9 @@ import { ReadingRoom, cleanTitle, isFinished, progressOf } from '../academy/Read
 import { Skyline, WingDoors, type Wing } from '../academy/Skyline';
 import { ArchiveWing, LectureHall, StacksWing } from '../academy/Wings';
 import { WELCOMES } from '../academy/shelf';
+import { ContinueHero } from '../academy/ContinueHero';
+import { LibraryCard } from '../academy/Ornaments';
+import { useAuth } from '../../api/AuthContext';
 
 function greeting() {
   const h = new Date().getHours();
@@ -24,6 +27,10 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const scroll = useRef<ScrollView>(null);
+  const roomY = useRef(0);
+  const scrollToRoom = useRef(false);
+  const { email } = useAuth();
+  const [quizNonce, setQuizNonce] = useState(0);
 
   const [wing, setWing] = useState<Wing>('stacks');
   const [items, setItems] = useState<ReadingItem[] | null>(null);
@@ -51,7 +58,9 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
   const show = (slice: ReadingSlice) => {
     setOpen(slice);
     setItems((xs) => [slice.item, ...(xs ?? []).filter((x) => x.id !== slice.item.id)]);
-    scroll.current?.scrollTo({ y: 0, animated: true });
+    // bring the reading room into view (it sits under the campus and your card)
+    scrollToRoom.current = true;
+    setTimeout(() => scroll.current?.scrollTo({ y: Math.max(0, roomY.current - 12), animated: true }), 120);
   };
 
   const run = async (key: string, fn: () => Promise<ReadingSlice | null>, notFound = 'That one isn’t available right now.') => {
@@ -94,22 +103,48 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
       <View style={[styles.gate, wide && styles.gateWide]}>
         <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
           <Mono style={styles.eyebrow}>ACADEMY · {greeting().toUpperCase()}</Mono>
-          <Display style={[styles.welcome, wide && { fontSize: 44, lineHeight: 48 }]} numberOfLines={2}>{WELCOMES[welcome][0]}</Display>
+          <Display style={[styles.welcome, wide && { fontSize: 46, lineHeight: 50 }]} numberOfLines={2}>{WELCOMES[welcome][0]}</Display>
           <Mono style={styles.lang}>{WELCOMES[welcome][1].toUpperCase()} · {welcome + 1}/{WELCOMES.length}</Mono>
+          <Mono style={styles.lede}>
+            Classics, open textbooks and texts in fifteen languages — free for every student, everywhere. Read a passage at a time; WYRD keeps your place, quizzes you, and talks it through with you.
+          </Mono>
         </View>
-        <View style={styles.stats}>
-          <Stat v={reading.length} k="ON YOUR DESK" />
-          <Stat v={finished.length} k="FINISHED" />
-          <Stat v={textbooks} k="TEXTBOOKS" />
-          <Stat v={quizStats && quizStats.total ? `${Math.round((quizStats.correct / quizStats.total) * 100)}%` : '—'} k={quizStats?.rounds ? `QUIZ SCORE · ${quizStats.rounds}` : 'QUIZ SCORE'} />
-        </View>
+        <LibraryCard
+          name={(email ?? 'student').split('@')[0]}
+          id={email ?? 'student'}
+          stats={[
+            [String(reading.length), 'READING'],
+            [String(finished.length), 'FINISHED'],
+            [String(textbooks), 'TEXTBOOKS'],
+            [quizStats && quizStats.total ? `${Math.round((quizStats.correct / quizStats.total) * 100)}%` : '—', quizStats?.rounds ? `QUIZ · ${quizStats.rounds}` : 'QUIZ'],
+          ]}
+        />
       </View>
+
+      {!open && reading[0] && (
+        <ContinueHero
+          item={reading[0]}
+          wide={wide}
+          busy={loading === `item-${reading[0].id}`}
+          onContinue={() => readOn(reading[0])}
+          onQuiz={() => { const it = reading[0]; run(`item-${it.id}`, () => api.libraryCurrent(it.id)).then(() => setQuizNonce(Date.now())); }}
+        />
+      )}
 
       {error && (
         <Pressable onPress={() => setError(null)}><Mono style={styles.error}>{error}  ✕</Mono></Pressable>
       )}
 
       {open && (
+        <View
+          onLayout={(e) => {
+            roomY.current = e.nativeEvent.layout.y;
+            if (scrollToRoom.current) {
+              scrollToRoom.current = false;
+              scroll.current?.scrollTo({ y: Math.max(0, roomY.current - 12), animated: true });
+            }
+          }}
+        >
         <ReadingRoom
           slice={open}
           busy={loading === `item-${open.item.id}`}
@@ -120,7 +155,9 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
           onRemove={() => remove(open.item)}
           onAsk={onAsk}
           onQuizStats={setQuizStats}
+          quizNonce={quizNonce}
         />
+        </View>
       )}
 
       {/* your desk: a shelf of what you're reading */}
@@ -184,7 +221,8 @@ const styles = StyleSheet.create({
   error: { fontSize: 11, color: colors.danger },
 
   gate: { gap: 14 },
-  gateWide: { flexDirection: 'row', alignItems: 'flex-end' },
+  gateWide: { flexDirection: 'row', alignItems: 'center', gap: 32 },
+  lede: { fontSize: 12, lineHeight: 18, color: colors.greenDim, maxWidth: 520, marginTop: 4 },
   welcome: { fontSize: 34, lineHeight: 38, minHeight: 76, color: colors.mint },
   lang: { fontSize: 9, letterSpacing: 2.4, color: colors.greenBorder },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 22 },

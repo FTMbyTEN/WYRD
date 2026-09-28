@@ -4,15 +4,18 @@ import { Text, View } from 'react-native';
 /** A passage laid out like a page: paragraphs with room between them, headings ("## …" from
  *  textbooks, or CHAPTER / Letter lines in novels) set apart, bullet lists indented, verse kept
  *  line by line, and _italics_ in italics. */
-export function Passage({ text, font, size, color, muted, rtl }: {
+export function Passage({ text, font, size, color, muted, rtl, dropCap }: {
   text: string;
   font: string | undefined;
   size: number;
   color: string;
   muted: string;
   rtl: boolean;
+  dropCap?: boolean; // the start of a chapter or section: a large first letter
 }) {
   const paras = text.trim().split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  // the first ordinary paragraph gets the drop cap
+  const capAt = dropCap ? paras.findIndex((p) => !p.startsWith('## ') && !p.startsWith('• ') && !isHeading(p) && p.length > 80) : -1;
   const dir = { writingDirection: rtl ? 'rtl' : 'ltr', textAlign: rtl ? 'right' : 'left' } as const;
 
   return (
@@ -41,6 +44,15 @@ export function Passage({ text, font, size, color, muted, rtl }: {
           );
         }
         const figure = /^(Figure|Table|Example) \d/.test(p);
+        const cap = i === capAt ? p.match(/^([“"'(]*)(\p{L})/u) : null;
+        if (cap) {
+          return (
+            <Text key={i} selectable style={[{ fontFamily: font, fontSize: size, lineHeight: size * 1.7, color }, dir]}>
+              <Text style={{ fontSize: size * 2.5, lineHeight: size * 1.7, fontWeight: '700' }}>{cap[1]}{cap[2]}</Text>
+              {inline(p.slice(cap[0].length))}
+            </Text>
+          );
+        }
         return (
           <Text
             key={i}
