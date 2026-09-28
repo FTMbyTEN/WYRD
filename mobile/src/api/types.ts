@@ -106,6 +106,26 @@ export interface Sighting {
 
 export interface LearningStats { answers: number; shared: number; reuses: number; improved: number }
 
+export interface QuarantinedItem {
+  id?: number;
+  timestamp: string;
+  source: string;
+  title: string;
+  url: string | null;
+  extract: string | null;
+  score: number;
+  reasons: string[];
+}
+export interface FilterReport {
+  day: string;
+  kept: number;
+  duplicates: number;
+  quarantined: number;
+  reasons: Record<string, number>;
+  categories: Record<string, number>;
+  recent: QuarantinedItem[];
+}
+
 export type GrowthRange = 'day' | 'week' | 'month' | 'all';
 
 export interface ConceptExample {

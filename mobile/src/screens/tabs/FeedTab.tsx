@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
 import { HoloButton } from '../../components/Holo';
 import { VocabularyPanel } from '../../components/VocabularyPanel';
+import { FilterCard } from '../../components/FilterCard';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
 import { useFeed, useLexicon } from '../../api/hooks';
@@ -29,6 +30,8 @@ export function FeedTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: Props) {
           </>
         }
       />
+
+      <FilterCard />
 
       <View style={styles.feedHeadRow}>
         <Mono style={styles.label}>LIVE DATA FEED</Mono>
