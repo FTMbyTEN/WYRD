@@ -66,6 +66,11 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
 
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [facing, setFacing] = useState<'user' | 'environment'>('user');
+  const [canFlip, setCanFlip] = useState(false);
+  const mirrored = facing === 'user'; // selfie view mirrors; the back camera shows the world as it is
+  const mirroredRef = useRef(mirrored);
+  mirroredRef.current = mirrored;
   const [trackerState, setTrackerState] = useState<'loading' | 'on' | 'off'>('loading');
   const [readout, setReadout] = useState<Readout | null>(null);
   const [question, setQuestion] = useState('');
@@ -101,7 +106,10 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
     setLooking(true);
     const s = stats.current;
     const tracked = describeForWyrd(facesRef.current, s.lockedAt ? (performance.now() - s.lockedAt) / 1000 : 0, s.blinks);
-    const note = why ? `why you looked on your own: ${why}; ${tracked}` : tracked;
+    const camera = mirroredRef.current
+      ? 'front camera, facing them'
+      : 'back camera: you are seeing what they are pointing it at, not them';
+    const note = `${camera}; ${why ? `why you looked on your own: ${why}; ` : ''}${tracked}`;
     setReason(why ?? null);
     try {
       const reply = await onLook(base64, (q ?? question).trim(), note);
@@ -116,15 +124,21 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
   const lookRef = useRef(look);
   lookRef.current = look;
 
-  // camera
+  // a fresh session each time the sheet opens (not on a camera flip)
+  useEffect(() => {
+    if (!visible) return;
+    setSaid(null);
+    setReason(null);
+    setFacing('user');
+    autoRef.current = { fired: 0, lastAt: 0, pending: null, pendingAt: 0, everSeen: false, lostAt: 0, count: 0, countSince: 0, stable: 0 };
+    refreshMemory();
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // camera: front ('user') or back ('environment'); flipping restarts the stream on the other one
   useEffect(() => {
     if (!visible || Platform.OS !== 'web') return;
     let cancelled = false;
     setError(null);
-    setSaid(null);
-    setReason(null);
-    autoRef.current = { fired: 0, lastAt: 0, pending: null, pendingAt: 0, everSeen: false, lostAt: 0, count: 0, countSince: 0, stable: 0 };
-    refreshMemory();
     stats.current = { lockedAt: 0, blinks: 0, eyesShut: false, frames: 0, fpsAt: performance.now(), fps: 0 };
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -132,7 +146,7 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
         return;
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } } });
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
         if (videoRef.current) {
@@ -140,12 +154,15 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
           await videoRef.current.play().catch(() => {});
         }
         setReady(true);
+        // labels are only readable after permission: show the flip button if there's more than one camera
+        const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+        if (!cancelled) setCanFlip(devices.filter((d) => d.kind === 'videoinput').length > 1);
       } catch (e) {
         setError(`couldn't access the camera — ${(e as Error).message || 'permission denied'}`);
       }
     })();
     return () => { cancelled = true; stop(); };
-  }, [visible]);
+  }, [visible, facing]);
 
   // tracker
   useEffect(() => {
@@ -194,7 +211,7 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
         s.lockedAt = 0;
       }
 
-      drawHud(cv, faces, tr?.edges, now, !!tr);
+      drawHud(cv, faces, tr?.edges, now, !!tr, mirroredRef.current);
 
       // what just happened in front of the camera, as a reason for WYRD to look
       const A = autoRef.current;
@@ -259,6 +276,15 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
             <View style={[styles.liveDot, ready && !error && styles.liveDotOn]} />
             <Display style={styles.title}>OPTIC_LINK</Display>
             <Mono style={styles.status} numberOfLines={1}>{status}</Mono>
+            {canFlip && (
+              <Pressable
+                onPress={() => { setReady(false); setFacing((f) => (f === 'user' ? 'environment' : 'user')); }}
+                style={styles.flipBtn}
+                accessibilityLabel={facing === 'user' ? 'Switch to the back camera' : 'Switch to the front camera'}
+              >
+                <Mono style={styles.flipText}>⟲ {facing === 'user' ? 'BACK' : 'FRONT'}</Mono>
+              </Pressable>
+            )}
             <Pressable onPress={close} style={styles.closeBtn} accessibilityLabel="Close camera">
               <Display style={styles.closeText}>✕</Display>
             </Pressable>
@@ -269,11 +295,11 @@ export function WebCameraSheet({ visible, onClose, onLook }: {
               ref: videoRef,
               playsInline: true,
               muted: true,
-              style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)', background: '#000' },
+              style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: mirrored ? 'scaleX(-1)' : 'none', background: '#000' },
             })}
             {React.createElement('canvas', {
               ref: canvasRef,
-              style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)', pointerEvents: 'none' },
+              style: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: mirrored ? 'scaleX(-1)' : 'none', pointerEvents: 'none' },
             })}
             <View pointerEvents="none" style={styles.scanlines} />
 
@@ -354,7 +380,7 @@ function Row({ k, v, right }: { k: string; v: string; right?: boolean }) {
 
 // ---- HUD drawing (canvas is mirrored with the video, so text is un-flipped locally) ----
 
-function drawHud(cv: HTMLCanvasElement, faces: FaceReading[], edges: Tracker['edges'] | undefined, now: number, tracking: boolean) {
+function drawHud(cv: HTMLCanvasElement, faces: FaceReading[], edges: Tracker['edges'] | undefined, now: number, tracking: boolean, mirrored: boolean) {
   const g = cv.getContext('2d')!;
   const W = cv.width, H = cv.height;
   const u = Math.max(1, W / 640); // line scale
@@ -448,11 +474,12 @@ function drawHud(cv: HTMLCanvasElement, faces: FaceReading[], edges: Tracker['ed
       }
     }
 
-    // label (drawn un-mirrored)
+    // label, readable either way: on the mirrored (front) view it's drawn flipped from the box's
+    // far edge, which the mirror puts on the left; on the back camera it's drawn normally
     const label = `SUBJECT ${String(i + 1).padStart(2, '0')} · ${main ? expressionOf(f) : 'TRACKED'}`;
     g.save();
-    g.translate(bx + bw, by - 8 * u);
-    g.scale(-1, 1);
+    g.translate(mirrored ? bx + bw : bx, by - 8 * u);
+    if (mirrored) g.scale(-1, 1); // the canvas is mirrored with the video: un-flip text
     g.font = `${Math.round(11 * u)}px "Share Tech Mono", monospace`;
     const tw = g.measureText(label).width;
     g.fillStyle = 'rgba(0,0,0,0.55)';
@@ -491,6 +518,8 @@ const styles = StyleSheet.create({
   liveDotOn: { backgroundColor: '#ff3b3b' },
   title: { color: '#fff', fontSize: 16, letterSpacing: 3 },
   status: { flex: 1, color: 'rgba(255,255,255,0.6)', fontSize: 10, letterSpacing: 2 },
+  flipBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', paddingHorizontal: 8, paddingVertical: 4 },
+  flipText: { color: '#fff', fontSize: 10, letterSpacing: 1.5 },
   closeBtn: { paddingHorizontal: 8, paddingVertical: 2 },
   closeText: { color: '#fff', fontSize: 16 },
   frame: { width: '100%', aspectRatio: 16 / 10, maxHeight: '70vh' as unknown as number, backgroundColor: '#000', overflow: 'hidden' },
