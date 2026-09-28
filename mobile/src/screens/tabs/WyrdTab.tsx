@@ -44,7 +44,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const { notes } = useReasoning();
   const reasoningNext = useReasoningNext();
   const { stats: lexicon } = useLexicon();
-  const brainActivity = useBrainActivitySignal();
+  const brainActivity = useBrainActivitySignal(mind);
   const desktop = useIsDesktop();
 
   const [expanded, setExpanded] = useState(false);
@@ -94,7 +94,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
           accessibilityLabel={expanded ? 'Close the brain view' : 'Open the brain to see its vitals'}
         >
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: brainScale }] }]}>
-            <BrainCanvas activitySignal={brainActivity} energy={expanded ? 2.2 : 1} />
+            <BrainCanvas activitySignal={brainActivity} energy={(expanded ? 2.2 : 1) * (0.6 + (mind?.curiosity ?? 0.4))} />
           </Animated.View>
 
           <LearningStream words={learningWords} active={expanded} />

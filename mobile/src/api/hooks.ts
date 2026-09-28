@@ -59,8 +59,10 @@ function prependUnique<T extends { timestamp: string }>(prev: T[] | null, item: 
 
 /** Mind vitals: seeded from mind.getMind, kept live by the stream's `mind` event (polled every
  *  5s, and published immediately with each chat reply). */
+/** WYRD's live state. Polled every few seconds: its mind changes constantly in the background
+ *  (a reasoning firing every 30 s, new articles, self-questions), not only when someone chats. */
 export function useMind() {
-  const { data, loading, error, setData } = usePolled<Mind>(api.mind, null);
+  const { data, loading, error, setData } = usePolled<Mind>(api.mind, 8000);
   useEffect(() => wyrdStream.subscribe('mind', (m) => setData(m as Mind)), [setData]);
   return { mind: data, loading, error };
 }
@@ -177,8 +179,13 @@ export function useConversations(limit = 50) {
 /** Increments once per real "WYRD digested something" event (an ingest landing, a reasoning
  *  tick, a self-question, a COP report) — feed it straight into BrainCanvas's `activitySignal`
  *  so the brain visual's burst pulses are tied to genuine backend activity, not a fake timer. */
-export function useBrainActivitySignal() {
+export function useBrainActivitySignal(mind?: Mind | null) {
   const [signal, setSignal] = useState(0);
+  // every real change in WYRD's mind (a firing, an article, a thought, a chat) is a pulse
+  const changedAt = mind?.updatedAt;
+  useEffect(() => {
+    if (changedAt) setSignal((n) => n + 1);
+  }, [changedAt]);
   useEffect(() => {
     const bump = () => setSignal((n) => n + 1);
     const events: StreamEvent['event'][] = ['ingested', 'thought', 'cop_report'];
