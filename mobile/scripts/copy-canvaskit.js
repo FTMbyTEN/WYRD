@@ -21,10 +21,25 @@ console.log('[copy-canvaskit] copied canvaskit.wasm -> mobile/public/canvaskit.w
 
 // pdf.js (reading attached PDFs in Dialogue Link) is served the same way, as static files the
 // app loads only when someone actually attaches a PDF -- it never enlarges the app's own bundle.
-const pdfSrc = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build');
+// The legacy build: the same pdf.js, compiled for older phone browsers (iOS Safari before 17.4,
+// older Android/Samsung browsers) that can't run the modern build's newest syntax.
+const pdfSrc = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'legacy', 'build');
 const pdfDest = path.join(destDir, 'pdfjs');
+// the one thing the legacy build still expects from the browser (its own fallbacks cover the rest,
+// such as Uint8Array.toHex), put at the top of both files so the page and the worker have it
+const POLYFILLS = `if (!Promise.withResolvers) {
+  Promise.withResolvers = function () {
+    let resolve, reject;
+    const promise = new this((a, b) => { resolve = a; reject = b; });
+    return { promise, resolve, reject };
+  };
+}
+`;
 if (fs.existsSync(pdfSrc)) {
   fs.mkdirSync(pdfDest, { recursive: true });
-  for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) fs.copyFileSync(path.join(pdfSrc, f), path.join(pdfDest, f));
-  console.log('[copy-canvaskit] copied pdf.js -> mobile/public/pdfjs/');
+  for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) {
+    fs.writeFileSync(path.join(pdfDest, f), POLYFILLS + fs.readFileSync(path.join(pdfSrc, f), 'utf8'));
+  }
+  fs.rmSync(path.join(pdfDest, 'pdf.worker.shim.mjs'), { force: true });
+  console.log('[copy-canvaskit] copied pdf.js (legacy build) -> mobile/public/pdfjs/');
 }

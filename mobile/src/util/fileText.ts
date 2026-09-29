@@ -44,8 +44,12 @@ export function pickFile(): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = ACCEPT;
-    input.style.display = 'none';
+    // phones: no type filter -- Android's picker greys out files whose type it can't map from an
+    // extension (.md, code), and the kind is checked after picking anyway
+    const touch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (!touch) input.accept = ACCEPT;
+    // off-screen rather than display:none, which some iOS versions refuse to open a picker for
+    Object.assign(input.style, { position: 'fixed', left: '-9999px', top: '0', opacity: '0', width: '1px', height: '1px' });
     input.onchange = () => {
       resolve(input.files?.[0] ?? null);
       input.remove();
@@ -65,10 +69,21 @@ export function pickFile(): Promise<File | null> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-new-func
 const nativeImport = new Function('u', 'return import(u)') as (u: string) => Promise<any>;
 
+// pdf.js here is its legacy build, with fallbacks for what older and current browsers lack
+// (Uint8Array.toHex, Promise.withResolvers, ...) built into both of its files; see
+// scripts/copy-canvaskit.js.
 async function pdfText(file: File, onProgress?: Progress): Promise<{ text: string; pages: number }> {
   const pdfjs = await nativeImport('/pdfjs/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  // a PDF that can't be opened says so, rather than leaving the card reading forever
+  const doc = await Promise.race([
+    task.promise,
+    new Promise<never>((_, reject) => setTimeout(() => {
+      task.destroy?.();
+      reject(new Error('That PDF took too long to open. Try again, or a smaller file.'));
+    }, 90000)),
+  ]);
   const pages = Math.min(doc.numPages, MAX_PDF_PAGES);
   const out: string[] = [];
   let total = 0;
