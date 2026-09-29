@@ -12,9 +12,17 @@ export interface ExtractedFile {
 /** What can be attached, for the file picker. */
 export const ACCEPT = '.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.html,.htm,.xml,.rtf,.log,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.cs,.go,.rs,.rb,.php,.swift,.kt,.dart,.sql,.yaml,.yml,.ini,.tex';
 
-const MAX_BYTES = 25 * 1024 * 1024; // a big PDF; the text sent is capped below
-const MAX_CHARS = 1_000_000; // ~170,000 words -- fits the server's request limit in any script
-const MAX_PDF_PAGES = 600;
+// The file stays in this browser (only a sample and, per question, the relevant passages are
+// sent), so the limits are about what a browser can comfortably read, not what the server takes.
+const MAX_BYTES = 150 * 1024 * 1024;
+const MAX_CHARS = 8_000_000; // ~1.3 million words
+const MAX_PDF_PAGES = 3000;
+
+/** Reading progress: [done] of [total] (pages for a PDF), for the loading bar. */
+export type Progress = (done: number, total: number) => void;
+
+// let the page breathe between chunks of work, so reading a big file never freezes it
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
 
 const CODE = /\.(js|ts|tsx|jsx|py|java|c|cpp|cs|go|rs|rb|php|swift|kt|dart|sql|yaml|yml|ini|tex)$/i;
 
@@ -57,7 +65,7 @@ export function pickFile(): Promise<File | null> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-new-func
 const nativeImport = new Function('u', 'return import(u)') as (u: string) => Promise<any>;
 
-async function pdfText(file: File): Promise<{ text: string; pages: number }> {
+async function pdfText(file: File, onProgress?: Progress): Promise<{ text: string; pages: number }> {
   const pdfjs = await nativeImport('/pdfjs/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
@@ -80,6 +88,8 @@ async function pdfText(file: File): Promise<{ text: string; pages: number }> {
     out.push(text);
     total += text.length;
     page.cleanup?.();
+    onProgress?.(i, pages);
+    if (i % 4 === 0) await breathe();
   }
   await doc.destroy?.();
   return { text: out.join('\n\n'), pages: doc.numPages };
@@ -109,13 +119,13 @@ function htmlText(html: string): string {
 }
 
 /** Reads the text out of [file] in the browser; only this text is sent to WYRD. */
-export async function extractText(file: File): Promise<ExtractedFile> {
+export async function extractText(file: File, onProgress?: Progress): Promise<ExtractedFile> {
   const kind = kindOf(file.name);
   if (!kind) throw new Error('That kind of file isn’t supported yet. Try a PDF, Word (.docx), text, CSV, JSON, web page or code file.');
-  if (file.size > MAX_BYTES) throw new Error('That file is over 25 MB. Try a smaller one, or just the part you need.');
+  if (file.size > MAX_BYTES) throw new Error('That file is over 150 MB. Try a smaller one, or just the part you need.');
   let text: string;
   let pages: number | undefined;
-  if (kind === 'pdf') ({ text, pages } = await pdfText(file));
+  if (kind === 'pdf') ({ text, pages } = await pdfText(file, onProgress));
   else if (kind === 'docx') text = await docxText(file);
   else if (kind === 'html') text = htmlText(await file.text());
   else text = await file.text();

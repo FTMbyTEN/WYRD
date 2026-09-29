@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleProp, TextStyle, View } from 'react-native';
+import { Animated, StyleProp, StyleSheet, TextStyle, View } from 'react-native';
 import { Display } from './ui';
 
 const GLYPHS = '!<>-_\\/[]{}=+*^?#01ΔΞΣ░▒▓';
@@ -10,7 +10,7 @@ const HOLD_MS = 3200; // how long each word rests before glitching into the next
  * letter by letter into the next word, with instant horizontal tears and a red/blue channel
  * split while it's unstable -- snap cuts, not eased fades, so it reads as signal breaking up.
  */
-export function GlitchWord({ words, style }: { words: string[]; style?: StyleProp<TextStyle> }) {
+export function GlitchWord({ words, style: baseStyle, fitChars }: { words: string[]; style?: StyleProp<TextStyle>; fitChars?: number }) {
   const [text, setText] = useState(words[0]);
   const [unstable, setUnstable] = useState(false);
   const tear = useRef(new Animated.Value(0)).current;
@@ -53,6 +53,17 @@ export function GlitchWord({ words, style }: { words: string[]; style?: StylePro
     cycle();
     return () => { alive = false; timers.forEach(clearTimeout); };
   }, [words, tear]);
+
+  // a phrase longer than [fitChars] is set smaller (and tighter) so it still fits the width
+  const flat = StyleSheet.flatten(baseStyle) ?? {};
+  const scale = fitChars && text.length > fitChars ? Math.max(0.4, fitChars / text.length) : 1;
+  const style: StyleProp<TextStyle> = scale === 1 ? baseStyle : [
+    baseStyle,
+    {
+      fontSize: (flat.fontSize ?? 16) * Math.min(1, scale * 1.35),
+      letterSpacing: (flat.letterSpacing ?? 0) * scale,
+    },
+  ];
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>

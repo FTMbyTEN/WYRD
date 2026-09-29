@@ -256,8 +256,9 @@ export const api = {
   mind: () => callEndpoint<SpMind>('mind', 'getMind', {}, { authenticated: false }).then(adaptMind),
 
   // ---- chat / dialogue link ----
-  chat: (text: string, _nonce?: string) =>
-    callEndpoint<SpChatReply>('chat', 'sendMessage', { text }).then(adaptChatResult),
+  /** [passages]: the parts of a file open in this browser relevant to the message. */
+  chat: (text: string, passages?: string[]) =>
+    callEndpoint<SpChatReply>('chat', 'sendMessage', passages?.length ? { text, passages } : { text }).then(adaptChatResult),
   /** One camera frame (base64 JPEG), described by WYRD's vision model. */
   /** What WYRD remembers seeing of the signed-in person (descriptions only), newest first. */
   sightings: (limit = 3) => callEndpoint<Sighting[]>('photo', 'getSightings', { limit }),
@@ -371,9 +372,10 @@ export const api = {
   libraryRemove: (id: number) => callEndpoint<void>('library', 'remove', { id }),
   // ---- shared files (their text, read in the browser) ----
   /** `staged`: the file waits for the message sent with it (no first-look reply of its own). */
-  documentUpload: (name: string, kind: string, text: string, pages?: number, staged = false) =>
+  /** [sample]: the file's opening and pieces from throughout (never the whole file); [words]: its full length. */
+  documentUpload: (name: string, kind: string, sample: string, words: number, pages?: number, staged = false) =>
     callEndpoint<{ id: number; name: string; kind: string; words: number; pages: number | null; reply: string; turnId: number | null }>(
-      'document', 'upload', pages == null ? { name, kind, text, staged } : { name, kind, text, pages, staged },
+      'document', 'upload', pages == null ? { name, kind, text: sample, words, staged } : { name, kind, text: sample, words, pages, staged },
     ),
   judgementReport: () => callEndpoint<JudgementReport>('feed', 'getJudgementReport', {}, { authenticated: false }),
   trust: () => callEndpoint<TrustReport>('feed', 'getTrust', {}, { authenticated: false }),

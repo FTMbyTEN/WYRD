@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Speech from 'expo-speech';
 import { OverlayShell } from './OverlayShell';
@@ -14,7 +14,8 @@ import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
 import { captureNative, WebCameraSheet } from '../../components/CameraCapture';
 import { useSpeechInput } from '../../util/speechInput';
-import { extractText, pickFile, type ExtractedFile } from '../../util/fileText';
+import { extractText, pickFile } from '../../util/fileText';
+import { buildIndex, passagesFor, sampleOf, wordCount, type DocIndex } from '../../util/docIndex';
 
 interface Props {
   visible: boolean;
@@ -35,8 +36,10 @@ const SUGGESTIONS: { tag: string; text: string }[] = [
   { tag: 'DRONE', text: 'Plan a short drone flight' },
 ];
 
-/** A file waiting in the composer for the message that goes with it. */
-type Staged = { status: 'reading'; name: string } | { status: 'ready'; file: ExtractedFile; words: number };
+/** A file read in this browser: its details, and its passages indexed for questions. */
+type OpenDoc = { name: string; kind: string; pages?: number; words: number; ix: DocIndex };
+/** A file in the composer: being read (with progress), or ready for the message that goes with it. */
+type Staged = { status: 'reading'; name: string; done: number; total: number } | { status: 'ready'; doc: OpenDoc };
 
 const ATTACHED = /^📎 ([^\n]+)\n*/;
 
@@ -58,6 +61,10 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   const [judged, setJudged] = useState<Map<string, string>>(() => new Map());
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // the file this conversation is about, kept only here in the browser: each message sends the
+  // passages of it that matter, so WYRD answers from the file without the server keeping it
+  const openDoc = useRef<OpenDoc | null>(null);
+  const reading = useRef(0); // which read is current, so a removed file's read is ignored
   const sending = pending !== null;
 
   const handleAction = useCallback((action: ChatAction) => {
@@ -70,7 +77,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
 
   const send = async (override?: string) => {
     const text = (override ?? draft).trim();
-    const file = override == null && staged?.status === 'ready' ? staged.file : null;
+    const file = override == null && staged?.status === 'ready' ? staged.doc : null;
     if ((!text && !file) || sending || staged?.status === 'reading') return;
     const shown = file ? `📎 ${file.name}${text ? `\n${text}` : ''}` : text;
     setDraft('');
@@ -80,13 +87,18 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     try {
       if (file && !text) {
         // a file on its own: WYRD's first look at it is the reply
-        const up = await api.documentUpload(file.name, file.kind, file.text, file.pages);
+        const up = await api.documentUpload(file.name, file.kind, sampleOf(file.ix), file.words, file.pages);
+        openDoc.current = file;
         wyrdStream.publish('chat', { id: up.turnId ?? undefined, userText: `📎 ${up.name}`, botText: up.reply, timestamp: new Date().toISOString(), nonce: null });
         if (tts && up.reply) speakAsWyrd(up.reply);
         return;
       }
-      if (file) await api.documentUpload(file.name, file.kind, file.text, file.pages, true);
-      const result = await api.chat(shown);
+      if (file) {
+        await api.documentUpload(file.name, file.kind, sampleOf(file.ix), file.words, file.pages, true);
+        openDoc.current = file;
+      }
+      const open = openDoc.current;
+      const result = await api.chat(shown, open ? passagesFor(open.ix, text) : undefined);
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
@@ -98,7 +110,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     } catch (err) {
       setError(err instanceof ApiError ? err.message : (err as Error)?.message || 'could not reach WYRD');
       setDraft(text); // give the message (and file) back so nothing is lost
-      if (file) setStaged({ status: 'ready', file, words: countWords(file.text) });
+      if (file) setStaged({ status: 'ready', doc: file });
     } finally {
       setPending(null);
     }
@@ -150,12 +162,19 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     setError(null);
     const file = await pickFile();
     if (!file) return;
-    setStaged({ status: 'reading', name: file.name });
+    const me = ++reading.current;
+    setStaged({ status: 'reading', name: file.name, done: 0, total: 0 });
     try {
-      const doc = await extractText(file);
+      const doc = await extractText(file, (done, total) => {
+        if (reading.current === me) setStaged({ status: 'reading', name: file.name, done, total });
+      });
       if (doc.text.trim().length < 20) throw new Error("I couldn't find readable text in that file (a scanned PDF is an image, not text).");
-      setStaged({ status: 'ready', file: doc, words: countWords(doc.text) });
+      await new Promise((r) => setTimeout(r, 0));
+      const ix = buildIndex(doc.name, doc.text);
+      if (reading.current !== me) return;
+      setStaged({ status: 'ready', doc: { name: doc.name, kind: doc.kind, pages: doc.pages, words: wordCount(doc.text), ix } });
     } catch (e) {
+      if (reading.current !== me) return;
       setStaged(null);
       setError((e as Error).message || 'could not read that file');
     }
@@ -215,7 +234,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               </View>
             )}
             <View style={[styles.composer, focused && styles.composerFocused]}>
-              {staged && <StagedFile staged={staged} onRemove={() => setStaged(null)} />}
+              {staged && <StagedFile staged={staged} onRemove={() => { reading.current++; setStaged(null); }} />}
               <TextInput
                 value={draft}
                 onChangeText={(t) => { setDraft(t); if (error) setError(null); }}
@@ -223,7 +242,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
                 onKeyPress={onKeyPress as never}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                placeholder={mic ? 'listening…' : staged ? 'Ask about this file…' : 'Message WYRD'}
+                editable={staged?.status !== 'reading'}
+                placeholder={mic ? 'listening…' : staged?.status === 'reading' ? 'Reading your file first…' : staged ? 'Ask about this file…' : 'Message WYRD'}
                 placeholderTextColor={colors.greenBorder}
                 style={styles.input}
                 multiline
@@ -322,10 +342,6 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   );
 }
 
-function countWords(text: string) {
-  return text.split(/\s+/).filter(Boolean).length;
-}
-
 function dayKey(iso: string) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toDateString();
@@ -388,17 +404,53 @@ function FileGlyph({ label, inverse }: { label: string; inverse?: boolean }) {
   );
 }
 
+/** A small ring turning over the file glyph while it is read. */
+function Spinner() {
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  return (
+    <Animated.View
+      style={[styles.spinner, { transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}
+    />
+  );
+}
+
+/** A bar sweeping across while the length of the work isn't known yet. */
+function IndeterminateBar() {
+  const x = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(x, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: false }));
+    loop.start();
+    return () => loop.stop();
+  }, [x]);
+  return <Animated.View style={[styles.barFill, { width: '35%', left: x.interpolate({ inputRange: [0, 1], outputRange: ['-35%', '100%'] }) }]} />;
+}
+
 function StagedFile({ staged, onRemove }: { staged: Staged; onRemove: () => void }) {
-  const name = staged.status === 'reading' ? staged.name : staged.file.name;
-  const meta = staged.status === 'reading'
-    ? 'reading…'
-    : [staged.file.pages ? `${staged.file.pages} page${staged.file.pages === 1 ? '' : 's'}` : null, `${staged.words.toLocaleString()} words`, 'ready — ask your question'].filter(Boolean).join(' · ');
+  const reading = staged.status === 'reading';
+  const name = reading ? staged.name : staged.doc.name;
+  const meta = reading
+    ? staged.total > 0 ? `reading page ${staged.done} of ${staged.total}…` : 'reading…'
+    : [staged.doc.pages ? `${staged.doc.pages.toLocaleString()} page${staged.doc.pages === 1 ? '' : 's'}` : null, `${staged.doc.words.toLocaleString()} words`, 'ready — ask your question'].filter(Boolean).join(' · ');
+  const pct = reading && staged.total > 0 ? staged.done / staged.total : null;
   return (
     <View style={styles.staged}>
-      <FileGlyph label={kindLabel(name, staged.status === 'ready' ? staged.file.kind : '')} />
+      <View>
+        <FileGlyph label={kindLabel(name, reading ? '' : staged.doc.kind)} />
+        {reading && <Spinner />}
+      </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Mono style={styles.stagedName} numberOfLines={1}>{name}</Mono>
-        <Mono style={styles.stagedMeta} numberOfLines={1}>{meta}</Mono>
+        <Mono style={[styles.stagedMeta, !reading && styles.stagedReady]} numberOfLines={1}>{reading ? meta : `✓ ${meta}`}</Mono>
+        {reading && (
+          <View style={styles.bar}>
+            {pct == null ? <IndeterminateBar /> : <View style={[styles.barFill, { width: `${Math.max(4, pct * 100)}%` }]} />}
+          </View>
+        )}
       </View>
       <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove file" style={styles.stagedX}>
         <Mono style={styles.stagedXText}>✕</Mono>
@@ -427,7 +479,7 @@ function timeLabel(iso: string) {
   return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5);
 }
 
-function Mine({ text, at }: { text: string; at: string }) {
+const Mine = React.memo(function Mine({ text, at }: { text: string; at: string }) {
   const m = text.match(ATTACHED);
   const file = m?.[1];
   const body = m ? text.slice(m[0].length) : text;
@@ -447,9 +499,9 @@ function Mine({ text, at }: { text: string; at: string }) {
       <Mono style={styles.timeRight}>{timeLabel(at)}</Mono>
     </View>
   );
-}
+});
 
-function Reply({ text, at, recalled, judged, turnId, rating }: { text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null }) {
+const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, rating }: { text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null }) {
   return (
     <View style={styles.theirsRow}>
       <View style={styles.avatar}>
@@ -481,7 +533,7 @@ function Reply({ text, at, recalled, judged, turnId, rating }: { text: string; a
       </View>
     </View>
   );
-}
+});
 
 /** 👍 / 👎 on one of WYRD's replies: trains the answer behind it (tap again to clear). */
 function Thumbs({ turnId, initial }: { turnId: number; initial: number | null }) {
@@ -648,6 +700,13 @@ const styles = StyleSheet.create({
   stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
   stagedX: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.greenBorderDim },
   stagedXText: { fontSize: 10, color: colors.greenDim },
+  stagedReady: { color: colors.green },
+  spinner: {
+    position: 'absolute', right: -5, bottom: -3, width: 14, height: 14, borderRadius: 7,
+    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.green, backgroundColor: '#fafafa',
+  },
+  bar: { marginTop: 6, height: 3, borderRadius: 2, backgroundColor: colors.greenBorderDim, overflow: 'hidden' },
+  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, backgroundColor: colors.green },
   glyph: { width: 30, height: 36, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 },
   glyphText: { fontSize: 7.5, letterSpacing: 0.6 },
 });

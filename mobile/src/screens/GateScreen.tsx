@@ -19,7 +19,8 @@ import { useAuth } from '../api/AuthContext';
 import { GlitchWord } from '../components/GlitchWord';
 import { DustField } from '../components/DustField';
 
-const WORDS = ['WYRD', 'WELCOME'];
+// WYRD is Old English for fate -- "what comes to be"
+const WORDS = ['WYRD', 'WHAT COMES TO BE', 'FATE', 'WELCOME'];
 /** A colorless shockwave played once per [triggerKey] increment, behind the WYRD wordmark --
  *  soft, blurred, achromatic haloes (no hue) expanding and thinning out, meant to read like
  *  displaced air/a pressure wave rather than a lit-up neon ring. Several overlapping soft-edged
@@ -125,7 +126,7 @@ export function GateScreen() {
               {({ pressed }) => (
                 <>
                   <QuantumBlast triggerKey={blastKey} />
-                  <GlitchWord words={WORDS} style={[styles.wordmark, pressed && { textShadowRadius: 26 }]} />
+                  <GlitchWord words={WORDS} fitChars={7} style={[styles.wordmark, pressed && { textShadowRadius: 26 }]} />
                 </>
               )}
             </Pressable>

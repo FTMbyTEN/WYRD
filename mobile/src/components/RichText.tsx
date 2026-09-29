@@ -54,7 +54,7 @@ function blocks(text: string): Block[] {
 
 /** Markdown the way a reader expects it: bold is bold, not "**bold**". Paragraphs, headings,
  *  bullet and numbered lists, quotes, rules, and inline bold/italic/code/links. */
-export function RichText({ text, style }: { text: string; style?: TextStyle }) {
+export const RichText = React.memo(function RichText({ text, style }: { text: string; style?: TextStyle }) {
   const base = [styles.base, style];
   return (
     <View style={styles.wrap}>
@@ -80,7 +80,7 @@ export function RichText({ text, style }: { text: string; style?: TextStyle }) {
       })}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
