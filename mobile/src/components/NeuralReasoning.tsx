@@ -5,7 +5,7 @@ import { Display, Mono } from './ui';
 import { colors } from '../theme';
 import { api } from '../api/client';
 import { useReasoning } from '../api/hooks';
-import type { Firing, NeuralNetwork, ReasoningNote } from '../api/types';
+import type { Firing, NeuralNetwork, ReasoningNote, Thought } from '../api/types';
 import { forceLayout } from '../util/forceLayout';
 import { timeAgo } from '../util/time';
 
@@ -32,7 +32,7 @@ export function NeuralReasoning() {
 
   const firings = notes.filter((n) => n.kind === 'firing' && n.firing);
   const latest = firings[0]?.firing ?? null;
-  const shown = notes.filter((n) => n.kind === 'firing' || n.kind === 'self' || n.kind === 'sleep').slice(0, 20);
+  const shown = notes.filter((n) => n.kind === 'thought' || n.kind === 'firing' || n.kind === 'self' || n.kind === 'sleep').slice(0, 20);
   const strongest = net?.synapses[0];
 
   return (
@@ -58,7 +58,7 @@ export function NeuralReasoning() {
 
       <Mono style={styles.section}>WHAT WYRD HAS BEEN THINKING</Mono>
       {shown.length === 0 && <Mono style={styles.muted}>Nothing yet.</Mono>}
-      {shown.map((n) => (n.kind === 'firing' && n.firing ? <FiringCard key={n.file} note={n} f={n.firing} /> : n.kind === 'sleep' ? <SleepCard key={n.file} note={n} /> : <SelfCard key={n.file} note={n} />))}
+      {shown.map((n) => (n.thought ? <ThoughtCard key={n.file} note={n} t={n.thought} /> : n.kind === 'firing' && n.firing ? <FiringCard key={n.file} note={n} f={n.firing} /> : n.kind === 'sleep' ? <SleepCard key={n.file} note={n} /> : <SelfCard key={n.file} note={n} />))}
     </ScrollView>
   );
 }
@@ -200,6 +200,38 @@ function SleepCard({ note }: { note: ReasoningNote }) {
     <View style={[styles.card, styles.sleepCard]}>
       <Mono style={styles.cardMeta}>☾ SLEEP · CONSOLIDATION{note.timestamp ? ' · ' + timeAgo(note.timestamp) : ''}</Mono>
       <Mono style={styles.cardText}>{summary}</Mono>
+    </View>
+  );
+}
+
+const STATUS: Record<Thought['status'], string> = {
+  held: 'HELD — sources agree', hypothesis: 'HYPOTHESIS — one source so far', doubted: 'DOUBTED', dream: 'A DREAM, UNTESTED',
+  dropped: 'LET GO', open: 'OPEN QUESTION',
+};
+
+/** One act of its own thinking: the belief it formed or re-tested, how sure it is, and why. */
+function ThoughtCard({ note, t }: { note: ReasoningNote; t: Thought }) {
+  const [open, setOpen] = useState(false);
+  const verb = t.op === 'connect' ? 'FORMED A BELIEF' : t.op === 'test' ? 'RE-TESTED A BELIEF' : 'ASKED ITSELF';
+  const pct = (v: number | null) => (v == null ? '' : `${Math.round(v * 100)}%`);
+  return (
+    <View style={[styles.card, t.status === 'open' && styles.sleepCard]}>
+      <Mono style={styles.cardMeta}>{verb}{note.timestamp ? ` · ${timeAgo(note.timestamp)}` : ''}</Mono>
+      <View style={styles.path}>
+        <View style={styles.node}><Mono style={styles.cardText}>{t.a}</Mono></View>
+        <Mono style={styles.muted}>{t.op === 'question' ? '?' : '↔'}</Mono>
+        <View style={styles.node}><Mono style={styles.cardText}>{t.b}</Mono></View>
+        <Mono style={styles.cardMeta}>{STATUS[t.status] ?? t.status.toUpperCase()}{t.after != null ? ` · ${t.before != null ? `${pct(t.before)} → ` : ''}${pct(t.after)}` : ''}</Mono>
+      </View>
+      <Mono style={styles.cardText}>{t.summary}</Mono>
+      {t.evidence.length > 0 && (
+        <>
+          <Mono style={styles.cardMeta} onPress={() => setOpen((o) => !o)}>{open ? '▾' : '▸'} EVIDENCE ({t.evidence.length})</Mono>
+          {open && t.evidence.map((e, i) => (
+            <Mono key={i} style={styles.meaning}>{e.against ? '✕ ' : '✓ '}“{e.text}” — {e.source}, trusted {Math.round(e.trust * 100)}%</Mono>
+          ))}
+        </>
+      )}
     </View>
   );
 }

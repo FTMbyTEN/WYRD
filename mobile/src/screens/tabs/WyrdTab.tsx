@@ -17,6 +17,7 @@ import {
 } from '../../api/hooks';
 import { countdown, timeAgo } from '../../util/time';
 import { firstLineFromMarkdown } from '../../util/text';
+import { noteLine } from '../../api/types';
 import { useIsDesktop } from '../../util/layout';
 
 const BRAIN_ZOOM = 1.6;
@@ -147,7 +148,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
               {notes.slice(0, 3).map((n, i) => (
                 <View key={n.file} style={[styles.detailRow, i > 0 && styles.detailRule]}>
                   <Mono style={styles.detailMeta}>{n.kind === 'firing' ? 'NEURAL FIRING' : /-self\.md$/.test(n.file) ? 'SELF-QUESTION' : 'REASONING PASS'}</Mono>
-                  <Mono style={styles.detailText}>{n.firing?.summary ?? firstLineFromMarkdown(n.content, 320)}</Mono>
+                  <Mono style={styles.detailText}>{n.thought || n.firing ? noteLine(n) : firstLineFromMarkdown(n.content, 320)}</Mono>
                 </View>
               ))}
             </DetailCard>
@@ -168,7 +169,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
         </View>
         <View style={styles.quote}>
           <Mono style={styles.quoteText} numberOfLines={desktop ? undefined : 4}>
-            {latestNote ? firstLineFromMarkdown(latestNote.content) : mind?.activeGoal || 'still forming one.'}
+            {latestNote ? noteLine(latestNote) : mind?.activeGoal || 'still forming one.'}
           </Mono>
         </View>
         <DialogueLauncher onPress={onOpenLink} focus={mind?.focusTopic} />

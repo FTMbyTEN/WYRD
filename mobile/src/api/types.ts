@@ -51,10 +51,34 @@ export interface Firing {
 
 export interface ReasoningNote {
   file: string;
-  content: string; // raw markdown, or JSON for kind 'firing'
-  kind?: 'reasoning' | 'self' | 'firing' | 'sleep';
+  content: string; // raw markdown, or JSON for kinds 'firing' and 'thought'
+  kind?: 'reasoning' | 'self' | 'firing' | 'sleep' | 'thought';
   timestamp?: string;
   firing?: Firing;
+  thought?: Thought;
+}
+
+/** One act of WYRD's own thinking: forming a belief from evidence, re-testing one, or asking. */
+export interface Thought {
+  op: 'connect' | 'test' | 'question';
+  a: string;
+  b: string;
+  claim: string | null;
+  before: number | null;
+  after: number | null;
+  status: 'hypothesis' | 'held' | 'doubted' | 'dream' | 'dropped' | 'open';
+  sources: number;
+  against: number;
+  evidence: { text: string; source: string; trust: number; against: boolean }[];
+  summary: string;
+}
+
+/** The one line to show for a note, whatever its kind. */
+export function noteLine(n: ReasoningNote): string {
+  if (n.thought) return n.thought.summary;
+  if (n.firing) return n.firing.summary;
+  const q = n.content.match(/^Q:\s*(.+)$/m)?.[1];
+  return q ?? n.content.split('\n').map((l) => l.replace(/^#+\s*/, '').trim()).find(Boolean) ?? '';
 }
 
 export interface Synapse { a: string; b: string; weight: number; fires: number; lastFired: string }

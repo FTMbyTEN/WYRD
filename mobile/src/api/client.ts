@@ -17,6 +17,7 @@ import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkP
   FilterReport,
   LearningStats,
   Firing,
+  Thought,
   NeuralNetwork,
   ConceptExample,
   Sighting,
@@ -132,7 +133,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
 
 interface SpReasoningNote {
   timestamp: string;
-  kind: 'reasoning' | 'self' | 'firing' | 'sleep';
+  kind: 'reasoning' | 'self' | 'firing' | 'sleep' | 'thought';
   content: string;
 }
 
@@ -295,8 +296,10 @@ export const api = {
     callEndpoint<SpReasoningNote[]>('reasoning', 'getNotes', { limit }, { authenticated: false }).then((ns) =>
       ns.map((n) => {
         let firing: Firing | undefined;
+        let thought: Thought | undefined;
         if (n.kind === 'firing') { try { firing = JSON.parse(n.content) as Firing; } catch { /* malformed: shown as text */ } }
-        return { file: `${n.timestamp.replace(/[:.]/g, '-')}${n.kind === 'self' ? '-self' : n.kind === 'firing' ? '-firing' : ''}.md`, content: n.content, kind: n.kind, timestamp: n.timestamp, firing };
+        if (n.kind === 'thought') { try { thought = JSON.parse(n.content) as Thought; } catch { /* malformed: shown as text */ } }
+        return { file: `${n.timestamp.replace(/[:.]/g, '-')}${n.kind === 'reasoning' ? '' : `-${n.kind}`}.md`, content: n.content, kind: n.kind, timestamp: n.timestamp, firing, thought };
       }),
     ),
   reasoningNetwork: (limit = 60) =>
