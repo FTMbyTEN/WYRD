@@ -25,10 +25,16 @@ function usePolled<T>(fetcher: () => Promise<T>, pollMs: number | null, deps: un
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
+  const lastJson = useRef<string | null>(null);
   const reload = useCallback(async () => {
     try {
       const result = await fetcherRef.current();
-      setData(result);
+      // unchanged since last time: keep the same object, so nothing re-renders for nothing
+      const json = JSON.stringify(result);
+      if (json !== lastJson.current) {
+        lastJson.current = json;
+        setData(result);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -41,8 +47,15 @@ function usePolled<T>(fetcher: () => Promise<T>, pollMs: number | null, deps: un
     setLoading(true);
     reload();
     if (!pollMs) return;
-    const id = setInterval(reload, pollMs);
-    return () => clearInterval(id);
+    // web: don't poll a tab nobody is looking at; catch up the moment it's visible again
+    const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const id = setInterval(() => { if (!hidden()) reload(); }, pollMs);
+    const onVisible = () => { if (!hidden()) reload(); };
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload, pollMs, ...deps]);
 

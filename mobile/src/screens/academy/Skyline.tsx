@@ -22,7 +22,10 @@ const GREY = '#9a9a9a';
 export function Skyline({ wing, onWing, lit }: { wing: Wing; onWing: (w: Wing) => void; lit: number }) {
   const [t, setT] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setT((x) => x + 1), 80);
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return; // nobody watching
+      setT((x) => x + 1);
+    }, 110);
     return () => clearInterval(id);
   }, []);
 

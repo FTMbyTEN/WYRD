@@ -35,11 +35,17 @@ function Loading() {
 // (module-evaluated), not just rendered, after CanvasKit (WASM) finishes loading — Skia.web.ts
 // reads `global.CanvasKit` once at import time. `React.lazy` + a dynamic `import()` is the only
 // way to defer module evaluation itself, which is why AppRoot lives in its own file.
+// Web: start loading CanvasKit (the ~3 MB graphics engine) and the app code the moment this
+// module runs, in parallel with the fonts -- not after them, as a lazy component would.
+const skiaReady: Promise<unknown> | null =
+  Platform.OS === 'web'
+    ? import('@shopify/react-native-skia/lib/module/web').then(({ LoadSkiaWeb }) => LoadSkiaWeb())
+    : null;
+
 const AppRoot =
   Platform.OS === 'web'
     ? React.lazy(async () => {
-        const { LoadSkiaWeb } = await import('@shopify/react-native-skia/lib/module/web');
-        await LoadSkiaWeb();
+        await skiaReady;
         return import('./src/AppRoot');
       })
     : require('./src/AppRoot').default;
