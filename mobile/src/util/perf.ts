@@ -19,3 +19,6 @@ export const LITE = detect();
 
 /** Frame rate for Skia animations. */
 export const ANIMATION_FPS = LITE ? 20 : 30;
+
+/** Frame rate for a visual that is the whole screen (the gate vortex): the display's own rate. */
+export const SMOOTH_FPS = LITE ? 30 : 60;

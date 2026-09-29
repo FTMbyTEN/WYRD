@@ -3,6 +3,7 @@ import { View, type LayoutChangeEvent } from 'react-native';
 import { Canvas, Picture } from '@shopify/react-native-skia';
 import { makeVortexEngine } from '../vortex/engine';
 import { useSkiaLoop } from '../vortex/skiaLoop';
+import { SMOOTH_FPS } from '../util/perf';
 
 export interface VortexHandle {
   burst: () => void;
@@ -38,6 +39,8 @@ export const VortexCanvas = forwardRef<VortexHandle, Props>(({ active = true, on
     size.width,
     size.height,
     active,
+    // the gate is the only thing on screen and its motion is the point: the display's full rate
+    SMOOTH_FPS,
   );
 
   const onLayout = (e: LayoutChangeEvent) => {

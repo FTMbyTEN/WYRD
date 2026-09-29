@@ -29,8 +29,10 @@ export function useSkiaLoop(draw: DrawFn, width: number, height: number, active 
     const bounds = Skia.XYWHRect(0, 0, width, height);
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      if (pageHidden() || now - last < minGap) return;
-      last = now;
+      // a frame is due when the gap has (almost) passed: a millisecond of vsync jitter must not
+      // skip a frame, and keeping to the grid (not `last = now`) keeps the steps even
+      if (pageHidden() || now - last < minGap - 2) return;
+      last = now - last > minGap * 3 ? now : last + minGap * Math.max(1, Math.floor((now - last + 2) / minGap));
       const recorder = Skia.PictureRecorder();
       const canvas = recorder.beginRecording(bounds);
       withArena(() => drawRef.current(canvas, width, height, now));

@@ -42,8 +42,11 @@ export function pickFile(): Promise<File | null> {
       resolve(input.files?.[0] ?? null);
       input.remove();
     };
-    // a cancelled picker fires no change event; the window regains focus instead
-    window.addEventListener('focus', () => setTimeout(() => { if (!input.files?.length) resolve(null); }, 800), { once: true });
+    // a cancelled picker says so with 'cancel'. (Guessing from the window regaining focus used to
+    // drop real picks whose change event came late -- a big file, or one still syncing from
+    // OneDrive -- so nothing happened at all. A picker closed without either event just leaves
+    // this promise waiting, which is harmless.)
+    input.addEventListener('cancel', () => { resolve(null); input.remove(); });
     document.body.appendChild(input);
     input.click();
   });
