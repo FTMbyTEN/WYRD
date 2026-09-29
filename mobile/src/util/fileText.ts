@@ -72,9 +72,14 @@ const nativeImport = new Function('u', 'return import(u)') as (u: string) => Pro
 // pdf.js here is its legacy build, with fallbacks for what older and current browsers lack
 // (Uint8Array.toHex, Promise.withResolvers, ...) built into both of its files; see
 // scripts/copy-canvaskit.js.
+// The pdf.js files are cached for a week by browsers and the CDN in front of the server, so their
+// address carries this revision: change it whenever the files change (a pdf.js upgrade, or a
+// change to scripts/copy-canvaskit.js), and everyone gets the new files at once.
+const PDFJS_REV = '6.3.289-legacy.1';
+
 async function pdfText(file: File, onProgress?: Progress): Promise<{ text: string; pages: number }> {
-  const pdfjs = await nativeImport('/pdfjs/pdf.min.mjs');
-  pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+  const pdfjs = await nativeImport(`/pdfjs/pdf.min.mjs?v=${PDFJS_REV}`);
+  pdfjs.GlobalWorkerOptions.workerSrc = `/pdfjs/pdf.worker.min.mjs?v=${PDFJS_REV}`;
   const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
   // a PDF that can't be opened says so, rather than leaving the card reading forever
   const doc = await Promise.race([
