@@ -44,12 +44,15 @@ export function Passage({ text, font, size, color, muted, rtl, dropCap }: {
           );
         }
         const figure = /^(Figure|Table|Example) \d/.test(p);
-        const cap = i === capAt ? p.match(/^([“"'(]*)(\p{L})/u) : null;
-        if (cap) {
+        // the opening of a chapter: its first few words in bold small capitals. (A large drop cap
+        // drawn inline overflowed its line and overlapped the one above, since text can't float.)
+        const lead = i === capAt ? /^((?:\S+\s+){1,3}?\S+)(\s)/.exec(p) : null;
+        if (lead && lead[1].length <= 40) {
           return (
             <Text key={i} selectable style={[{ fontFamily: font, fontSize: size, lineHeight: size * 1.7, color }, dir]}>
-              <Text style={{ fontSize: size * 2.5, lineHeight: size * 1.7, fontWeight: '700' }}>{cap[1]}{cap[2]}</Text>
-              {inline(p.slice(cap[0].length))}
+              <Text style={{ fontWeight: '700', letterSpacing: 1.2, fontVariant: ['small-caps'] }}>{lead[1]}</Text>
+              {lead[2]}
+              {inline(p.slice(lead[0].length))}
             </Text>
           );
         }
@@ -69,15 +72,29 @@ export function Passage({ text, font, size, color, muted, rtl, dropCap }: {
 
 /** Short stand-alone lines that name a chapter, letter, act or part. */
 function isHeading(p: string) {
-  if (p.length > 60 || p.includes('\n') || /[,;]$/.test(p)) return false;
-  if (/^(chapter|book|part|volume|act|scene|letter|canto|section|stave)\b[\s.:]*([ivxlcdm\d]+|[a-z]+)?\b/i.test(p)) return true;
+  if (p.length > 60 || p.includes('\n') || /[,;:]$/.test(p)) return false;
+  // the whole line is a marker: "CHAPTER IV.", "Letter 3", "Act II, Scene 1", "BOOK THE FIRST"
+  if (/^(chapter|book|part|volume|act|scene|letter|canto|section|stave)\s+([ivxlcdm]+|\d+|the\s+\w+|one|two|three|four|five|six|seven|eight|nine|ten)\b[\s.,:—–-]*(scene\s+[ivxlcdm\d]+\.?)?$/i.test(p)) return true;
+  // or a short line in capitals ("THE PROPOSAL", "LETTER III.")
   const letters = p.replace(/[^A-Za-z]/g, '');
-  return letters.length >= 4 && letters === letters.toUpperCase() && !/[.!?]["”’]?$/.test(p.replace(/^[IVXLC]+\.$/, ''));
+  return letters.length >= 4 && letters === letters.toUpperCase() && p.split(/\s+/).length <= 8;
 }
 
-/** _italic_ spans. */
+/** _italic_ spans: only an underscore that opens after a space or line start and closes before
+ *  a space or punctuation, so snake_case words and file_names stay as written. */
 function inline(s: string): React.ReactNode {
-  const parts = s.split(/(_[^_\n]{1,120}_)/g);
-  if (parts.length === 1) return s;
-  return parts.map((x, i) => (/^_[^_]+_$/.test(x) ? <Text key={i} style={{ fontStyle: 'italic' }}>{x.slice(1, -1)}</Text> : x));
+  const re = /(^|[\s(“"‘'—])_([^_\n]{1,120}?)_(?=$|[\s).,;:!?”"’'—])/g;
+  if (!re.test(s)) return s;
+  re.lastIndex = 0;
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  for (let m = re.exec(s); m; m = re.exec(s)) {
+    const start = m.index + m[1].length;
+    out.push(s.slice(last, start));
+    out.push(<Text key={k++} style={{ fontStyle: 'italic' }}>{m[2]}</Text>);
+    last = start + m[2].length + 2;
+  }
+  out.push(s.slice(last));
+  return out;
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
@@ -37,7 +37,6 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
   const [open, setOpen] = useState<ReadingSlice | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [welcome, setWelcome] = useState(0);
   const [quizStats, setQuizStats] = useState<QuizStats | null>(null);
   useEffect(() => { api.libraryQuizStats().then(setQuizStats).catch(() => {}); }, []);
 
@@ -50,11 +49,6 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
 
   const load = useCallback(() => api.libraryList().then(setItems).catch(() => setItems([])), []);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const t = setInterval(() => setWelcome((w) => (w + 1) % WELCOMES.length), 3200);
-    return () => clearInterval(t);
-  }, []);
-
   const show = (slice: ReadingSlice) => {
     setOpen(slice);
     setItems((xs) => [slice.item, ...(xs ?? []).filter((x) => x.id !== slice.item.id)]);
@@ -103,8 +97,7 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
       <View style={[styles.gate, wide && styles.gateWide]}>
         <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
           <Mono style={styles.eyebrow}>ACADEMY · {greeting().toUpperCase()}</Mono>
-          <Display style={[styles.welcome, wide && { fontSize: 46, lineHeight: 50 }]} numberOfLines={2}>{WELCOMES[welcome][0]}</Display>
-          <Mono style={styles.lang}>{WELCOMES[welcome][1].toUpperCase()} · {welcome + 1}/{WELCOMES.length}</Mono>
+          <Welcome wide={wide} />
           <Mono style={styles.lede}>
             Classics, open textbooks and texts in fifteen languages — free for every student, everywhere. Read a passage at a time; WYRD keeps your place, quizzes you, and talks it through with you.
           </Mono>
@@ -201,6 +194,37 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
         Free for every student, everywhere: public-domain books from Project Gutenberg, open textbooks from OpenStax (CC BY 4.0) and texts from Wikisource (CC BY-SA 4.0). Reading here never uses an AI.
       </Mono>
     </ScrollView>
+  );
+}
+
+const NON_LATIN = /[Ͱ-ϿЀ-ӿ֐-ࣿऀ-෿฀-࿿　-鿿가-힯]/;
+const welcomeSerif = Platform.select({ web: 'Georgia, "Noto Serif", "Noto Sans", "Times New Roman", serif', ios: 'Georgia', default: 'serif' });
+
+/** "Welcome, scholar" in sixteen languages, one after another. Kept in its own component so the
+ *  change every few seconds redraws only this line (not the reading room below it), in a box of
+ *  fixed height so nothing below it moves, and in a font that has every script: the pixel
+ *  display font has no Arabic, Devanagari or Chinese, so those fell back to mismatched fonts. */
+function Welcome({ wide }: { wide: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      setI((w) => (w + 1) % WELCOMES.length);
+    }, 3200);
+    return () => clearInterval(t);
+  }, []);
+  const [text, lang] = WELCOMES[i];
+  const size = wide ? 44 : 32;
+  const other = NON_LATIN.test(text);
+  return (
+    <View style={{ height: size * 1.3 + 16, justifyContent: 'flex-end', gap: 4 }}>
+      {other ? (
+        <Text numberOfLines={1} style={{ fontFamily: welcomeSerif, fontSize: size * 0.82, lineHeight: size * 1.15, color: colors.mint }}>{text}</Text>
+      ) : (
+        <Display numberOfLines={1} style={{ fontSize: size, lineHeight: size * 1.15, color: colors.mint }}>{text}</Display>
+      )}
+      <Mono style={styles.lang}>{lang.toUpperCase()} · {i + 1}/{WELCOMES.length}</Mono>
+    </View>
   );
 }
 
