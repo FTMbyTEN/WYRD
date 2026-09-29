@@ -149,7 +149,8 @@ export function useFeed() {
 }
 
 export function useGrowth(limit = 500) {
-  const { data, loading, error, reload } = usePolled<GrowthSnapshot[]>(() => api.growth(limit), 120000, [limit]);
+  // the last week averaged into ~120 points on the server (was 500 raw snapshots per poll)
+  const { data, loading, error, reload } = usePolled<GrowthSnapshot[]>(() => api.growthHistory('week'), 300000, [limit]);
   return { snapshots: data || [], loading, error, reload };
 }
 

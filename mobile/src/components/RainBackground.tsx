@@ -22,7 +22,7 @@ export function RainBackground({ opacity = 0.1 }: { opacity?: number }) {
       if (!stateRef.current || stateRef.current.cols !== cols) {
         stateRef.current = { cols, drops: Array.from({ length: cols }, () => (Math.random() * h) / fs) };
       }
-      if (now - lastRef.current < 62) return;
+      if (now - lastRef.current < 62) return false; // nothing new: no snapshot this frame
       lastRef.current = now;
 
       const st = stateRef.current;
@@ -39,6 +39,8 @@ export function RainBackground({ opacity = 0.1 }: { opacity?: number }) {
     },
     size.width,
     size.height,
+    true,
+    0.5, // a faint texture: half resolution looks the same at a quarter of the memory
   );
 
   const onLayout = (e: LayoutChangeEvent) => {

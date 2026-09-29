@@ -74,7 +74,10 @@ function Pattern({ seed }: { seed: number }) {
   return <G>{els}</G>;
 }
 
-export function BookCover({ title, author, width = 120, progress, badge }: {
+/** Redrawn only when this book's own details change, not whenever the list around it does. */
+export const BookCover = React.memo(BookCoverImpl);
+
+function BookCoverImpl({ title, author, width = 120, progress, badge }: {
   title: string;
   author?: string;
   width?: number;
@@ -82,12 +85,14 @@ export function BookCover({ title, author, width = 120, progress, badge }: {
   badge?: string;
 }) {
   const seed = useMemo(() => hash(`${title}|${author ?? ''}`), [title, author]);
+  // the pattern is the costly part (up to a hundred shapes): build it once per book
+  const pattern = useMemo(() => <Pattern seed={seed} />, [seed]);
   const height = (width * H) / W;
   return (
     <View style={[styles.cover, { width, height }]}>
       <Svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={StyleSheet.absoluteFill}>
         <Rect x={0} y={0} width={W} height={H} fill="#ffffff" />
-        <Pattern seed={seed} />
+        {pattern}
         {/* spine shadow */}
         <Rect x={0} y={0} width={5} height={H} fill={INK} opacity={0.85} />
         {progress != null && progress > 0 && (

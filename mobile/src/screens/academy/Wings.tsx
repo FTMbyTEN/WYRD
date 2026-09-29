@@ -103,6 +103,8 @@ export function StacksWing({ desk, loading, open, coverW, wide }: WingProps) {
 // ---------------------------------------------------------------------------------------------
 // LECTURE HALL: OpenStax textbooks
 
+const PER_GROUP = 8;
+
 const LANG_NAMES: Record<string, string> = { en: 'ENGLISH', es: 'ESPAÑOL', pl: 'POLSKI', fr: 'FRANÇAIS', de: 'DEUTSCH' };
 
 export function LectureHall({ desk, loading, open, coverW, wide }: WingProps) {
@@ -111,6 +113,7 @@ export function LectureHall({ desk, loading, open, coverW, wide }: WingProps) {
   const [subject, setSubject] = useState<string | null>(null);
   const [lang, setLang] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => { api.libraryTextbooks().then(setBooks).catch(() => setFailed(true)); }, []);
 
@@ -154,10 +157,17 @@ export function LectureHall({ desk, loading, open, coverW, wide }: WingProps) {
               <View style={styles.courseHead}>
                 <Mono style={styles.course}>{name.toUpperCase()}</Mono>
                 <View style={styles.rule} />
-                <Mono style={styles.muted}>{list.length}</Mono>
+                {list.length > PER_GROUP && !subject && !q.trim() ? (
+                  <Pressable onPress={() => setOpenGroups((g) => ({ ...g, [name]: !g[name] }))}>
+                    <Mono style={styles.go}>{openGroups[name] ? 'SHOW FEWER' : `SHOW ALL ${list.length} →`}</Mono>
+                  </Pressable>
+                ) : (
+                  <Mono style={styles.muted}>{list.length}</Mono>
+                )}
               </View>
               <View style={styles.grid}>
-                {list.map((b) => {
+                {/* a few per subject at first: every cover is a drawing, and there are over a hundred */}
+                {(openGroups[name] || subject || q.trim() ? list : list.slice(0, PER_GROUP)).map((b) => {
                   const onDesk = desk.find((i) => i.url === `openstax:${b.id}`);
                   return (
                     <Pressable key={b.id} onPress={() => open('openstax', b.id, b.id)} style={({ pressed }) => [styles.card, { width: wide ? 124 : coverW }, pressed && { opacity: 0.75 }]}>

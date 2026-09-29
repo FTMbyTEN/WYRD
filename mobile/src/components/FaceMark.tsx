@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import { Canvas, Picture, PointMode, Skia, type SkCanvas, type SkPicture } from '@shopify/react-native-skia';
 import { useSkiaLoop } from '../vortex/skiaLoop';
+import { disposeSoon, withArena } from '../vortex/arena';
 import { faceProject } from '../face/faceProject';
 import { FACE_FACES } from '../face/faceMeshData';
 
@@ -79,9 +80,11 @@ export function FaceMark({ mode = 'scan', spin = false, style }: Props) {
     if (spin || size.width <= 0 || size.height <= 0) return null;
     const recorder = Skia.PictureRecorder();
     const canvas = recorder.beginRecording(Skia.XYWHRect(0, 0, size.width, size.height));
-    drawFace(canvas, size.width, size.height, mode, 0.18);
+    withArena(() => drawFace(canvas, size.width, size.height, mode, 0.18));
     return recorder.finishRecordingAsPicture();
   }, [spin, size.width, size.height, mode]);
+  // free the drawn mark when it is redrawn at a new size or goes away
+  useEffect(() => () => disposeSoon(staticPicture as unknown as { dispose?: () => void }), [staticPicture]);
 
   const picture = spin ? loopPicture : staticPicture;
 

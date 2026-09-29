@@ -1,33 +1,52 @@
 import { useEffect, useRef, useState } from 'react';
 import { Skia, type SkCanvas, type SkPicture } from '@shopify/react-native-skia';
+import { disposeSoon, pageHidden, withArena } from './arena';
+import { ANIMATION_FPS } from '../util/perf';
 
 export type DrawFn = (canvas: SkCanvas, width: number, height: number, nowMs: number) => void;
 
 /**
  * Imperative per-frame drawing for Skia, mirroring the original design's canvas-2d `ctx` calls
- * almost 1:1 (drawCircle/drawLine/drawRect/drawPoints/save/restore/translate/scale). Each RAF
- * tick records a fresh SkPicture and swaps it in — React only ever re-renders one <Picture> node,
- * the actual pixel work happens off the JS thread inside Skia.
+ * almost 1:1 (drawCircle/drawLine/drawRect/drawPoints/save/restore/translate/scale). Each tick
+ * records a fresh SkPicture and swaps it in -- React only ever re-renders one <Picture> node.
+ *
+ * Memory: every frame's paints and paths are freed right after drawing (withArena), and each
+ * picture is freed once the next has replaced it -- CanvasKit never frees them by itself.
+ * Speed: capped at [fps] (30 by default -- smooth for these slow drifting visuals, half the work
+ * of 60), and resting entirely while the page is hidden.
  */
-export function useSkiaLoop(draw: DrawFn, width: number, height: number, active = true) {
+export function useSkiaLoop(draw: DrawFn, width: number, height: number, active = true, fps = ANIMATION_FPS) {
   const [picture, setPicture] = useState<SkPicture | null>(null);
   const drawRef = useRef(draw);
   drawRef.current = draw;
+  const current = useRef<SkPicture | null>(null);
 
   useEffect(() => {
     if (!active || width <= 0 || height <= 0) return;
     let raf = 0;
+    let last = 0;
+    const minGap = 1000 / fps;
     const bounds = Skia.XYWHRect(0, 0, width, height);
-    const tick = () => {
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (pageHidden() || now - last < minGap) return;
+      last = now;
       const recorder = Skia.PictureRecorder();
       const canvas = recorder.beginRecording(bounds);
-      drawRef.current(canvas, width, height, performance.now());
-      setPicture(recorder.finishRecordingAsPicture());
-      raf = requestAnimationFrame(tick);
+      withArena(() => drawRef.current(canvas, width, height, now));
+      const next = recorder.finishRecordingAsPicture();
+      (recorder as unknown as { dispose?: () => void }).dispose?.();
+      disposeSoon(current.current as unknown as { dispose?: () => void });
+      current.current = next;
+      setPicture(next);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [width, height, active]);
+    return () => {
+      cancelAnimationFrame(raf);
+      disposeSoon(current.current as unknown as { dispose?: () => void });
+      current.current = null;
+    };
+  }, [width, height, active, fps]);
 
   return picture;
 }
