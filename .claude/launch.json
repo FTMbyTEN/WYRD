@@ -2,13 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "wyrd-backend",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js"],
-      "port": 4477,
-      "autoPort": false
-    },
-    {
       "name": "wyrd-mobile-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "mobile", "run", "web"],
