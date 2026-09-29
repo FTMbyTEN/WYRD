@@ -5,6 +5,7 @@ import * as Speech from 'expo-speech';
 import { OverlayShell } from './OverlayShell';
 import { Display, Mono } from '../../components/ui';
 import { FaceMark } from '../../components/FaceMark';
+import { RichText } from '../../components/RichText';
 import { colors } from '../../theme';
 import { api, ApiError } from '../../api/client';
 import { useConversations, useMind } from '../../api/hooks';
@@ -13,7 +14,7 @@ import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
 import { captureNative, WebCameraSheet } from '../../components/CameraCapture';
 import { useSpeechInput } from '../../util/speechInput';
-import { extractText, pickFile } from '../../util/fileText';
+import { extractText, pickFile, type ExtractedFile } from '../../util/fileText';
 
 interface Props {
   visible: boolean;
@@ -25,26 +26,32 @@ interface Props {
   onOpenBook: (readingItemId: number) => void;
 }
 
-const SUGGESTIONS = [
-  'What are you thinking about right now?',
-  'What did you learn today?',
-  'Build me a tip calculator',
-  'Find me a physics textbook',
-  'Show me Japan on the globe',
-  'Plan a short drone flight',
+const SUGGESTIONS: { tag: string; text: string }[] = [
+  { tag: 'MIND', text: 'What are you thinking about right now?' },
+  { tag: 'MEMORY', text: 'What did you learn today?' },
+  { tag: 'BUILD', text: 'Build me a tip calculator' },
+  { tag: 'ACADEMY', text: 'Find me a physics textbook' },
+  { tag: 'GLOBE', text: 'Show me Japan on the globe' },
+  { tag: 'DRONE', text: 'Plan a short drone flight' },
 ];
 
+/** A file waiting in the composer for the message that goes with it. */
+type Staged = { status: 'reading'; name: string } | { status: 'ready'; file: ExtractedFile; words: number };
+
+const ATTACHED = /^📎 ([^\n]+)\n*/;
+
 /** DIALOGUE_LINK: your private conversation with WYRD. Real chat via chat.sendMessage, history
- *  from chat.getHistory kept live by the stream's `chat` event, and the two tool hand-offs
- *  (`open_world_map` / `preview_app`) routed to the real overlays. Your message shows the moment
- *  you send it, with WYRD "thinking" until the reply lands. The mic is real speech-to-text
- *  on web (util/speechInput.ts); spoken replies are real via expo-speech. */
+ *  from chat.getHistory kept live by the stream's `chat` event, and the tool hand-offs routed to
+ *  the real overlays. A file you attach waits in the composer until you send your message with
+ *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
 export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook }: Props) {
   const { turns } = useConversations(60);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
+  const [staged, setStaged] = useState<Staged | null>(null);
   const [pending, setPending] = useState<{ text: string; at: string } | null>(null);
   const [camOpen, setCamOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   // replies WYRD gave from its own learned answers this session, marked in the thread
   const [fromMemory, setFromMemory] = useState<Set<string>>(() => new Set());
   // replies the judgement gate changed this session: reply text -> verdict
@@ -63,23 +70,35 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
 
   const send = async (override?: string) => {
     const text = (override ?? draft).trim();
-    if (!text || sending) return;
+    const file = override == null && staged?.status === 'ready' ? staged.file : null;
+    if ((!text && !file) || sending || staged?.status === 'reading') return;
+    const shown = file ? `📎 ${file.name}${text ? `\n${text}` : ''}` : text;
     setDraft('');
+    setStaged(null);
     setError(null);
-    setPending({ text, at: new Date().toISOString() });
+    setPending({ text: shown, at: new Date().toISOString() });
     try {
-      const result = await api.chat(text);
+      if (file && !text) {
+        // a file on its own: WYRD's first look at it is the reply
+        const up = await api.documentUpload(file.name, file.kind, file.text, file.pages);
+        wyrdStream.publish('chat', { id: up.turnId ?? undefined, userText: `📎 ${up.name}`, botText: up.reply, timestamp: new Date().toISOString(), nonce: null });
+        if (tts && up.reply) speakAsWyrd(up.reply);
+        return;
+      }
+      if (file) await api.documentUpload(file.name, file.kind, file.text, file.pages, true);
+      const result = await api.chat(shown);
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
       if (result.judgement) setJudged((m) => new Map(m).set(result.reply, result.judgement!));
-      wyrdStream.publish('chat', { id: result.turnId, userText: text, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
       if (tts && result.reply) speakAsWyrd(result.reply);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'could not reach WYRD');
-      setDraft(text); // give the message back so it isn't lost
+      setError(err instanceof ApiError ? err.message : (err as Error)?.message || 'could not reach WYRD');
+      setDraft(text); // give the message (and file) back so nothing is lost
+      if (file) setStaged({ status: 'ready', file, words: countWords(file.text) });
     } finally {
       setPending(null);
     }
@@ -123,27 +142,22 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     }
   };
 
-  // Share a file: its text is read here in the browser and only that is sent; WYRD answers the
-  // first look, and any question typed alongside it straight after.
+  // Attach a file: its text is read here in the browser, then it waits in the composer until
+  // you send your message with it. Nothing reaches WYRD before that.
   const attachFile = async () => {
-    if (sending) return;
+    if (sending || staged?.status === 'reading') return;
     if (Platform.OS !== 'web') { setError('Sharing files works in the web app for now.'); return; }
     setError(null);
     const file = await pickFile();
     if (!file) return;
-    const question = draft.trim();
-    setDraft('');
-    setPending({ text: `📎 ${file.name} — reading…`, at: new Date().toISOString() });
+    setStaged({ status: 'reading', name: file.name });
     try {
       const doc = await extractText(file);
-      const up = await api.documentUpload(doc.name, doc.kind, doc.text, doc.pages);
-      wyrdStream.publish('chat', { id: up.turnId ?? undefined, userText: `📎 ${up.name}`, botText: up.reply, timestamp: new Date().toISOString(), nonce: null });
-      setPending(null);
-      if (question) await send(question);
-      else if (tts && up.reply) speakAsWyrd(up.reply);
+      if (doc.text.trim().length < 20) throw new Error("I couldn't find readable text in that file (a scanned PDF is an image, not text).");
+      setStaged({ status: 'ready', file: doc, words: countWords(doc.text) });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : (e as Error).message || 'could not read that file');
-      setPending(null);
+      setStaged(null);
+      setError((e as Error).message || 'could not read that file');
     }
   };
 
@@ -175,7 +189,15 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   }, [turns.length, pending]);
 
-  const canSend = draft.trim().length > 0 && !sending;
+  const canSend = (draft.trim().length > 0 || staged?.status === 'ready') && !sending && staged?.status !== 'reading';
+
+  // web: Enter sends, Shift+Enter is a new line
+  const onKeyPress = (e: { nativeEvent: { key: string; shiftKey?: boolean }; preventDefault?: () => void }) => {
+    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+      e.preventDefault?.();
+      send();
+    }
+  };
 
   return (
     <OverlayShell
@@ -185,50 +207,51 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       black
       footer={
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {!!error && (
-            <View style={styles.error}>
-              <Mono style={styles.errorText}>{error}</Mono>
+          <View style={styles.dock}>
+            {!!error && (
+              <View style={styles.error}>
+                <Mono style={styles.errorText}>{error}</Mono>
+                <Pressable onPress={() => setError(null)} hitSlop={8}><Mono style={styles.errorText}>✕</Mono></Pressable>
+              </View>
+            )}
+            <View style={[styles.composer, focused && styles.composerFocused]}>
+              {staged && <StagedFile staged={staged} onRemove={() => setStaged(null)} />}
+              <TextInput
+                value={draft}
+                onChangeText={(t) => { setDraft(t); if (error) setError(null); }}
+                onSubmitEditing={() => { if (Platform.OS !== 'web') send(); }}
+                onKeyPress={onKeyPress as never}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder={mic ? 'listening…' : staged ? 'Ask about this file…' : 'Message WYRD'}
+                placeholderTextColor={colors.greenBorder}
+                style={styles.input}
+                multiline
+                blurOnSubmit={Platform.OS !== 'web'}
+                returnKeyType="send"
+              />
+              <View style={styles.toolRow}>
+                <Tool label="Voice input" on={mic} onPress={toggleMic}>
+                  <Path d="M8 1.5a2.2 2.2 0 0 0-2.2 2.2v3.8a2.2 2.2 0 0 0 4.4 0V3.7A2.2 2.2 0 0 0 8 1.5Z" />
+                  <Path d="M3.8 7.2a4.2 4.2 0 0 0 8.4 0M8 11.4v3" />
+                </Tool>
+                <Tool label="Show WYRD a photo" onPress={openCamera} disabled={sending}>
+                  <Path d="M2 5.2h2.6L5.8 3.5h4.4l1.2 1.7H14v7.3H2Z" strokeLinejoin="round" />
+                  <Path d="M8 10.9a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6Z" />
+                </Tool>
+                <Tool label="Attach a file" on={!!staged} onPress={attachFile} disabled={sending}>
+                  <Path d="M11.2 7.3 7.3 11.2a2.6 2.6 0 0 1-3.7-3.7l4.6-4.6a1.7 1.7 0 0 1 2.4 2.4L6.1 9.8a.8.8 0 0 1-1.2-1.2l3.9-3.9" strokeLinecap="round" />
+                </Tool>
+                <Mono style={styles.hint} numberOfLines={1}>
+                  {Platform.OS === 'web' ? 'enter to send · shift+enter new line' : ''}
+                </Mono>
+                <Pressable onPress={() => send()} disabled={!canSend} style={[styles.sendBtn, !canSend && styles.sendBtnOff]} accessibilityLabel="Send">
+                  <Svg width={15} height={15} viewBox="0 0 16 16">
+                    <Path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke={colors.black} strokeWidth={1.9} fill="none" />
+                  </Svg>
+                </Pressable>
+              </View>
             </View>
-          )}
-          <View style={styles.composer}>
-            <Pressable onPress={toggleMic} style={[styles.iconBtn, mic && styles.iconBtnOn]} accessibilityLabel="Voice input">
-              <Svg width={16} height={16} viewBox="0 0 16 16">
-                <Path d="M8 1.5a2.2 2.2 0 0 0-2.2 2.2v3.8a2.2 2.2 0 0 0 4.4 0V3.7A2.2 2.2 0 0 0 8 1.5Z" stroke={mic ? colors.black : colors.greenDim} strokeWidth={1.3} fill="none" />
-                <Path d="M3.8 7.2a4.2 4.2 0 0 0 8.4 0M8 11.4v3" stroke={mic ? colors.black : colors.greenDim} strokeWidth={1.3} fill="none" />
-              </Svg>
-            </Pressable>
-            <Pressable onPress={openCamera} disabled={sending} style={styles.iconBtn} accessibilityLabel="Show WYRD a photo">
-              <Svg width={16} height={16} viewBox="0 0 16 16">
-                <Path d="M2 5.2h2.6L5.8 3.5h4.4l1.2 1.7H14v7.3H2Z" stroke={colors.greenDim} strokeWidth={1.3} fill="none" strokeLinejoin="round" />
-                <Path d="M8 10.9a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6Z" stroke={colors.greenDim} strokeWidth={1.3} fill="none" />
-              </Svg>
-            </Pressable>
-            <Pressable onPress={attachFile} disabled={sending} style={styles.iconBtn} accessibilityLabel="Share a file with WYRD">
-              <Svg width={16} height={16} viewBox="0 0 16 16">
-                <Path d="M11.2 7.3 7.3 11.2a2.6 2.6 0 0 1-3.7-3.7l4.6-4.6a1.7 1.7 0 0 1 2.4 2.4L6.1 9.8a.8.8 0 0 1-1.2-1.2l3.9-3.9" stroke={colors.greenDim} strokeWidth={1.3} fill="none" strokeLinecap="round" />
-              </Svg>
-            </Pressable>
-            <TextInput
-              value={draft}
-              onChangeText={(t) => { setDraft(t); if (error) setError(null); }}
-              onSubmitEditing={() => send()}
-              placeholder={mic ? 'listening…' : 'Message WYRD'}
-              placeholderTextColor={colors.greenBorder}
-              style={styles.input}
-              multiline
-              blurOnSubmit
-              returnKeyType="send"
-            />
-            <Pressable
-              onPress={() => send()}
-              disabled={!canSend}
-              style={[styles.sendBtn, !canSend && styles.sendBtnOff]}
-              accessibilityLabel="Send"
-            >
-              <Svg width={16} height={16} viewBox="0 0 16 16">
-                <Path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke={colors.black} strokeWidth={1.8} fill="none" />
-              </Svg>
-            </Pressable>
           </View>
           <WebCameraSheet visible={camOpen} onClose={() => setCamOpen(false)} onLook={lookAt} />
         </KeyboardAvoidingView>
@@ -239,10 +262,20 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
           <FaceMark mode="scan" />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Mono style={styles.presenceName}>WYRD · {mind?.mood ?? 'online'}</Mono>
+          <View style={styles.presenceTop}>
+            <Display style={styles.presenceName}>WYRD</Display>
+            <View style={styles.liveDot} />
+            <Mono style={styles.presenceMood}>{mind?.mood ?? 'online'}</Mono>
+          </View>
           <Mono numberOfLines={1} style={styles.presenceSub}>
-            {mind?.focusTopic ? `thinking about ${mind.focusTopic}` : 'always thinking'} · private thread
+            {mind?.focusTopic ? `thinking about ${mind.focusTopic}` : 'always thinking'}
           </Mono>
+        </View>
+        <View style={styles.privatePill}>
+          <Svg width={10} height={10} viewBox="0 0 16 16">
+            <Path d="M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3Z" stroke={colors.greenDim} strokeWidth={1.5} fill="none" />
+          </Svg>
+          <Mono style={styles.privateText}>PRIVATE</Mono>
         </View>
       </View>
 
@@ -253,32 +286,124 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               <FaceMark mode="scan" />
             </View>
             <Display style={styles.emptyTitle}>Say something.</Display>
-            <Mono style={styles.emptyText}>This is a private thread, just you and WYRD. It remembers what you tell it.</Mono>
-            <View style={styles.chips}>
+            <Mono style={styles.emptyText}>A private thread, just you and WYRD. It remembers what you tell it — and you can hand it a file to read with you.</Mono>
+            <View style={styles.cards}>
               {SUGGESTIONS.map((s) => (
-                <Pressable key={s} onPress={() => send(s)} style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}>
-                  <Mono style={styles.chipText}>{s}</Mono>
+                <Pressable key={s.text} onPress={() => send(s.text)} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.card, (pressed || hovered) && styles.cardOn]}>
+                  <Mono style={styles.cardTag}>{s.tag}</Mono>
+                  <Mono style={styles.cardText}>{s.text}</Mono>
+                  <Mono style={styles.cardArrow}>↗</Mono>
                 </Pressable>
               ))}
             </View>
           </View>
         )}
 
-        {turns.map((t, i) => (
-          <View key={`${t.timestamp}-${i}`} style={styles.turn}>
-            {t.userText ? <Bubble mine text={t.userText} at={t.timestamp} /> : null}
-            {t.botText ? <Bubble text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} /> : null}
-          </View>
-        ))}
+        {turns.map((t, i) => {
+          const prev = turns[i - 1];
+          const newDay = !prev || dayKey(prev.timestamp) !== dayKey(t.timestamp);
+          return (
+            <View key={`${t.timestamp}-${i}`} style={styles.turn}>
+              {newDay && <DayRule iso={t.timestamp} />}
+              {t.userText ? <Mine text={t.userText} at={t.timestamp} /> : null}
+              {t.botText ? <Reply text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} /> : null}
+            </View>
+          );
+        })}
 
         {pending && (
           <View style={styles.turn}>
-            <Bubble mine text={pending.text} at={pending.at} />
-            <Thinking />
+            <Mine text={pending.text} at={pending.at} />
+            <Thinking reading={ATTACHED.test(pending.text)} />
           </View>
         )}
       </ScrollView>
     </OverlayShell>
+  );
+}
+
+function countWords(text: string) {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toDateString();
+}
+
+function DayRule({ iso }: { iso: string }) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86400000);
+  const label = d.toDateString() === today.toDateString() ? 'TODAY'
+    : d.toDateString() === yesterday.toDateString() ? 'YESTERDAY'
+    : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase();
+  return (
+    <View style={styles.dayRule}>
+      <View style={styles.dayLine} />
+      <Mono style={styles.dayText}>{label}</Mono>
+      <View style={styles.dayLine} />
+    </View>
+  );
+}
+
+function Tool({ label, on, disabled, onPress, children }: { label: string; on?: boolean; disabled?: boolean; onPress: () => void; children: React.ReactNode }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityLabel={label}
+      style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.tool, hovered && styles.toolHover, on && styles.toolOn, disabled && { opacity: 0.35 }]}
+    >
+      <Svg width={16} height={16} viewBox="0 0 16 16">
+        <G stroke={on ? colors.black : colors.greenDim}>{children}</G>
+      </Svg>
+    </Pressable>
+  );
+}
+
+// react-native-svg's G, typed loosely so stroke props cascade to the paths inside
+const G = ({ stroke, children }: { stroke: string; children: React.ReactNode }) => (
+  <>
+    {React.Children.map(children, (c) => (React.isValidElement(c) ? React.cloneElement(c as React.ReactElement<Record<string, unknown>>, { stroke, strokeWidth: 1.3, fill: 'none' }) : c))}
+  </>
+);
+
+function kindLabel(name: string, kind: string) {
+  const ext = name.includes('.') ? name.split('.').pop()!.toUpperCase() : kind.toUpperCase();
+  return ext.length <= 5 ? ext : kind.toUpperCase();
+}
+
+function FileGlyph({ label, inverse }: { label: string; inverse?: boolean }) {
+  const ink = inverse ? colors.black : colors.green;
+  return (
+    <View style={styles.glyph}>
+      <Svg width={30} height={36} viewBox="0 0 30 36" style={StyleSheet.absoluteFill}>
+        <Path d="M1 1h19l9 9v25H1Z" stroke={ink} strokeWidth={1.2} fill="none" />
+        <Path d="M20 1v9h9" stroke={ink} strokeWidth={1.2} fill="none" />
+      </Svg>
+      <Mono style={[styles.glyphText, { color: ink }]} numberOfLines={1}>{label}</Mono>
+    </View>
+  );
+}
+
+function StagedFile({ staged, onRemove }: { staged: Staged; onRemove: () => void }) {
+  const name = staged.status === 'reading' ? staged.name : staged.file.name;
+  const meta = staged.status === 'reading'
+    ? 'reading…'
+    : [staged.file.pages ? `${staged.file.pages} page${staged.file.pages === 1 ? '' : 's'}` : null, `${staged.words.toLocaleString()} words`, 'ready — ask your question'].filter(Boolean).join(' · ');
+  return (
+    <View style={styles.staged}>
+      <FileGlyph label={kindLabel(name, staged.status === 'ready' ? staged.file.kind : '')} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Mono style={styles.stagedName} numberOfLines={1}>{name}</Mono>
+        <Mono style={styles.stagedMeta} numberOfLines={1}>{meta}</Mono>
+      </View>
+      <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove file" style={styles.stagedX}>
+        <Mono style={styles.stagedXText}>✕</Mono>
+      </Pressable>
+    </View>
   );
 }
 
@@ -302,39 +427,55 @@ function timeLabel(iso: string) {
   return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5);
 }
 
-function Bubble({ text, at, mine, recalled, judged, turnId, rating }: { text: string; at: string; mine?: boolean; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null }) {
-  if (mine) {
-    return (
-      <View style={styles.mineRow}>
-        <View style={styles.mine}>
-          <Mono style={styles.mineText}>{text}</Mono>
+function Mine({ text, at }: { text: string; at: string }) {
+  const m = text.match(ATTACHED);
+  const file = m?.[1];
+  const body = m ? text.slice(m[0].length) : text;
+  return (
+    <View style={styles.mineRow}>
+      {file && (
+        <View style={styles.mineFile}>
+          <FileGlyph label={kindLabel(file, 'file')} inverse />
+          <Mono style={styles.mineFileName} numberOfLines={2}>{file}</Mono>
         </View>
-        <Mono style={styles.timeRight}>{timeLabel(at)}</Mono>
-      </View>
-    );
-  }
+      )}
+      {!!body && (
+        <View style={styles.mine}>
+          <Mono style={styles.mineText}>{body}</Mono>
+        </View>
+      )}
+      <Mono style={styles.timeRight}>{timeLabel(at)}</Mono>
+    </View>
+  );
+}
+
+function Reply({ text, at, recalled, judged, turnId, rating }: { text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null }) {
   return (
     <View style={styles.theirsRow}>
       <View style={styles.avatar}>
         <FaceMark mode="scan" />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
+        <Mono style={styles.who}>WYRD <Mono style={styles.whoTime}>{timeLabel(at)}</Mono></Mono>
         <View style={styles.theirs}>
           {splitCode(text).map((p, i) =>
             p.code ? (
               <View key={i} style={styles.code}>
-                {p.lang ? <Mono style={styles.codeLang}>{p.lang.toUpperCase()}</Mono> : null}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.codeHead}>
+                  <Mono style={styles.codeLang}>{(p.lang ?? 'code').toUpperCase()}</Mono>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 12 }}>
                   <Mono style={styles.codeText}>{p.body}</Mono>
                 </ScrollView>
               </View>
             ) : (
-              <Mono key={i} style={styles.theirsText}>{p.body}</Mono>
+              <RichText key={i} text={p.body} />
             ),
           )}
         </View>
         <View style={styles.metaRow}>
-          <Mono style={styles.timeLeft}>WYRD · {timeLabel(at)}{recalled ? ' · ↺ from memory, no AI call' : ''}{judged ? ` · ⚖ ${judged === 'softened' ? 'worth double-checking' : judged === 'corrected' ? 'corrected' : 'held back'}` : ''}</Mono>
+          {recalled && <Mono style={styles.badge}>↺ from memory · no AI call</Mono>}
+          {judged && <Mono style={styles.badge}>⚖ {judged === 'softened' ? 'worth double-checking' : judged === 'corrected' ? 'corrected' : 'held back'}</Mono>}
           {turnId != null && <Thumbs turnId={turnId} initial={rating ?? null} />}
         </View>
       </View>
@@ -356,10 +497,10 @@ function Thumbs({ turnId, initial }: { turnId: number; initial: number | null })
   return (
     <View style={styles.thumbs}>
       <Pressable onPress={() => choose(1)} accessibilityLabel="Helpful reply" style={[styles.thumb, rating === 1 && styles.thumbOn]}>
-        <Mono style={[styles.thumbText, rating === 1 && styles.thumbTextOn]}>👍</Mono>
+        <Mono style={styles.thumbText}>👍</Mono>
       </Pressable>
       <Pressable onPress={() => choose(-1)} accessibilityLabel="Unhelpful reply" style={[styles.thumb, rating === -1 && styles.thumbOn]}>
-        <Mono style={[styles.thumbText, rating === -1 && styles.thumbTextOn]}>👎</Mono>
+        <Mono style={styles.thumbText}>👎</Mono>
       </Pressable>
       {thanks && rating != null && <Mono style={styles.thanks}>{rating === 1 ? 'noted — WYRD will reuse this' : 'noted — WYRD will rethink this'}</Mono>}
     </View>
@@ -367,7 +508,7 @@ function Thumbs({ turnId, initial }: { turnId: number; initial: number | null })
 }
 
 /** Three dots rising in turn while WYRD composes its reply. */
-function Thinking() {
+function Thinking({ reading }: { reading?: boolean }) {
   const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
   useEffect(() => {
     const loops = dots.map((d, i) =>
@@ -388,7 +529,7 @@ function Thinking() {
       <View style={styles.avatar}>
         <FaceMark mode="scan" />
       </View>
-      <View style={[styles.theirs, styles.thinking]}>
+      <View style={styles.thinking}>
         {dots.map((d, i) => (
           <Animated.View
             key={i}
@@ -401,7 +542,7 @@ function Thinking() {
             ]}
           />
         ))}
-        <Mono style={styles.thinkingText}>thinking</Mono>
+        <Mono style={styles.thinkingText}>{reading ? 'reading your file' : 'thinking'}</Mono>
       </View>
     </View>
   );
@@ -411,65 +552,102 @@ const HAIRLINE = StyleSheet.hairlineWidth;
 
 const styles = StyleSheet.create({
   presence: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12,
     borderBottomWidth: HAIRLINE, borderBottomColor: colors.greenBorder,
   },
-  presenceFace: { width: 32, height: 32, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.green },
-  presenceName: { fontSize: 11.5, letterSpacing: 1.5, color: colors.green },
-  presenceSub: { marginTop: 1, fontSize: 10, color: colors.greenDim },
+  presenceFace: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.green },
+  presenceTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  presenceName: { fontSize: 24, lineHeight: 24, color: colors.green, letterSpacing: 2 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
+  presenceMood: { fontSize: 10.5, letterSpacing: 1.2, color: colors.greenDim, textTransform: 'uppercase' },
+  presenceSub: { marginTop: 2, fontSize: 11, color: colors.greenDim },
+  privatePill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
+  privateText: { fontSize: 8.5, letterSpacing: 1.6, color: colors.greenDim },
 
-  thread: { padding: 16, paddingBottom: 24, gap: 14, maxWidth: 760, width: '100%', alignSelf: 'center' },
-  turn: { gap: 10 },
+  thread: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28, gap: 18, maxWidth: 780, width: '100%', alignSelf: 'center' },
+  turn: { gap: 14 },
 
-  mineRow: { alignItems: 'flex-end' },
-  mine: { maxWidth: '82%', backgroundColor: colors.green, paddingHorizontal: 13, paddingVertical: 10, borderRadius: 16, borderBottomRightRadius: 4 },
-  mineText: { fontSize: 13.5, lineHeight: 20, color: colors.black },
-  timeRight: { marginTop: 3, fontSize: 9, color: colors.greenBorder },
+  dayRule: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  dayLine: { flex: 1, height: HAIRLINE, backgroundColor: colors.greenBorderDim },
+  dayText: { fontSize: 9, letterSpacing: 2, color: colors.greenBorder },
 
-  theirsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '92%' },
-  avatar: { width: 26, height: 26, borderRadius: 13, overflow: 'hidden', borderWidth: 1, borderColor: colors.greenBorder, marginBottom: 16 },
-  theirs: {
-    alignSelf: 'flex-start', maxWidth: '100%', borderWidth: 1, borderColor: colors.green,
-    paddingHorizontal: 13, paddingVertical: 10, borderRadius: 16, borderBottomLeftRadius: 4, gap: 8,
+  mineRow: { alignItems: 'flex-end', gap: 6 },
+  mine: { maxWidth: '82%', backgroundColor: colors.green, paddingHorizontal: 15, paddingVertical: 11, borderRadius: 20, borderBottomRightRadius: 6 },
+  mineText: { fontSize: 13.5, lineHeight: 21, color: colors.black },
+  mineFile: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '82%', backgroundColor: colors.mint,
+    paddingLeft: 10, paddingRight: 14, paddingVertical: 9, borderRadius: 14,
   },
-  theirsText: { fontSize: 13.5, lineHeight: 20, color: colors.mint },
-  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  thumbs: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  thumb: { borderWidth: 1, borderColor: 'transparent', borderRadius: 10, paddingHorizontal: 5, paddingVertical: 1, opacity: 0.55 },
+  mineFileName: { flexShrink: 1, fontSize: 12.5, color: colors.black },
+  timeRight: { fontSize: 9, color: colors.greenBorder },
+
+  theirsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, maxWidth: '94%' },
+  avatar: { width: 28, height: 28, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.green, marginTop: 1 },
+  who: { fontSize: 10, letterSpacing: 1.8, color: colors.green, marginBottom: 6 },
+  whoTime: { fontSize: 9, letterSpacing: 0, color: colors.greenBorder },
+  theirs: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: 13, paddingVertical: 2, gap: 10 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8, paddingLeft: 15 },
+  badge: { fontSize: 9.5, color: colors.greenDim, borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  thumbs: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  thumb: { borderWidth: 1, borderColor: 'transparent', borderRadius: 10, paddingHorizontal: 5, paddingVertical: 1, opacity: 0.5 },
   thumbOn: { borderColor: colors.green, opacity: 1 },
   thumbText: { fontSize: 11 },
-  thumbTextOn: {},
   thanks: { fontSize: 9.5, color: colors.greenDim },
-  timeLeft: { marginTop: 3, fontSize: 9, color: colors.greenBorder },
 
-  code: { borderWidth: HAIRLINE, borderColor: colors.greenBorder, backgroundColor: 'rgba(0,0,0,0.035)', padding: 10, borderRadius: 6 },
-  codeLang: { fontSize: 8.5, letterSpacing: 1.5, color: colors.greenDim, marginBottom: 6 },
+  code: { borderWidth: 1, borderColor: colors.green, borderRadius: 8, overflow: 'hidden', backgroundColor: '#fafafa' },
+  codeHead: { backgroundColor: colors.green, paddingHorizontal: 10, paddingVertical: 4 },
+  codeLang: { fontSize: 9, letterSpacing: 1.8, color: colors.black },
   codeText: { fontSize: 12, lineHeight: 18, color: colors.green },
 
-  thinking: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 16 },
+  thinking: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
-  thinkingText: { marginLeft: 4, fontSize: 10, color: colors.greenDim },
+  thinkingText: { marginLeft: 6, fontSize: 10.5, letterSpacing: 1, color: colors.greenDim },
 
-  empty: { alignItems: 'center', paddingTop: 30, gap: 8 },
-  emptyFace: { width: 68, height: 68, borderRadius: 34, overflow: 'hidden', borderWidth: 1, borderColor: colors.green, marginBottom: 6 },
-  emptyTitle: { fontSize: 28, color: colors.green },
-  emptyText: { fontSize: 12, lineHeight: 18, color: colors.greenDim, textAlign: 'center', maxWidth: 300 },
-  chips: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  chip: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  chipText: { fontSize: 11.5, color: colors.green },
+  empty: { alignItems: 'center', paddingTop: 28, gap: 8 },
+  emptyFace: { width: 84, height: 84, borderRadius: 42, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.green, marginBottom: 8 },
+  emptyTitle: { fontSize: 36, color: colors.green },
+  emptyText: { fontSize: 12, lineHeight: 19, color: colors.greenDim, textAlign: 'center', maxWidth: 340 },
+  cards: { marginTop: 18, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, width: '100%' },
+  card: {
+    flexGrow: 1, flexBasis: 200, maxWidth: 360, minHeight: 78, borderWidth: 1, borderColor: colors.greenBorderDim,
+    borderRadius: 14, padding: 12, gap: 6,
+  },
+  cardOn: { borderColor: colors.green, backgroundColor: 'rgba(0,0,0,0.03)' },
+  cardTag: { fontSize: 8.5, letterSpacing: 2, color: colors.greenBorder },
+  cardText: { fontSize: 12.5, lineHeight: 18, color: colors.mint, paddingRight: 16 },
+  cardArrow: { position: 'absolute', right: 12, top: 10, fontSize: 12, color: colors.greenBorder },
 
-  error: { marginHorizontal: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.danger, paddingHorizontal: 10, paddingVertical: 7 },
-  errorText: { fontSize: 11, color: colors.danger },
+  dock: { paddingHorizontal: 12, paddingBottom: 10, paddingTop: 6, maxWidth: 804, width: '100%', alignSelf: 'center' },
+  error: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, borderWidth: 1, borderColor: colors.danger,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  errorText: { flexShrink: 1, fontSize: 11, color: colors.danger },
   composer: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginHorizontal: 12, marginBottom: 10, marginTop: 4,
-    borderWidth: 1, borderColor: colors.green, borderRadius: 24, paddingLeft: 6, paddingRight: 6, paddingVertical: 6,
-  },
-  iconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  iconBtnOn: { backgroundColor: colors.green },
+    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, backgroundColor: '#ffffff',
+    paddingHorizontal: 8, paddingTop: 6, paddingBottom: 6, boxShadow: '0 6px 24px rgba(0,0,0,0.07)',
+  } as object,
+  composerFocused: { borderColor: colors.green },
   input: {
-    flex: 1, minWidth: 0, maxHeight: 120, paddingHorizontal: 4, paddingVertical: 8,
-    color: colors.green, fontFamily: 'ShareTechMono_400Regular', fontSize: 14,
+    minHeight: 40, maxHeight: 140, paddingHorizontal: 8, paddingVertical: 8,
+    color: colors.green, fontFamily: 'ShareTechMono_400Regular', fontSize: 14, outlineStyle: 'none',
+  } as object,
+  toolRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  tool: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  toolHover: { backgroundColor: 'rgba(0,0,0,0.05)' },
+  toolOn: { backgroundColor: colors.green },
+  hint: { flex: 1, textAlign: 'right', fontSize: 9, color: colors.greenBorderDim, marginRight: 8 },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
+  sendBtnOff: { opacity: 0.2 },
+
+  staged: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 2, marginTop: 2, marginBottom: 2,
+    borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 12, padding: 8, backgroundColor: '#fafafa',
   },
-  sendBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
-  sendBtnOff: { opacity: 0.25 },
+  stagedName: { fontSize: 12.5, color: colors.mint },
+  stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
+  stagedX: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.greenBorderDim },
+  stagedXText: { fontSize: 10, color: colors.greenDim },
+  glyph: { width: 30, height: 36, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 },
+  glyphText: { fontSize: 7.5, letterSpacing: 0.6 },
 });
