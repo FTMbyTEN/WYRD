@@ -366,6 +366,11 @@ export const api = {
   librarySearchBooks: (query: string) => callEndpoint<WorkHit[]>('library', 'searchBooks', { query }),
   libraryOpenBook: (query: string) => callEndpoint<ReadingSlice | null>('library', 'openBook', { query }),
   libraryRemove: (id: number) => callEndpoint<void>('library', 'remove', { id }),
+  // ---- shared files (their text, read in the browser) ----
+  documentUpload: (name: string, kind: string, text: string, pages?: number) =>
+    callEndpoint<{ id: number; name: string; kind: string; words: number; pages: number | null; reply: string; turnId: number | null }>(
+      'document', 'upload', pages == null ? { name, kind, text } : { name, kind, text, pages },
+    ),
   judgementReport: () => callEndpoint<JudgementReport>('feed', 'getJudgementReport', {}, { authenticated: false }),
   trust: () => callEndpoint<TrustReport>('feed', 'getTrust', {}, { authenticated: false }),
   filterReport: () => callEndpoint<FilterReport>('feed', 'getFilterReport', {}, { authenticated: false }),

@@ -13,6 +13,7 @@ import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
 import { captureNative, WebCameraSheet } from '../../components/CameraCapture';
 import { useSpeechInput } from '../../util/speechInput';
+import { extractText, pickFile } from '../../util/fileText';
 
 interface Props {
   visible: boolean;
@@ -122,6 +123,30 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     }
   };
 
+  // Share a file: its text is read here in the browser and only that is sent; WYRD answers the
+  // first look, and any question typed alongside it straight after.
+  const attachFile = async () => {
+    if (sending) return;
+    if (Platform.OS !== 'web') { setError('Sharing files works in the web app for now.'); return; }
+    setError(null);
+    const file = await pickFile();
+    if (!file) return;
+    const question = draft.trim();
+    setDraft('');
+    setPending({ text: `📎 ${file.name} — reading…`, at: new Date().toISOString() });
+    try {
+      const doc = await extractText(file);
+      const up = await api.documentUpload(doc.name, doc.kind, doc.text, doc.pages);
+      wyrdStream.publish('chat', { id: up.turnId ?? undefined, userText: `📎 ${up.name}`, botText: up.reply, timestamp: new Date().toISOString(), nonce: null });
+      setPending(null);
+      if (question) await send(question);
+      else if (tts && up.reply) speakAsWyrd(up.reply);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message || 'could not read that file');
+      setPending(null);
+    }
+  };
+
   // Voice input: the transcript fills the box as you speak and sends when you pause.
   const speech = useSpeechInput({
     onText: (t) => setDraft(t),
@@ -176,6 +201,11 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               <Svg width={16} height={16} viewBox="0 0 16 16">
                 <Path d="M2 5.2h2.6L5.8 3.5h4.4l1.2 1.7H14v7.3H2Z" stroke={colors.greenDim} strokeWidth={1.3} fill="none" strokeLinejoin="round" />
                 <Path d="M8 10.9a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6Z" stroke={colors.greenDim} strokeWidth={1.3} fill="none" />
+              </Svg>
+            </Pressable>
+            <Pressable onPress={attachFile} disabled={sending} style={styles.iconBtn} accessibilityLabel="Share a file with WYRD">
+              <Svg width={16} height={16} viewBox="0 0 16 16">
+                <Path d="M11.2 7.3 7.3 11.2a2.6 2.6 0 0 1-3.7-3.7l4.6-4.6a1.7 1.7 0 0 1 2.4 2.4L6.1 9.8a.8.8 0 0 1-1.2-1.2l3.9-3.9" stroke={colors.greenDim} strokeWidth={1.3} fill="none" strokeLinecap="round" />
               </Svg>
             </Pressable>
             <TextInput

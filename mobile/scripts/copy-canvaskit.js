@@ -18,3 +18,13 @@ if (!fs.existsSync(src)) {
 fs.mkdirSync(destDir, { recursive: true });
 fs.copyFileSync(src, dest);
 console.log('[copy-canvaskit] copied canvaskit.wasm -> mobile/public/canvaskit.wasm');
+
+// pdf.js (reading attached PDFs in Dialogue Link) is served the same way, as static files the
+// app loads only when someone actually attaches a PDF -- it never enlarges the app's own bundle.
+const pdfSrc = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build');
+const pdfDest = path.join(destDir, 'pdfjs');
+if (fs.existsSync(pdfSrc)) {
+  fs.mkdirSync(pdfDest, { recursive: true });
+  for (const f of ['pdf.min.mjs', 'pdf.worker.min.mjs']) fs.copyFileSync(path.join(pdfSrc, f), path.join(pdfDest, f));
+  console.log('[copy-canvaskit] copied pdf.js -> mobile/public/pdfjs/');
+}
