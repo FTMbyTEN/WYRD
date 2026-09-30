@@ -9,6 +9,8 @@ import { SMOOTH_FPS } from '../util/perf';
 export interface VortexHandle {
   burst: () => void;
   setIntensity: (v: number) => void;
+  /** morph to one of its shapes (by index; 0 is the sphere) */
+  goTo: (i: number) => void;
 }
 
 interface Props {
@@ -33,6 +35,7 @@ export const VortexCanvas = forwardRef<VortexHandle, Props>(({ active = true, on
   useImperativeHandle(ref, () => ({
     burst: () => engine.burst(),
     setIntensity: (v: number) => engine.setIntensity(v),
+    goTo: (i: number) => engine.goTo(i),
   }), [engine]);
 
   const loop = useSkiaLoop(

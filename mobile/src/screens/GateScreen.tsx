@@ -13,11 +13,16 @@ import {
 import { VortexCanvas, type VortexHandle } from '../components/VortexCanvas';
 import { AuthPanel } from '../components/AuthPanel';
 import { ScreenEffects } from '../components/ScreenEffects';
-import { Display } from '../components/ui';
+import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
 import { useAuth } from '../api/AuthContext';
 import { GlitchWord } from '../components/GlitchWord';
 import { DustField } from '../components/DustField';
+import { IntroVortex } from '../components/IntroVortex';
+
+// the liquid-chrome intro (three.js) is loaded only when the intro plays; without WebGL 2, the 2D one
+const IntroChrome = React.lazy(() => import('../components/IntroChrome').then((m) => ({ default: m.IntroChrome })));
+const canWebGL2 = (() => { try { return typeof document !== 'undefined' && !!document.createElement('canvas').getContext('webgl2'); } catch { return false; } })();
 import { getSound, preloadVoice, setSound, sfx, startMusic, stopMusic, unlock, useSound, voice, type VoiceLine } from '../util/sound';
 import Svg, { Path } from 'react-native-svg';
 
@@ -84,11 +89,25 @@ export function GateScreen() {
   const { resetToLogin } = useAuth();
   const sound = useSound();
   const started = useRef(false);
-  const awakening = useRef(false);
   const spoken = useRef(new Set<string>());
+  // The first time someone arrives, WYRD's awakening plays before the gate (IntroVortex); after
+  // that it can be replayed from the gate. Having just heard it, the gate doesn't repeat its words.
+  const [intro, setIntro] = useState(() => {
+    if (Platform.OS !== 'web') return false;
+    try { return localStorage.getItem('wyrd.intro') !== '1'; } catch { return false; }
+  });
+  const heardIntro = useRef(false);
+  // the intro's last moments: the gate's vortex starts turning underneath so the hand-off is seamless
+  const [introEnding, setIntroEnding] = useState(false);
+  const endIntro = () => {
+    heardIntro.current = true;
+    try { localStorage.setItem('wyrd.intro', '1'); } catch { /* fine */ }
+    setIntro(false);
+    setIntroEnding(false);
+  };
 
-  // Sound starts with the first touch (browsers allow nothing before it): the music fades in and,
-  // the very first time someone arrives, WYRD speaks "The Awakening". It all fades as they sign in.
+  // Sound starts with the first touch (browsers allow nothing before it): the music fades in. It
+  // all fades as they sign in.
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const first = () => {
@@ -97,18 +116,7 @@ export function GateScreen() {
       startMusic();
       if (started.current) return;
       started.current = true;
-      preloadVoice(['awakening', ...Object.values(GATE_VOICE)]);
-      let seen = false;
-      try { seen = localStorage.getItem('wyrd.awakened') === '1'; } catch { /* no storage: treat as seen */ seen = true; }
-      if (!seen) {
-        awakening.current = true;
-        setTimeout(() => {
-          voice('awakening', { force: true }).finally(() => {
-            awakening.current = false;
-            try { localStorage.setItem('wyrd.awakened', '1'); } catch { /* fine */ }
-          });
-        }, 1400);
-      }
+      preloadVoice(Object.values(GATE_VOICE));
     };
     window.addEventListener('pointerdown', first, true);
     window.addEventListener('keydown', first, true);
@@ -122,7 +130,7 @@ export function GateScreen() {
   // the word breaking up crackles; the first time each word appears, WYRD says it
   const onGlitch = (next: string) => {
     sfx('glitch');
-    if (!started.current || awakening.current || !getSound().music || spoken.current.has(next)) return;
+    if (!started.current || heardIntro.current || intro || !getSound().music || spoken.current.has(next)) return;
     spoken.current.add(next);
     const line = GATE_VOICE[next];
     if (line) setTimeout(() => { void voice(line, { force: true }); }, 650);
@@ -172,7 +180,7 @@ export function GateScreen() {
 
   return (
     <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
-      <VortexCanvas ref={vortexRef} style={StyleSheet.absoluteFill} />
+      <VortexCanvas ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />
       <DustField />
       <ScreenEffects />
 
@@ -203,6 +211,16 @@ export function GateScreen() {
         )}
       </KeyboardAvoidingView>
 
+      {Platform.OS === 'web' && !intro && !open && (
+        <Pressable onPress={() => setIntro(true)} hitSlop={10} style={styles.introBtn} accessibilityLabel="Replay the intro">
+          <Mono style={styles.introText}>↺ INTRO</Mono>
+        </Pressable>
+      )}
+
+      {intro && (canWebGL2
+        ? <React.Suspense fallback={<View style={[StyleSheet.absoluteFill, { backgroundColor: '#fff' }]} />}><IntroChrome onDone={endIntro} onEnding={() => { setIntroEnding(true); vortexRef.current?.goTo(0); }} /></React.Suspense>
+        : <IntroVortex onDone={endIntro} />)}
+
       {Platform.OS === 'web' && (
         <Pressable onPress={toggleSound} hitSlop={10} style={styles.soundBtn} accessibilityLabel={sound.music || sound.sfx ? 'Sound off' : 'Sound on'}>
           <Svg width={18} height={18} viewBox="0 0 16 16">
@@ -218,6 +236,8 @@ export function GateScreen() {
 }
 
 const styles = StyleSheet.create({
+  introBtn: { position: 'absolute', top: 18, left: 18, height: 38, paddingHorizontal: 14, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)' },
+  introText: { fontSize: 10, letterSpacing: 2, color: colors.greenDim },
   soundBtn: { position: 'absolute', top: 18, right: 18, width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   // the auth card sits over the vortex, centred, with room on every side on any screen size

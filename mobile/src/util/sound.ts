@@ -11,7 +11,8 @@ import { useEffect, useState } from 'react';
  * tap; [unlock] is called from that tap.
  */
 
-export type Sfx = 'tick' | 'tab' | 'open' | 'close' | 'send' | 'receive' | 'alert' | 'error' | 'scan' | 'ready' | 'gateEnter' | 'glitch';
+export type Sfx = 'tick' | 'tab' | 'open' | 'close' | 'send' | 'receive' | 'alert' | 'error' | 'scan' | 'ready' | 'gateEnter' | 'glitch'
+  | 'drip' | 'stretch' | 'inhale' | 'splash' | 'lock' | 'gather';
 export type VoiceLine =
   | 'awakening' | 'gate-wyrd' | 'gate-what-comes' | 'gate-fate' | 'gate-welcome'
   | 'greet-first' | 'greet-morning' | 'greet-evening' | 'greet-return'
@@ -246,7 +247,79 @@ export function sfx(name: Sfx) {
       }
       break;
     }
+    // ---- liquid metal -----------------------------------------------------------------------------
+    case 'drip': { // a word leaving the surface: a rising metallic bloop with a tiny splash
+      const f = 320 + Math.random() * 260;
+      tone(c, { f0: f, f1: f * 2.6, at: t, dur: 0.09, peak: 0.07, attack: 0.003 });
+      tone(c, { f0: f * 3.76, at: t + 0.02, dur: 0.22, peak: 0.012, detune: 9 }); // an inharmonic ring: metal, not water
+      hiss(c, { at: t + 0.01, dur: 0.06, peak: 0.02, f0: 5200, q: 3, attack: 0.002 });
+      break;
+    }
+    case 'stretch': // the drop pulled thin: a slow, low metallic strain
+      hiss(c, { at: t, dur: 1.2, peak: 0.07, f0: 140, f1: 900, q: 5, attack: 0.6 });
+      tone(c, { type: 'triangle', f0: 62, f1: 96, at: t, dur: 1.2, peak: 0.07, attack: 0.5 });
+      tone(c, { f0: 740, f1: 1110, at: t + 0.2, dur: 1.0, peak: 0.012, attack: 0.5, detune: 7 });
+      break;
+    case 'inhale': // drawing in its breath: a reversed swell
+      hiss(c, { at: t, dur: 0.5, peak: 0.1, f0: 4200, f1: 300, q: 0.9, attack: 0.45 });
+      tone(c, { f0: 45, f1: 70, at: t, dur: 0.5, peak: 0.12, attack: 0.45 });
+      break;
+    case 'splash': { // bursting into droplets: a wet crack and a scatter of beads
+      hiss(c, { at: t, dur: 0.35, peak: 0.16, f0: 2400, f1: 500, q: 0.8, attack: 0.004 });
+      for (let i = 0; i < 14; i++) {
+        const at = t + 0.04 + Math.random() * 0.9, f = 500 + Math.random() * 1400;
+        tone(c, { f0: f, f1: f * 1.8, at, dur: 0.05 + Math.random() * 0.05, peak: 0.02 + Math.random() * 0.025, attack: 0.002 });
+        tone(c, { f0: f * 2.76, at, dur: 0.15, peak: 0.005, detune: 11 });
+      }
+      break;
+    }
+    case 'lock': // the droplets locking into a lattice: a struck metal plate
+      for (const [f, pk, d] of [[392, 0.05, 1.6], [392 * 2.76, 0.022, 1.1], [392 * 5.4, 0.01, 0.7], [392 * 8.93, 0.005, 0.4]] as const)
+        tone(c, { f0: f, at: t, dur: d, peak: pk, attack: 0.002, detune: 4 });
+      hiss(c, { at: t, dur: 0.05, peak: 0.04, f0: 6000, q: 2, attack: 0.001 });
+      break;
+    case 'gather': { // the drops flowing together into the gate: converging beads, a rising shimmer
+      for (let i = 0; i < 10; i++) {
+        const at = t + i * 0.08 + Math.random() * 0.05, f = 700 + i * 90;
+        tone(c, { f0: f, f1: f * 1.6, at, dur: 0.06, peak: 0.018, attack: 0.002 });
+      }
+      hiss(c, { at: t, dur: 1.4, peak: 0.07, f0: 300, f1: 5000, q: 4, attack: 0.9 });
+      tone(c, { f0: 523, f1: 1046, at: t + 0.3, dur: 1.2, peak: 0.02, attack: 0.8, detune: 5 });
+      break;
+    }
   }
+}
+
+/** A continuous liquid-metal bed under the intro: a low, viscous churn whose loudness and brightness follow the surface. */
+export function liquidBed(): { set(amount: number, bright: number): void; stop(): void } | null {
+  if (!settings.sfx) return null;
+  const c = graph();
+  if (!c || c.state === 'closed') return null;
+  const src = c.createBufferSource(); src.buffer = noise(c); src.loop = true;
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 7; bp.frequency.value = 180;
+  const wob = c.createOscillator(); wob.frequency.value = 0.7; // the slow slosh
+  const wobG = c.createGain(); wobG.gain.value = 60;
+  wob.connect(wobG).connect(bp.frequency);
+  const low = c.createOscillator(); low.frequency.value = 48;
+  const lowG = c.createGain(); lowG.gain.value = 0.35;
+  const g = c.createGain(); g.gain.value = 0.0001;
+  src.connect(bp).connect(g); low.connect(lowG).connect(g);
+  g.connect(fxBus);
+  const t = c.currentTime;
+  src.start(t); wob.start(t); low.start(t);
+  return {
+    set(amount, bright) {
+      const now = c.currentTime;
+      g.gain.setTargetAtTime(0.0001 + Math.max(0, Math.min(1, amount)) * 0.14, now, 0.25);
+      bp.frequency.setTargetAtTime(160 + bright * 900, now, 0.3);
+      low.frequency.setTargetAtTime(44 + bright * 30, now, 0.4);
+    },
+    stop() {
+      const now = c.currentTime;
+      g.gain.setTargetAtTime(0.0001, now, 0.3);
+      for (const n of [src, wob, low]) n.stop(now + 1.5);
+    },
+  };
 }
 
 // ---- voice -------------------------------------------------------------------------------------
@@ -277,26 +350,72 @@ export function preloadVoice(names: VoiceLine[]) { names.forEach((n) => { void f
  * aloud); [force] plays one regardless. Resolves when it has finished.
  */
 export async function voice(name: VoiceLine, opts: { force?: boolean } = {}): Promise<void> {
-  if (!opts.force && !settings.sfx) return;
+  const s = await speak(name, opts);
+  return s?.done;
+}
+
+/** A line being spoken: how loud it is right now (0..1, for a face to move its mouth to) and how
+ *  far in it is, in seconds. */
+export interface Speech {
+  level: () => number;
+  /** the voice's energy right now in three bands, 0..1: body (<300 Hz), voice (300-2k), air (2k+) */
+  bands: () => [number, number, number];
+  elapsed: () => number;
+  done: Promise<void>;
+}
+
+/** Like [voice], but hands back the live speech -- its loudness and position -- as it starts. */
+export async function speak(name: VoiceLine, opts: { force?: boolean } = {}): Promise<Speech | null> {
+  if (!opts.force && !settings.sfx) return null;
   const c = graph();
-  if (!c || c.state === 'closed') return; // a context still waking from the tap plays as soon as it's up
+  if (!c || c.state === 'closed') return null; // a context still waking from the tap plays as soon as it's up
   const buf = await fetchLine(name);
-  if (!buf) return;
+  if (!buf) return null;
   stopVoice();
   const src = c.createBufferSource();
   src.buffer = buf;
   const g = c.createGain();
   g.gain.value = LINE_GAIN[name] ?? 1;
   src.connect(g).connect(voiceIn);
+  // a tap on the dry voice, for its loudness
+  const analyser = c.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.35;
+  g.connect(analyser);
+  const samples = new Float32Array(analyser.fftSize);
+  const freq = new Uint8Array(analyser.frequencyBinCount);
   duck(true);
   current = src;
-  return new Promise((resolve) => {
+  const startAt = c.currentTime + 0.02;
+  const done = new Promise<void>((resolve) => {
     src.onended = () => {
       if (current === src) { current = null; duck(false); }
+      analyser.disconnect();
       resolve();
     };
-    src.start();
   });
+  src.start(startAt);
+  return {
+    level: () => {
+      analyser.getFloatTimeDomainData(samples);
+      let sum = 0;
+      for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+      return Math.min(1, Math.sqrt(sum / samples.length) * 5.5); // speech sits around 0.05-0.2 RMS
+    },
+    bands: () => {
+      analyser.getByteFrequencyData(freq);
+      const hz = c.sampleRate / analyser.fftSize; // per bin
+      const band = (lo: number, hi: number) => {
+        const a = Math.max(1, Math.floor(lo / hz)), b = Math.min(freq.length - 1, Math.ceil(hi / hz));
+        let s = 0;
+        for (let i = a; i <= b; i++) s += freq[i];
+        return Math.min(1, s / ((b - a + 1) * 255) * 1.8);
+      };
+      return [band(60, 300), band(300, 2000), band(2000, 8000)];
+    },
+    elapsed: () => Math.max(0, c.currentTime - startAt),
+    done,
+  };
 }
 
 export function stopVoice() {
@@ -310,6 +429,9 @@ const DUCKED = 0.11;
 let musicEl: HTMLAudioElement | null = null;
 let musicWanted = false;
 let musicStarting = false;
+// the gate plays one passage of The Great Flood, once: 2:03 to 3:03, fading out over its last seconds
+const MUSIC_FROM = 123, MUSIC_TO = 183, MUSIC_FADE = 4;
+let musicDone = false;
 let ducked = false;
 
 function duck(on: boolean) {
@@ -327,10 +449,20 @@ export function startMusic() {
   if (!c) return;
   if (!musicEl) {
     musicEl = new Audio(`/music/great-flood.mp3?v=${ASSET_REV}`);
-    musicEl.loop = true;
+    musicEl.loop = false;
     musicEl.preload = 'auto';
+    const el = musicEl;
+    el.addEventListener('loadedmetadata', () => { if (el.currentTime < MUSIC_FROM) el.currentTime = MUSIC_FROM; });
+    el.addEventListener('timeupdate', () => {
+      if (musicDone || el.currentTime < MUSIC_TO - MUSIC_FADE) return;
+      musicDone = true; // the passage is over: fade out and don't come back
+      stopMusic(Math.max(0.5, MUSIC_TO - el.currentTime));
+    });
+    el.addEventListener('ended', () => { musicDone = true; });
     c.createMediaElementSource(musicEl).connect(musicGain);
   }
+  if (musicDone) return; // it has played its passage
+  if (musicEl.readyState >= 1 && musicEl.currentTime < MUSIC_FROM) musicEl.currentTime = MUSIC_FROM;
   if (!musicEl.paused || musicStarting) return; // already playing (or starting): leave its level alone
   musicStarting = true;
   musicEl.play().finally(() => { musicStarting = false; }).then(() => {
