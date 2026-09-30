@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
-import { Canvas, Picture, Skia } from '@shopify/react-native-skia';
+import { PointMode, Skia, type SkCanvas } from '@shopify/react-native-skia';
 import { useSkiaLoop } from '../vortex/skiaLoop';
+import { SkiaLoopView } from '../vortex/SkiaLoopView';
 
 interface BrainPoint { x: number; y: number; z: number; s: number; ph: number; region: 'left' | 'right' | 'cerebellum' }
 interface Edge { a: number; b: number; speed: number; phase: number }
@@ -65,6 +66,23 @@ function buildBrain(nodeCount: number): BrainPoint[] {
   return pts;
 }
 
+// Shades of ink, quantized: each made once and reused every frame.
+const SHADES = 32;
+const inks: ReturnType<typeof Skia.Color>[] = [];
+function ink(bucket: number) {
+  return (inks[bucket] ??= Skia.Color(`rgba(0,0,0,${((bucket + 0.5) / SHADES).toFixed(3)})`));
+}
+const shade = (alpha: number) => Math.max(0, Math.min(SHADES - 1, Math.floor(alpha * SHADES)));
+function shadeBuckets<T>(): T[][] {
+  return Array.from({ length: SHADES }, () => [] as T[]);
+}
+/** Filled circles given as [x, y, r, x, y, r, ...]: one call where the canvas can batch them. */
+function fillCircles(canvas: SkCanvas, xyr: number[], paint: ReturnType<typeof Skia.Paint>) {
+  const batch = (canvas as unknown as { fillCircles?: (xyr: number[], p: unknown) => void }).fillCircles;
+  if (batch) { batch(xyr, paint); return; }
+  for (let i = 0; i < xyr.length; i += 3) canvas.drawCircle(xyr[i], xyr[i + 1], xyr[i + 2], paint);
+}
+
 /** Nearest-2-neighbour mesh instead of arbitrary index pairing — edges follow the actual shape
  *  of the point cloud (short local connections) rather than drawing long chords across the whole
  *  brain, which is what makes it read as a neural mesh instead of a wireframe ball. O(n^2), fine
@@ -120,7 +138,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activitySignal]);
 
-  const picture = useSkiaLoop(
+  const loop = useSkiaLoop(
     (canvas, W, H, now) => {
       const t = now * 0.00022;
       const R = Math.min(W, H) * 0.42;
@@ -137,36 +155,47 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
         return { sx: W / 2 + x * R * sc * 1.7, sy: H / 2 - p.y * R * sc * 1.9, d: sc, ph: p.ph, s: p.s };
       });
 
+      // Everything is drawn in batches by shade -- a few dozen draw calls a frame instead of ~750,
+      // with each shade's color made once rather than parsed from a string per item.
+      const lines = shadeBuckets<{ x: number; y: number }>();
+      const pulses = shadeBuckets<number>();
+      const dots = shadeBuckets<number>();
+
       // Base mesh: dim connective tissue between neighbouring nodes.
+      for (const e of edges) {
+        const a = proj[e.a], b = proj[e.b];
+        const depth = (a.d + b.d) / 2;
+        const l = lines[shade(0.22 + depth * 0.4)];
+        l.push({ x: a.sx, y: a.sy }, { x: b.sx, y: b.sy });
+
+        // Firing signal: a bright packet travelling each edge on a continuous loop -- the
+        // "electrons keep firing" part, always running, not just on activity.
+        const tt = (clock.t * 0.00035 * e.speed + e.phase) % 1;
+        pulses[shade(0.55 + depth * 0.45)].push(a.sx + (b.sx - a.sx) * tt, a.sy + (b.sy - a.sy) * tt, (1.3 + depth * 1.1) * (1 + boost * 0.6));
+      }
+
+      // Nodes themselves, gently pulsing -- the "neurons".
+      for (const p of proj) {
+        const pulse = 0.55 + 0.45 * Math.sin(now * 0.002 + p.ph);
+        dots[shade(0.25 + p.d * 0.9 * pulse)].push(p.sx, p.sy, p.s * p.d * 1.5);
+      }
+
       const linePaint = Skia.Paint();
       linePaint.setStyle(1);
       linePaint.setStrokeWidth(0.8);
-      edges.forEach((e) => {
-        const a = proj[e.a], b = proj[e.b];
-        const depth = (a.d + b.d) / 2;
-        linePaint.setColor(Skia.Color(`rgba(0,0,0,${(0.22 + depth * 0.4).toFixed(3)})`));
-        canvas.drawLine(a.sx, a.sy, b.sx, b.sy, linePaint);
+      lines.forEach((pts, b) => {
+        if (!pts.length) return;
+        linePaint.setColor(ink(b));
+        canvas.drawPoints(PointMode.Lines, pts, linePaint);
       });
-
-      // Firing signal: a bright packet travelling each edge on a continuous loop — this is the
-      // "electrons keep firing" part, always running, not just on activity.
-      const pulsePaint = Skia.Paint();
-      edges.forEach((e) => {
-        const a = proj[e.a], b = proj[e.b];
-        const tt = (clock.t * 0.00035 * e.speed + e.phase) % 1;
-        const px = a.sx + (b.sx - a.sx) * tt, py = a.sy + (b.sy - a.sy) * tt;
-        const depth = (a.d + b.d) / 2;
-        pulsePaint.setColor(Skia.Color(`rgba(0,0,0,${(0.55 + depth * 0.45).toFixed(3)})`));
-        canvas.drawCircle(px, py, (1.3 + depth * 1.1) * (1 + boost * 0.6), pulsePaint);
-      });
-
-      // Nodes themselves, gently pulsing — the "neurons".
-      const dotPaint = Skia.Paint();
-      proj.forEach((p) => {
-        const pulse = 0.55 + 0.45 * Math.sin(now * 0.002 + p.ph);
-        dotPaint.setColor(Skia.Color(`rgba(0,0,0,${(0.25 + p.d * 0.9 * pulse).toFixed(3)})`));
-        canvas.drawCircle(p.sx, p.sy, p.s * p.d * 1.5, dotPaint);
-      });
+      const fillPaint = Skia.Paint();
+      for (const group of [pulses, dots]) {
+        group.forEach((xyr, b) => {
+          if (!xyr.length) return;
+          fillPaint.setColor(ink(b));
+          fillCircles(canvas, xyr, fillPaint);
+        });
+      }
 
       // Digestion bursts: a real event (ingest/reasoning tick) landed just now — an expanding,
       // fading ring at a random node, visibly distinct from the constant background firing above.
@@ -194,9 +223,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
   return (
     <View style={{ width: '100%', height: '100%' }} onLayout={onLayout}>
       {size.width > 0 && (
-        <Canvas style={{ width: size.width, height: size.height }}>
-          {picture && <Picture picture={picture} />}
-        </Canvas>
+        <SkiaLoopView loop={loop} width={size.width} height={size.height} />
       )}
     </View>
   );

@@ -10,7 +10,15 @@ const HOLD_MS = 3200; // how long each word rests before glitching into the next
  * letter by letter into the next word, with instant horizontal tears and a red/blue channel
  * split while it's unstable -- snap cuts, not eased fades, so it reads as signal breaking up.
  */
-export function GlitchWord({ words, style: baseStyle, fitChars }: { words: string[]; style?: StyleProp<TextStyle>; fitChars?: number }) {
+export function GlitchWord({ words, style: baseStyle, fitChars, onGlitch }: {
+  words: string[];
+  style?: StyleProp<TextStyle>;
+  fitChars?: number;
+  /** called as the word starts breaking up into [next] (it settles ~650 ms later) -- for sound */
+  onGlitch?: (next: string) => void;
+}) {
+  const onGlitchRef = useRef(onGlitch);
+  onGlitchRef.current = onGlitch;
   const [text, setText] = useState(words[0]);
   const [unstable, setUnstable] = useState(false);
   const tear = useRef(new Animated.Value(0)).current;
@@ -22,6 +30,7 @@ export function GlitchWord({ words, style: baseStyle, fitChars }: { words: strin
     const later = (fn: () => void, ms: number) => timers.push(setTimeout(() => alive && fn(), ms));
 
     const glitchTo = (next: string) => {
+      onGlitchRef.current?.(next);
       setUnstable(true);
       const from = words[i];
       const len = Math.max(from.length, next.length);

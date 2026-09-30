@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Header } from './Header';
 import { TabBar, type TabKey } from './TabBar';
@@ -10,6 +10,20 @@ import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
 import { colors } from '../theme';
 import { useIsDesktop } from '../util/layout';
 import { LITE } from '../util/perf';
+import { preloadVoice, setSound, sfx, unlock, useSound, voice, type VoiceLine } from '../util/sound';
+
+/** WYRD's greeting, by how long it's been: first ever, a new morning or evening, or just back. */
+function greeting(): VoiceLine | null {
+  let last = 0;
+  try { last = Number(localStorage.getItem('wyrd.lastVisit') || 0); localStorage.setItem('wyrd.lastVisit', String(Date.now())); } catch { return null; }
+  if (!last) return 'greet-first';
+  const away = Date.now() - last;
+  if (away < 20 * 60 * 1000) return null; // a reload, not a return
+  const h = new Date().getHours();
+  if (away > 4 * 3600 * 1000 && h >= 5 && h < 12) return 'greet-morning';
+  if (away > 4 * 3600 * 1000 && h >= 17) return 'greet-evening';
+  return 'greet-return';
+}
 
 // Everything but the home tab is loaded on demand: the first screen downloads and parses only
 // what it shows, and each other tab or overlay arrives the first time it's opened.
@@ -49,7 +63,9 @@ export function AppShell() {
   // Dialogue Link keeps its draft and scroll once opened; every other overlay is mounted only
   // while open, so a closed one never polls the server or holds memory
   const [linkOpened, setLinkOpened] = useState(false);
-  const [tts, setTts] = useState(false);
+  // VOICE (reading whole replies aloud) is remembered between visits
+  const tts = useSound().voice;
+  const setTts = (f: (v: boolean) => boolean) => { unlock(); setSound({ voice: f(tts) }); };
   const [globeFocus, setGlobeFocus] = useState<string | null>(null);
   const [appPreviewHtml, setAppPreviewHtml] = useState<string | null>(null);
 
@@ -59,10 +75,28 @@ export function AppShell() {
 
   const open = (o: Overlay) => {
     if (o === 'link') setLinkOpened(true);
+    if (o !== overlay) sfx('open');
     setOverlay(o);
   };
   const openAlerts = () => { open('alerts'); markAllAlertsRead(); };
-  const close = () => setOverlay(null);
+  const close = () => { if (overlay) sfx('close'); setOverlay(null); };
+  const changeTab = (t: TabKey) => { if (t !== tab) sfx('tab'); setTab(t); };
+
+  // a signal when new alerts arrive (not for the ones already waiting on arrival)
+  const lastUnread = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastUnread.current != null && unread > lastUnread.current) sfx('alert');
+    lastUnread.current = unread;
+  }, [unread]);
+
+  // WYRD greets whoever just came in (signing in was a tap, so sound is allowed by now)
+  useEffect(() => {
+    const line = greeting();
+    if (!line) return;
+    preloadVoice([line]);
+    const t = setTimeout(() => { void voice(line); }, 1600);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -70,7 +104,7 @@ export function AppShell() {
       <ScreenEffects />
 
       <View style={[styles.content, desktop && styles.contentDesktop]}>
-        {desktop && <TabBar active={tab} onChange={setTab} vertical />}
+        {desktop && <TabBar active={tab} onChange={changeTab} vertical />}
         <View style={{ flex: 1, minWidth: 0 }}>
         <Header
           mind={mind}
@@ -99,7 +133,7 @@ export function AppShell() {
           </Suspense>
         </View>
 
-        {!desktop && <TabBar active={tab} onChange={setTab} />}
+        {!desktop && <TabBar active={tab} onChange={changeTab} />}
         </View>
       </View>
 
@@ -112,8 +146,8 @@ export function AppShell() {
             tts={tts}
             onOpenGlobe={(country) => { setGlobeFocus(country); open('globe'); }}
             onOpenAppPreview={(html) => { setAppPreviewHtml(html); open('appPreview'); }}
-            onOpenDrone={() => { setOverlay(null); setTab('drone'); }}
-            onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); setTab('academy'); }}
+            onOpenDrone={() => { setOverlay(null); changeTab('drone'); }}
+            onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
           />
         )}
         {overlay === 'brain' && <BrainOverlay visible onClose={close} />}

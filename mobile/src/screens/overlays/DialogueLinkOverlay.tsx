@@ -12,6 +12,7 @@ import { useConversations, useMind } from '../../api/hooks';
 import { wyrdStream } from '../../api/stream';
 import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
+import { preloadVoice, sfx, stopVoice, voice } from '../../util/sound';
 import { captureNative, WebCameraSheet } from '../../components/CameraCapture';
 import { useSpeechInput } from '../../util/speechInput';
 import { extractText, pickFile } from '../../util/fileText';
@@ -84,13 +85,18 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     setStaged(null);
     setError(null);
     setPending({ text: shown, at: new Date().toISOString() });
+    sfx('send');
+    // a reply that takes a while: WYRD says it's thinking (once)
+    const slow = setTimeout(() => { void voice('thinking'); }, 4500);
     try {
       if (file && !text) {
         // a file on its own: WYRD's first look at it is the reply
         const up = await api.documentUpload(file.name, file.kind, sampleOf(file.ix), file.words, file.pages);
         openDoc.current = file;
         wyrdStream.publish('chat', { id: up.turnId ?? undefined, userText: `📎 ${up.name}`, botText: up.reply, timestamp: new Date().toISOString(), nonce: null });
-        if (tts && up.reply) speakAsWyrd(up.reply);
+        clearTimeout(slow);
+        sfx('receive');
+        if (tts && up.reply) { stopVoice(); speakAsWyrd(up.reply); }
         return;
       }
       if (file) {
@@ -106,8 +112,19 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
-      if (tts && result.reply) speakAsWyrd(result.reply);
+      clearTimeout(slow);
+      sfx('receive');
+      if (tts && result.reply) {
+        stopVoice();
+        // an answer the judgement check softened is introduced as uncertain, in WYRD's own voice
+        if (result.judgement === 'softened') voice('not-sure').then(() => speakAsWyrd(result.reply));
+        else speakAsWyrd(result.reply);
+      }
     } catch (err) {
+      clearTimeout(slow);
+      stopVoice();
+      sfx('error');
+      void voice('error');
       setError(err instanceof ApiError ? err.message : (err as Error)?.message || 'could not reach WYRD');
       setDraft(text); // give the message (and file) back so nothing is lost
       if (file) setStaged({ status: 'ready', doc: file });
@@ -164,6 +181,9 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     if (!file) return;
     const me = ++reading.current;
     setStaged({ status: 'reading', name: file.name, done: 0, total: 0 });
+    sfx('scan');
+    preloadVoice(['file-received', 'file-ready']);
+    void voice('file-received');
     try {
       const doc = await extractText(file, (done, total) => {
         if (reading.current === me) setStaged({ status: 'reading', name: file.name, done, total });
@@ -173,9 +193,12 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       const ix = buildIndex(doc.name, doc.text);
       if (reading.current !== me) return;
       setStaged({ status: 'ready', doc: { name: doc.name, kind: doc.kind, pages: doc.pages, words: wordCount(doc.text), ix } });
+      sfx('ready');
+      void voice('file-ready');
     } catch (e) {
       if (reading.current !== me) return;
       setStaged(null);
+      sfx('error');
       setError((e as Error).message || 'could not read that file');
     }
   };

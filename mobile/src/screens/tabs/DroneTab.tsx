@@ -9,6 +9,7 @@ import { api, ApiError } from '../../api/client';
 import { useDrone } from '../../api/hooks';
 import type { DroneMission, DroneState } from '../../api/types';
 import { timeAgo } from '../../util/time';
+import { sfx, voice } from '../../util/sound';
 
 const STALE_MS = 10000;
 // mirrors DroneSafety on the server (wyrd_server/lib/src/drone/drone_safety.dart)
@@ -48,6 +49,22 @@ export function DroneTab() {
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
   const { state, missions, isOperator, reloadMissions } = useDrone();
+
+  // WYRD says what the drone is doing as its missions change (not for ones already under way on arrival)
+  const seen = useRef<Map<number, string> | null>(null);
+  useEffect(() => {
+    const now = new Map(missions.filter((m) => m.id != null).map((m) => [m.id!, m.status]));
+    const before = seen.current;
+    seen.current = now;
+    if (!before) return;
+    for (const m of missions) {
+      if (m.id == null || before.get(m.id) === m.status) continue;
+      if (m.kind === 'abort' || m.status === 'aborted') { sfx('alert'); void voice('drone-abort'); return; }
+      if (m.status === 'running') { sfx('gateEnter'); void voice('drone-takeoff'); return; }
+      if (m.status === 'done') { sfx('ready'); void voice('drone-home'); return; }
+      if (m.status === 'rejected') { sfx('error'); return; }
+    }
+  }, [missions]);
   const [instruction, setInstruction] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);

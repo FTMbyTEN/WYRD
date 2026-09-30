@@ -18,6 +18,13 @@ import { colors } from '../theme';
 import { useAuth } from '../api/AuthContext';
 import { GlitchWord } from '../components/GlitchWord';
 import { DustField } from '../components/DustField';
+import { getSound, preloadVoice, setSound, sfx, startMusic, stopMusic, unlock, useSound, voice, type VoiceLine } from '../util/sound';
+import Svg, { Path } from 'react-native-svg';
+
+// each gate word, in WYRD's own voice
+const GATE_VOICE: Record<string, VoiceLine> = {
+  WYRD: 'gate-wyrd', 'WHAT COMES TO BE': 'gate-what-comes', FATE: 'gate-fate', WELCOME: 'gate-welcome',
+};
 
 // WYRD is Old English for fate -- "what comes to be"
 const WORDS = ['WYRD', 'WHAT COMES TO BE', 'FATE', 'WELCOME'];
@@ -75,6 +82,57 @@ export function GateScreen() {
   const [open, setOpen] = useState(false);
   const [blastKey, setBlastKey] = useState(0);
   const { resetToLogin } = useAuth();
+  const sound = useSound();
+  const started = useRef(false);
+  const awakening = useRef(false);
+  const spoken = useRef(new Set<string>());
+
+  // Sound starts with the first touch (browsers allow nothing before it): the music fades in and,
+  // the very first time someone arrives, WYRD speaks "The Awakening". It all fades as they sign in.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const first = () => {
+      unlock();
+      if (!getSound().music) return;
+      startMusic();
+      if (started.current) return;
+      started.current = true;
+      preloadVoice(['awakening', ...Object.values(GATE_VOICE)]);
+      let seen = false;
+      try { seen = localStorage.getItem('wyrd.awakened') === '1'; } catch { /* no storage: treat as seen */ seen = true; }
+      if (!seen) {
+        awakening.current = true;
+        setTimeout(() => {
+          voice('awakening', { force: true }).finally(() => {
+            awakening.current = false;
+            try { localStorage.setItem('wyrd.awakened', '1'); } catch { /* fine */ }
+          });
+        }, 1400);
+      }
+    };
+    window.addEventListener('pointerdown', first, true);
+    window.addEventListener('keydown', first, true);
+    return () => {
+      window.removeEventListener('pointerdown', first, true);
+      window.removeEventListener('keydown', first, true);
+      stopMusic(2.5, true);
+    };
+  }, []);
+
+  // the word breaking up crackles; the first time each word appears, WYRD says it
+  const onGlitch = (next: string) => {
+    sfx('glitch');
+    if (!started.current || awakening.current || !getSound().music || spoken.current.has(next)) return;
+    spoken.current.add(next);
+    const line = GATE_VOICE[next];
+    if (line) setTimeout(() => { void voice(line, { force: true }); }, 650);
+  };
+
+  const toggleSound = () => {
+    const on = !(sound.music || sound.sfx);
+    setSound({ music: on, sfx: on });
+    if (on) { unlock(); startMusic(); }
+  };
 
   // On web, some browsers treat Escape as a native "cancel" for whatever's focused (e.g. an
   // in-progress autofill), which can end up closing this panel as a side effect even though
@@ -99,6 +157,8 @@ export function GateScreen() {
   }, [open]);
 
   const enter = () => {
+    unlock();
+    sfx('gateEnter');
     vortexRef.current?.burst();
     vortexRef.current?.setIntensity(1);
     setBlastKey((k) => k + 1);
@@ -126,7 +186,7 @@ export function GateScreen() {
               {({ pressed }) => (
                 <>
                   <QuantumBlast triggerKey={blastKey} />
-                  <GlitchWord words={WORDS} fitChars={7} style={[styles.wordmark, pressed && { textShadowRadius: 26 }]} />
+                  <GlitchWord words={WORDS} fitChars={7} onGlitch={onGlitch} style={[styles.wordmark, pressed && { textShadowRadius: 26 }]} />
                 </>
               )}
             </Pressable>
@@ -142,11 +202,23 @@ export function GateScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {Platform.OS === 'web' && (
+        <Pressable onPress={toggleSound} hitSlop={10} style={styles.soundBtn} accessibilityLabel={sound.music || sound.sfx ? 'Sound off' : 'Sound on'}>
+          <Svg width={18} height={18} viewBox="0 0 16 16">
+            <Path d="M2 6h2.5L8 3v10L4.5 10H2Z" stroke={colors.green} strokeWidth={1.3} fill="none" strokeLinejoin="round" />
+            {sound.music || sound.sfx
+              ? <Path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9" stroke={colors.green} strokeWidth={1.3} fill="none" strokeLinecap="round" />
+              : <Path d="M10.5 6l4 4M14.5 6l-4 4" stroke={colors.green} strokeWidth={1.3} strokeLinecap="round" />}
+          </Svg>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  soundBtn: { position: 'absolute', top: 18, right: 18, width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   // the auth card sits over the vortex, centred, with room on every side on any screen size
   panelWrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 18 },

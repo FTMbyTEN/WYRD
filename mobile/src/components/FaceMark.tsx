@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import { Canvas, Picture, PointMode, Skia, type SkCanvas, type SkPicture } from '@shopify/react-native-skia';
 import { useSkiaLoop } from '../vortex/skiaLoop';
+import { SkiaLoopView } from '../vortex/SkiaLoopView';
 import { disposeSoon, withArena } from '../vortex/arena';
 import { faceProject } from '../face/faceProject';
 import { FACE_FACES } from '../face/faceMeshData';
@@ -69,7 +70,7 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
 export function FaceMark({ mode = 'scan', spin = false, style }: Props) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
-  const loopPicture = useSkiaLoop(
+  const loop = useSkiaLoop(
     (canvas, W, H, now) => drawFace(canvas, W, H, mode, Math.sin(now * 0.00022) * 0.5),
     size.width,
     size.height,
@@ -86,7 +87,7 @@ export function FaceMark({ mode = 'scan', spin = false, style }: Props) {
   // free the drawn mark when it is redrawn at a new size or goes away
   useEffect(() => () => disposeSoon(staticPicture as unknown as { dispose?: () => void }), [staticPicture]);
 
-  const picture = spin ? loopPicture : staticPicture;
+  const picture = staticPicture;
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -96,9 +97,13 @@ export function FaceMark({ mode = 'scan', spin = false, style }: Props) {
   return (
     <View style={[{ width: '100%', height: '100%' }, style]} onLayout={onLayout}>
       {size.width > 0 && (
-        <Canvas style={{ width: size.width, height: size.height }}>
-          {picture && <Picture picture={picture} />}
-        </Canvas>
+        spin
+          ? <SkiaLoopView loop={loop} width={size.width} height={size.height} />
+          : (
+            <Canvas style={{ width: size.width, height: size.height }}>
+              {picture && <Picture picture={picture} />}
+            </Canvas>
+          )
       )}
     </View>
   );

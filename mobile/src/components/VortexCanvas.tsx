@@ -1,8 +1,9 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
-import { Canvas, Picture } from '@shopify/react-native-skia';
+
 import { makeVortexEngine } from '../vortex/engine';
 import { useSkiaLoop } from '../vortex/skiaLoop';
+import { SkiaLoopView } from '../vortex/SkiaLoopView';
 import { SMOOTH_FPS } from '../util/perf';
 
 export interface VortexHandle {
@@ -34,7 +35,7 @@ export const VortexCanvas = forwardRef<VortexHandle, Props>(({ active = true, on
     setIntensity: (v: number) => engine.setIntensity(v),
   }), [engine]);
 
-  const picture = useSkiaLoop(
+  const loop = useSkiaLoop(
     (canvas, w, h, now) => engine.frame(canvas, w, h, now),
     size.width,
     size.height,
@@ -51,9 +52,7 @@ export const VortexCanvas = forwardRef<VortexHandle, Props>(({ active = true, on
   return (
     <View style={[{ flex: 1 }, style]} onLayout={onLayout}>
       {size.width > 0 && (
-        <Canvas style={{ width: size.width, height: size.height }}>
-          {picture && <Picture picture={picture} />}
-        </Canvas>
+        <SkiaLoopView loop={loop} width={size.width} height={size.height} />
       )}
     </View>
   );

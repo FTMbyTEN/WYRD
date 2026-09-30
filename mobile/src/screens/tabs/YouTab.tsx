@@ -9,6 +9,7 @@ import { api } from '../../api/client';
 import { useAuth } from '../../api/AuthContext';
 import { useConversations, useMind, useProfile } from '../../api/hooks';
 import type { QuizStats, ReadingItem } from '../../api/types';
+import { sfx, voice } from '../../util/sound';
 
 const DAY = 86400000;
 const serif = Platform.select({ web: 'Georgia, "Iowan Old Style", "Noto Serif", "Times New Roman", serif', ios: 'Georgia', default: 'serif' });
@@ -30,6 +31,14 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
   const { email, logout } = useAuth();
+  // WYRD says goodbye, then the session ends (at most ~2.5 s later, even if the line can't play)
+  const [leaving, setLeaving] = useState(false);
+  const signOut = () => {
+    if (leaving) return;
+    setLeaving(true);
+    sfx('close');
+    Promise.race([voice('goodbye'), new Promise((r) => setTimeout(r, 2500))]).finally(() => { void logout(); });
+  };
   const { profile, reload: reloadProfile } = useProfile();
   const { turns, total: msgCount, reload: reloadTurns } = useConversations(200);
   const { mind } = useMind();
@@ -132,7 +141,7 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
         )}
       </Section>
 
-      <Pressable onPress={logout} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
+      <Pressable onPress={signOut} disabled={leaving} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
         <Mono style={styles.logoutText}>LOG OUT</Mono>
       </Pressable>
     </>

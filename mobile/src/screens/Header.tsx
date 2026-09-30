@@ -6,6 +6,7 @@ import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Mind } from '../api/types';
+import { setSound, sfx, unlock, useSound } from '../util/sound';
 
 interface Props {
   mind: Mind | null;
@@ -37,6 +38,13 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
   const now = useClock();
 
   const connected = mind != null;
+  const sound = useSound();
+  const soundOn = sound.sfx || sound.music;
+  const toggleSound = () => {
+    unlock();
+    setSound({ sfx: !soundOn, music: !soundOn });
+    if (!soundOn) setTimeout(() => sfx('ready'), 30);
+  };
 
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -77,6 +85,9 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
               <Mono style={styles.clockDate}>{now.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}</Mono>
             </View>
           )}
+          <Switch label="SOUND" on={soundOn} onPress={toggleSound} hint={soundOn ? 'Interface sound on' : 'Interface sound off'} compact={narrow}>
+            <WaveIcon on={soundOn} />
+          </Switch>
           <Switch label="VOICE" on={tts} onPress={onToggleTts} hint={tts ? 'Spoken replies on' : 'Spoken replies off'} compact={narrow}>
             <SpeakerIcon on={tts} />
           </Switch>
@@ -131,6 +142,17 @@ function SpeakerIcon({ on, color = colors.mint }: { on?: boolean; color?: string
       ) : (
         <Path d="M14.5 7.5 L18.5 12.5 M18.5 7.5 L14.5 12.5" stroke={color} strokeWidth={1.5} />
       )}
+    </Svg>
+  );
+}
+
+/** Sound: a small waveform, flat when off. */
+function WaveIcon({ on, color = colors.mint }: { on?: boolean; color?: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 20 20">
+      {on
+        ? <Path d="M2 10h2l2-5 3 10 3-12 3 12 2-5h1" stroke={color} strokeWidth={1.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+        : <Path d="M2 10h16" stroke={color} strokeWidth={1.5} strokeLinecap="round" />}
     </Svg>
   );
 }
