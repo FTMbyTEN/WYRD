@@ -15,6 +15,7 @@ import { AuthPanel } from '../components/AuthPanel';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
+import { Glyph } from '../components/glyph/Glyph';
 import { useAuth } from '../api/AuthContext';
 import { GlitchWord } from '../components/GlitchWord';
 import { DustField } from '../components/DustField';
@@ -90,11 +91,16 @@ export function GateScreen() {
   const sound = useSound();
   const started = useRef(false);
   const spoken = useRef(new Set<string>());
-  // The first time someone arrives, WYRD's awakening plays before the gate (IntroVortex); after
-  // that it can be replayed from the gate. Having just heard it, the gate doesn't repeat its words.
+  // The first time someone arrives, WYRD's awakening plays before the gate -- once, ever: it is marked
+  // seen the moment it starts, so leaving halfway or reloading doesn't bring it back. Having just
+  // heard it, the gate doesn't repeat its words.
   const [intro, setIntro] = useState(() => {
     if (Platform.OS !== 'web') return false;
-    try { return localStorage.getItem('wyrd.intro') !== '1'; } catch { return false; }
+    try {
+      if (localStorage.getItem('wyrd.intro') === '1') return false;
+      localStorage.setItem('wyrd.intro', '1');
+      return true;
+    } catch { return false; }
   });
   const heardIntro = useRef(false);
   // the intro's last moments: the gate's vortex starts turning underneath so the hand-off is seamless
@@ -211,24 +217,13 @@ export function GateScreen() {
         )}
       </KeyboardAvoidingView>
 
-      {Platform.OS === 'web' && !intro && !open && (
-        <Pressable onPress={() => setIntro(true)} hitSlop={10} style={styles.introBtn} accessibilityLabel="Replay the intro">
-          <Mono style={styles.introText}>↺ INTRO</Mono>
-        </Pressable>
-      )}
-
       {intro && (canWebGL2
         ? <React.Suspense fallback={<View style={[StyleSheet.absoluteFill, { backgroundColor: '#fff' }]} />}><IntroChrome onDone={endIntro} onEnding={() => { setIntroEnding(true); vortexRef.current?.goTo(0); }} /></React.Suspense>
         : <IntroVortex onDone={endIntro} />)}
 
       {Platform.OS === 'web' && (
         <Pressable onPress={toggleSound} hitSlop={10} style={styles.soundBtn} accessibilityLabel={sound.music || sound.sfx ? 'Sound off' : 'Sound on'}>
-          <Svg width={18} height={18} viewBox="0 0 16 16">
-            <Path d="M2 6h2.5L8 3v10L4.5 10H2Z" stroke={colors.green} strokeWidth={1.3} fill="none" strokeLinejoin="round" />
-            {sound.music || sound.sfx
-              ? <Path d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9" stroke={colors.green} strokeWidth={1.3} fill="none" strokeLinecap="round" />
-              : <Path d="M10.5 6l4 4M14.5 6l-4 4" stroke={colors.green} strokeWidth={1.3} strokeLinecap="round" />}
-          </Svg>
+          <Glyph name={sound.music || sound.sfx ? "voice" : "voiceOff"} size={18} color={colors.green} active={sound.music || sound.sfx} />
         </Pressable>
       )}
     </View>
@@ -236,8 +231,6 @@ export function GateScreen() {
 }
 
 const styles = StyleSheet.create({
-  introBtn: { position: 'absolute', top: 18, left: 18, height: 38, paddingHorizontal: 14, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)' },
-  introText: { fontSize: 10, letterSpacing: 2, color: colors.greenDim },
   soundBtn: { position: 'absolute', top: 18, right: 18, width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   // the auth card sits over the vortex, centred, with room on every side on any screen size

@@ -3,6 +3,7 @@ import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowD
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
+import { Glyph } from '../../components/glyph/Glyph';
 import { useDiary, useMind } from '../../api/hooks';
 import type { DiaryEntry } from '../../api/types';
 import { FeedTab } from './FeedTab';
@@ -283,39 +284,16 @@ function Calendar({ entries, selected, onPick }: { entries: DiaryEntry[]; select
 // icons
 
 function PenIcon({ c, size = 18 }: { c: string; size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 20 20">
-      <Path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z" stroke={c} strokeWidth={1.4} fill="none" strokeLinejoin="round" />
-      <Line x1="11.5" y1="5.5" x2="14.5" y2="8.5" stroke={c} strokeWidth={1.4} />
-      <Line x1="3" y1="18" x2="17" y2="18" stroke={c} strokeWidth={1.4} />
-    </Svg>
-  );
+  return <Glyph name="pen" size={size} color={c} />;
 }
 function MoonIcon({ c }: { c: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 20 20">
-      <Path d="M13 3 A7 7 0 1 0 17 13 A5.5 5.5 0 1 1 13 3 Z" stroke={c} strokeWidth={1.4} fill="none" />
-      <Circle cx="15.5" cy="4.5" r="0.9" fill={c} />
-    </Svg>
-  );
+  return <Glyph name="dream" size={18} color={c} />;
 }
 function NodesIcon({ c }: { c: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 20 20">
-      <Line x1="5" y1="6" x2="14" y2="5" stroke={c} strokeWidth={1.3} />
-      <Line x1="5" y1="6" x2="10" y2="15" stroke={c} strokeWidth={1.3} />
-      <Line x1="14" y1="5" x2="10" y2="15" stroke={c} strokeWidth={1.3} />
-      <Circle cx="5" cy="6" r="2.2" fill={c} /><Circle cx="14" cy="5" r="2.2" fill={c} /><Circle cx="10" cy="15" r="2.2" fill={c} />
-    </Svg>
-  );
+  return <Glyph name="concept" size={18} color={c} />;
 }
 function WaveIcon({ c }: { c: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 20 20">
-      <Path d="M2 10 Q5 4 8 10 T14 10 T20 10" stroke={c} strokeWidth={1.4} fill="none" />
-      <Rect x="2" y="14" width="16" height="1.4" fill={c} />
-    </Svg>
-  );
+  return <Glyph name="feed" size={18} color={c} />;
 }
 
 const styles = StyleSheet.create({
@@ -337,11 +315,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderBottomWidth: 0, borderColor: colors.greenBorderDim, backgroundColor: '#f1f1ef',
     borderTopLeftRadius: 8, borderTopRightRadius: 8, marginBottom: -1, flexShrink: 1,
   },
-  tabOn: { backgroundColor: '#fff', borderColor: colors.mint, zIndex: 2, paddingVertical: 12 },
+  tabOn: { backgroundColor: '#fff', borderColor: colors.signal, zIndex: 2, paddingVertical: 12 },
   tabName: { fontSize: 10.5, letterSpacing: 2, color: colors.greenDim },
   tabWhat: { fontSize: 9, color: colors.greenBorder },
   count: { fontSize: 9, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorderDim, paddingHorizontal: 5, borderRadius: 8 },
-  countOn: { color: '#fff', backgroundColor: colors.mint, borderColor: colors.mint },
+  countOn: { color: '#fff', backgroundColor: colors.signal, borderColor: colors.signal },
   sheet: { borderWidth: 1, borderColor: colors.mint, backgroundColor: '#fff', padding: 16, minHeight: 420 },
   embed: { minHeight: 560 },
 
@@ -378,7 +356,7 @@ const styles = StyleSheet.create({
   legend: { fontSize: 9, color: colors.greenDim, marginLeft: -6 },
 
   indexRow: { flexDirection: 'row', gap: 10, paddingVertical: 7, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#efefed', alignItems: 'center' },
-  indexRowOn: { backgroundColor: colors.mint },
+  indexRowOn: { backgroundColor: colors.signal },
   indexDate: { fontSize: 9.5, letterSpacing: 1, color: colors.greenDim, width: 52 },
   indexLine: { flex: 1, fontSize: 13, color: colors.mint },
 

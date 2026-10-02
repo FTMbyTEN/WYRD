@@ -17,6 +17,17 @@ export const colors = {
   danger: '#ff3b3b', // logout, flagged verdicts
   ink: '#111111', // COP's own voice — deliberately not green
   black: '#ffffff',
+  // Signal: the one colour in the monochrome brand. It marks what is live or yours -- your messages,
+  // the active tab, WYRD thinking, focus, progress, links -- and the keywords in code.
+  signal: '#2a46ff',
+  signalSoft: 'rgba(42,70,255,0.08)',
+  onSignal: '#ffffff',
+  // code, quiet enough to sit beside the signal
+  codeString: '#0e8a5f',
+  codeNumber: '#b4471c',
+  codeFn: '#0d0d0f',
+  codeComment: '#6b6e78',
+  codeBg: '#f5f6f8',
 } as const;
 
 export const fonts = {

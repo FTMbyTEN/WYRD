@@ -18,7 +18,17 @@ export interface AlertItem {
 
 const POLL_MS = 60000;
 let alerts: AlertItem[] = [];
-let seenCount = 0;
+// which alerts this person has already seen, by what they say (their position and "ago" shift as
+// new ones arrive): kept on the device, so signing in again doesn't bring old ones back as unread
+const SEEN_KEY = 'wyrd.alertsSeen';
+const keyOf = (a: AlertItem) => `${a.tag}|${a.body}`;
+const seen = new Set<string>(loadSeen());
+function loadSeen(): string[] {
+  try { return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as string[]; } catch { return []; }
+}
+function saveSeen() {
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-400))); } catch { /* fine: kept in memory */ }
+}
 const subscribers = new Set<() => void>();
 let started = false;
 
@@ -58,11 +68,12 @@ export function useAlerts() {
 }
 
 export function markAllAlertsRead() {
-  seenCount = alerts.length;
+  for (const a of alerts) seen.add(keyOf(a));
+  saveSeen();
   notify();
 }
 
 export function useUnreadAlertCount() {
   const list = useAlerts();
-  return Math.max(0, list.length - seenCount);
+  return list.filter((a) => !seen.has(keyOf(a))).length;
 }

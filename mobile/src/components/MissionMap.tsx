@@ -322,11 +322,11 @@ const styles = StyleSheet.create({
   scaleBar: { height: 4, borderWidth: 1, borderTopWidth: 0, borderColor: colors.green, marginBottom: 2 },
   progress: { borderWidth: 1, borderColor: colors.greenBorder, padding: 10, gap: 8 },
   progressHead: { gap: 2 },
-  progressLine: { fontSize: 12, color: colors.green },
+  progressLine: { fontSize: 12, color: colors.signal },
   segments: { flexDirection: 'row', gap: 4 },
   segment: { flex: 1, borderWidth: 1, borderColor: colors.greenBorder, paddingVertical: 5, alignItems: 'center' },
   segmentDone: { backgroundColor: colors.greenDim, borderColor: colors.greenDim },
-  segmentNow: { backgroundColor: colors.green, borderColor: colors.green },
+  segmentNow: { backgroundColor: colors.signal, borderColor: colors.signal },
   segmentText: { fontSize: 11, color: colors.greenDim },
   segmentTextOn: { color: colors.black },
 });

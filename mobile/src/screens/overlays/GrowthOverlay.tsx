@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   intro: { fontSize: 12, lineHeight: 18, color: colors.greenDim },
   tabs: { flexDirection: 'row', borderWidth: 1, borderColor: colors.green, alignSelf: 'flex-start' },
   tab: { paddingHorizontal: 12, paddingVertical: 7 },
-  tabOn: { backgroundColor: colors.green },
+  tabOn: { backgroundColor: colors.signal },
   tabText: { fontSize: 10, letterSpacing: 1.5, color: colors.green },
   tabTextOn: { color: colors.black },
   empty: { fontSize: 12, lineHeight: 18, color: colors.greenDim, marginTop: 10 },

@@ -3,13 +3,11 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Header } from './Header';
 import { TabBar, type TabKey } from './TabBar';
 import { WyrdTab } from './tabs/WyrdTab';
-import { RainBackground } from '../components/RainBackground';
 import { ScreenEffects } from '../components/ScreenEffects';
-import { useMind } from '../api/hooks';
+import { prefetchBrain, prefetchDialogue, useDroneAccess, useMind } from '../api/hooks';
 import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
 import { colors } from '../theme';
 import { useIsDesktop } from '../util/layout';
-import { LITE } from '../util/perf';
 import { preloadVoice, setSound, sfx, unlock, useSound, voice, type VoiceLine } from '../util/sound';
 
 /** WYRD's greeting, by how long it's been: first ever, a new morning or evening, or just back. */
@@ -34,6 +32,7 @@ const named = (load: () => Promise<Record<string, any>>, name: string) =>
 
 const JournalTab = named(() => import('./tabs/JournalTab'), 'JournalTab') as unknown as typeof import('./tabs/JournalTab').JournalTab;
 const AcademyTab = named(() => import('./tabs/AcademyTab'), 'AcademyTab') as unknown as typeof import('./tabs/AcademyTab').AcademyTab;
+const GamesTab = named(() => import('./tabs/GamesTab'), 'GamesTab') as unknown as typeof import('./tabs/GamesTab').GamesTab;
 const DroneTab = named(() => import('./tabs/DroneTab'), 'DroneTab') as unknown as typeof import('./tabs/DroneTab').DroneTab;
 const YouTab = named(() => import('./tabs/YouTab'), 'YouTab') as unknown as typeof import('./tabs/YouTab').YouTab;
 const AlertsOverlay = named(() => import('./overlays/AlertsOverlay'), 'AlertsOverlay') as unknown as typeof import('./overlays/AlertsOverlay').AlertsOverlay;
@@ -57,6 +56,7 @@ function Loading() {
 
 export function AppShell() {
   const [tab, setTab] = useState<TabKey>('wyrd');
+  const droneAccess = useDroneAccess();
   // a book Dialogue Link pulled up: the Academy opens it (behind the chat, which stays open)
   const [bookFocus, setBookFocus] = useState<{ id: number; at: number } | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
@@ -89,6 +89,34 @@ export function AppShell() {
     lastUnread.current = unread;
   }, [unread]);
 
+  // DIALOGUE_LINK is the panel people open most: its code is fetched as soon as the first screen is up,
+  // so the tap opens it at once instead of waiting on a download
+  useEffect(() => {
+    const t = setTimeout(() => { void import('./overlays/DialogueLinkOverlay'); prefetchDialogue(); }, 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  // BRAIN_3D opens at once: its code and data are fetched ahead once the app has settled
+  useEffect(() => {
+    const t = setTimeout(() => { void import('./overlays/BrainOverlay'); prefetchBrain(); void import('../components/BrainCanvas').then((m) => m.brainFor(400)); }, 2500); // its mesh too, at the size a grown brain uses
+    return () => clearTimeout(t);
+  }, []);
+
+  // every other tab and panel: their code fetched one after another once the app is idle, so the
+  // first tap on any of them opens it at once instead of waiting on a download
+  useEffect(() => {
+    const rest: (() => Promise<unknown>)[] = [
+      () => import('./tabs/JournalTab'), () => import('./tabs/AcademyTab').then((m) => m.warmDesk()), () => import('./tabs/GamesTab'),
+      () => import('./tabs/YouTab'), () => import('./overlays/AlertsOverlay'), () => import('./overlays/CopOverlay'),
+      () => import('./overlays/ConceptMapOverlay'), () => import('./overlays/GrowthOverlay'),
+      () => import('./overlays/GlobeOverlay'), () => import('./tabs/DroneTab'),
+    ];
+    let i = 0, timer: ReturnType<typeof setTimeout>;
+    const next = () => { if (i < rest.length) void rest[i++]().finally(() => { timer = setTimeout(next, 250); }); };
+    timer = setTimeout(next, 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // WYRD greets whoever just came in (signing in was a tap, so sound is allowed by now)
   useEffect(() => {
     const line = greeting();
@@ -100,11 +128,10 @@ export function AppShell() {
 
   return (
     <View style={styles.root}>
-      {!LITE && <RainBackground opacity={0.1} />}
       <ScreenEffects />
 
       <View style={[styles.content, desktop && styles.contentDesktop]}>
-        {desktop && <TabBar active={tab} onChange={changeTab} vertical />}
+        {desktop && <TabBar active={tab} onChange={changeTab} vertical drone={droneAccess} />}
         <View style={{ flex: 1, minWidth: 0 }}>
         <Header
           mind={mind}
@@ -128,12 +155,13 @@ export function AppShell() {
               />
             )}
             {tab === 'academy' && <AcademyTab focus={bookFocus} onAsk={() => open('link')} />}
-            {tab === 'drone' && <DroneTab />}
+            {tab === 'games' && <GamesTab />}
+            {tab === 'drone' && droneAccess && <DroneTab />}
             {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
           </Suspense>
         </View>
 
-        {!desktop && <TabBar active={tab} onChange={changeTab} />}
+        {!desktop && <TabBar active={tab} onChange={changeTab} drone={droneAccess} />}
         </View>
       </View>
 

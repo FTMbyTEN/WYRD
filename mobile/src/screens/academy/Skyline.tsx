@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   wrap: { width: '100%', aspectRatio: 900 / 250, borderWidth: 1, borderColor: colors.mint, overflow: 'hidden' },
   doors: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.mint },
   door: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', gap: 2, borderRightWidth: 1, borderRightColor: colors.greenBorderDim, backgroundColor: '#fff' },
-  doorOn: { backgroundColor: colors.mint },
+  doorOn: { backgroundColor: colors.signal },
   doorName: { fontSize: 11, letterSpacing: 2, color: colors.mint },
   doorWhat: { fontSize: 9, color: colors.greenDim, textAlign: 'center' },
 });

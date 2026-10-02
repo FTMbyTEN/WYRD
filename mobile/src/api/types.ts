@@ -354,3 +354,27 @@ export interface DronePlanResult {
   reason: string | null;
   mission: DroneMission | null;
 }
+
+// ---- games ----
+export interface PlayerRating {
+  id: number;
+  game: string;
+  name: string;
+  rating: number;
+  played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+export interface GameMatch {
+  id: number;
+  game: string;
+  state: string; // chess: FEN
+  moves: string[];
+  playerSide: 'w' | 'b';
+  status: 'active' | 'won' | 'lost' | 'draw' | 'resigned';
+  wyrdLevel: number;
+  ratingBefore: number;
+  ratingAfter: number | null;
+  remark: string | null;
+}

@@ -1,4 +1,5 @@
 import { callEndpoint, ServerpodClientError, SERVERPOD_BASE_URL } from './serverpodClient';
+import type { BrainMapData } from '../components/BrainCanvas';
 import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
   AlertNote,
   ChatResult,
@@ -30,6 +31,8 @@ import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkP
   ReasoningNote,
   SelfConfig,
   DroneMission,
+  GameMatch,
+  PlayerRating,
   DronePlanResult,
   DroneState,
 } from './types';
@@ -352,6 +355,8 @@ export const api = {
     if (!snaps.length) throw new ServerpodClientError(404, 'no growth snapshot exists yet');
     return adaptGrowthSnapshot(snaps[0]);
   },
+  // WYRD's real brain: neurons, synapses and its latest thoughts (public, shared from a 20 s cache)
+  brainMap: () => callEndpoint<BrainMapData>('brain', 'getMap', {}, { authenticated: false }),
   concepts: () => callEndpoint<SpConceptGraph>('memory', 'getConcepts', {}, { authenticated: false }).then(adaptConceptsGraph),
   /** Growth averaged over a readable span; see GrowthEndpoint.getHistory. */
   learning: () => callEndpoint<LearningStats>('growth', 'getLearning', {}, { authenticated: false }),
@@ -403,4 +408,13 @@ export const api = {
   droneIsOperator: () => callEndpoint<boolean>('drone', 'isOperator', {}),
   dronePlan: (instruction: string) => callEndpoint<DronePlanResult>('drone', 'plan', { instruction }),
   droneAbort: () => callEndpoint<DroneMission>('drone', 'abort', {}),
+
+  // ---- games ---- (the server holds every position and checks every move)
+  gameRatings: () => callEndpoint<PlayerRating[]>('games', 'myRatings', {}),
+  gameLeaderboard: (game: string) => callEndpoint<PlayerRating[]>('games', 'leaderboard', { game }),
+  gameActive: (game: string) => callEndpoint<GameMatch | null>('games', 'active', { game }),
+  chessStart: (side: 'w' | 'b' | 'random') => callEndpoint<GameMatch>('games', 'startChess', { side }),
+  chessMove: (matchId: number, from: string, to: string, promotion?: string) =>
+    callEndpoint<GameMatch>('games', 'moveChess', { matchId, from, to, promotion: promotion ?? null }),
+  gameResign: (matchId: number) => callEndpoint<GameMatch>('games', 'resign', { matchId }),
 };

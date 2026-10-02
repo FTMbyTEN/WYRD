@@ -6,8 +6,10 @@ import { LearningStream } from '../../components/LearningStream';
 import { DialogueLauncher } from '../../components/DialogueLauncher';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
+import { Glyph } from '../../components/glyph/Glyph';
 import {
   useBrainActivitySignal,
+  useBrainMap,
   useFeed,
   useFeedNext,
   useLexicon,
@@ -46,6 +48,9 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const reasoningNext = useReasoningNext();
   const { stats: lexicon } = useLexicon();
   const brainActivity = useBrainActivitySignal(mind);
+  const brainMap = useBrainMap();
+  // the thought crossing the brain right now: its real path, and whether it's new or recalled
+  const [thought, setThought] = useState<{ path: string[]; live: boolean } | null>(null);
   const desktop = useIsDesktop();
 
   const [expanded, setExpanded] = useState(false);
@@ -95,15 +100,25 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
           accessibilityLabel={expanded ? 'Close the brain view' : 'Open the brain to see its vitals'}
         >
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: brainScale }] }]}>
-            <BrainCanvas activitySignal={brainActivity} energy={(expanded ? 2.2 : 1) * (0.6 + (mind?.curiosity ?? 0.4))} />
+            <BrainCanvas
+              activitySignal={brainActivity}
+              energy={(expanded ? 2.2 : 1) * (0.6 + (mind?.curiosity ?? 0.4))}
+              map={brainMap}
+              onThought={(path, live) => setThought({ path, live })}
+            />
           </Animated.View>
 
           <LearningStream words={learningWords} active={expanded} />
 
           <Animated.View style={[styles.hero, { opacity: heroOpacity }]} pointerEvents="none">
-            <Mono style={styles.eyebrow}>MOOD</Mono>
-            <Display style={styles.moodValue}>{mood}</Display>
-            <Mono style={styles.focusLine}>focus · {focus}</Mono>
+            <Mono style={[styles.eyebrow, styles.halo]}>MOOD</Mono>
+            <Display style={[styles.moodValue, styles.halo]}>{mood}</Display>
+            <Mono style={[styles.focusLine, styles.halo]}>focus · {focus}</Mono>
+            {thought ? (
+              <Mono style={[styles.thought, styles.halo, thought.live && styles.thoughtLive]} numberOfLines={1}>
+                {thought.live ? 'thinking · ' : 'recalling · '}{thought.path.join(' → ')}
+              </Mono>
+            ) : null}
           </Animated.View>
         </Pressable>
 
@@ -241,13 +256,6 @@ function DetailCard({ title, onClose, children }: { title: string; onClose: () =
 /** Door into the full 3D brain: an orbit that keeps turning, so it reads as "there's more in
  *  here" rather than a plain box. */
 function Enter3DButton({ onPress }: { onPress: () => void }) {
-  const spin = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 6000, easing: Easing.linear, useNativeDriver: true }));
-    loop.start();
-    return () => loop.stop();
-  }, [spin]);
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   return (
     <Pressable
       onPress={onPress}
@@ -255,14 +263,7 @@ function Enter3DButton({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel="Open the 3D brain"
     >
-      <Animated.View style={{ transform: [{ rotate }] }}>
-        <Svg width={26} height={26} viewBox="0 0 26 26">
-          <Ellipse cx="13" cy="13" rx="11" ry="4.5" stroke={colors.green} strokeWidth={1.2} fill="none" transform="rotate(-30 13 13)" />
-          <Ellipse cx="13" cy="13" rx="11" ry="4.5" stroke={colors.greenDim} strokeWidth={0.8} fill="none" transform="rotate(40 13 13)" />
-          <Circle cx="13" cy="13" r="2.6" fill={colors.green} />
-          <Circle cx="22.5" cy="7.6" r="1.8" fill={colors.green} />
-        </Svg>
-      </Animated.View>
+      <Glyph name="brain" size={34} color={colors.signal} active />
       <View>
         <Mono style={styles.enter3dLabel}>ENTER 3D</Mono>
         <Mono style={styles.enter3dSub}>BRAIN_3D ↗</Mono>
@@ -279,10 +280,14 @@ const styles = StyleSheet.create({
   desktopRow: { flexDirection: 'row' },
   heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   center: { alignItems: 'center', justifyContent: 'center' },
-  hero: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 22, backgroundColor: 'rgba(255,255,255,0.82)' },
+  // no box: the brain shows through and fires behind the words; a soft white halo keeps them readable
+  hero: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 22 },
+  halo: { textShadowColor: 'rgba(255,255,255,0.95)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
   eyebrow: { fontSize: 9, letterSpacing: 3, color: colors.greenDim },
   moodValue: { fontSize: 54, lineHeight: 56, color: colors.green, marginTop: 2 },
   focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
+  thought: { marginTop: 8, fontSize: 10.5, letterSpacing: 0.6, color: colors.greenDim, maxWidth: 320 },
+  thoughtLive: { color: colors.signal },
   hint: { position: 'absolute', bottom: 10, fontSize: 8.5, letterSpacing: 3, color: colors.greenBorder },
 
   // compact vitals: small cards around the brain's core
@@ -298,14 +303,14 @@ const styles = StyleSheet.create({
   vitalValue: { fontSize: 18, lineHeight: 20, color: colors.green, marginTop: 2 },
   vitalValueBig: { fontSize: 24, lineHeight: 26 },
   meter: { marginTop: 5, height: 2, width: '100%', backgroundColor: colors.greenBorderDim },
-  meterFill: { height: '100%', backgroundColor: colors.green },
+  meterFill: { height: '100%', backgroundColor: colors.signal },
 
   channel: {
     position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 7,
     paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999,
     backgroundColor: colors.black, borderWidth: 1, borderColor: colors.green,
   },
-  channelOn: { backgroundColor: colors.green },
+  channelOn: { backgroundColor: colors.signal },
   channelLeft: { left: '8%', bottom: '17%' },
   channelRight: { right: '8%', bottom: '17%' },
   channelDot: { width: 6, height: 6, borderRadius: 3 },
@@ -343,7 +348,7 @@ const styles = StyleSheet.create({
     paddingTop: 22, paddingHorizontal: 20, justifyContent: 'flex-start',
   },
   thoughtHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.signal },
   quote: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: 12, paddingVertical: 2 },
   quoteText: { fontSize: 13, lineHeight: 20, color: colors.mint },
 });

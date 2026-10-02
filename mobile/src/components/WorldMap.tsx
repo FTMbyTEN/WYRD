@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#f2f2f0' },
   toggle: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', borderWidth: 1, borderColor: colors.green, backgroundColor: colors.black },
   toggleBtn: { paddingHorizontal: 10, paddingVertical: 6 },
-  toggleOn: { backgroundColor: colors.green },
+  toggleOn: { backgroundColor: colors.signal },
   toggleText: { fontSize: 10, letterSpacing: 1.5, color: colors.green },
   toggleTextOn: { color: colors.black },
   readout: { position: 'absolute', top: 44, left: 10, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3 },

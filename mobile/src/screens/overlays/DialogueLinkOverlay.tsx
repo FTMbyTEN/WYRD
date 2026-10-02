@@ -6,7 +6,10 @@ import { OverlayShell } from './OverlayShell';
 import { Display, Mono } from '../../components/ui';
 import { FaceMark } from '../../components/FaceMark';
 import { RichText } from '../../components/RichText';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
+import { CodeText } from '../../components/CodeText';
+import { Glyph } from '../../components/glyph/Glyph';
+import type { GlyphName } from '../../components/glyph/glyphs';
 import { api, ApiError } from '../../api/client';
 import { useConversations, useMind } from '../../api/hooks';
 import { wyrdStream } from '../../api/stream';
@@ -274,24 +277,14 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
                 returnKeyType="send"
               />
               <View style={styles.toolRow}>
-                <Tool label="Voice input" on={mic} onPress={toggleMic}>
-                  <Path d="M8 1.5a2.2 2.2 0 0 0-2.2 2.2v3.8a2.2 2.2 0 0 0 4.4 0V3.7A2.2 2.2 0 0 0 8 1.5Z" />
-                  <Path d="M3.8 7.2a4.2 4.2 0 0 0 8.4 0M8 11.4v3" />
-                </Tool>
-                <Tool label="Show WYRD a photo" onPress={openCamera} disabled={sending}>
-                  <Path d="M2 5.2h2.6L5.8 3.5h4.4l1.2 1.7H14v7.3H2Z" strokeLinejoin="round" />
-                  <Path d="M8 10.9a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6Z" />
-                </Tool>
-                <Tool label="Attach a file" on={!!staged} onPress={attachFile} disabled={sending}>
-                  <Path d="M11.2 7.3 7.3 11.2a2.6 2.6 0 0 1-3.7-3.7l4.6-4.6a1.7 1.7 0 0 1 2.4 2.4L6.1 9.8a.8.8 0 0 1-1.2-1.2l3.9-3.9" strokeLinecap="round" />
-                </Tool>
+                <Tool label="Voice input" glyph="mic" on={mic} onPress={toggleMic} />
+                <Tool label="Show WYRD a photo" glyph="camera" onPress={openCamera} disabled={sending} />
+                <Tool label="Attach a file" glyph="attach" on={!!staged} onPress={attachFile} disabled={sending} />
                 <Mono style={styles.hint} numberOfLines={1}>
                   {Platform.OS === 'web' ? 'enter to send · shift+enter new line' : ''}
                 </Mono>
                 <Pressable onPress={() => send()} disabled={!canSend} style={[styles.sendBtn, !canSend && styles.sendBtnOff]} accessibilityLabel="Send">
-                  <Svg width={15} height={15} viewBox="0 0 16 16">
-                    <Path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke={colors.black} strokeWidth={1.9} fill="none" />
-                  </Svg>
+                  <Glyph name="send" size={17} color={colors.onSignal} active={canSend} style={{ transform: [{ rotate: '-90deg' }] }} />
                 </Pressable>
               </View>
             </View>
@@ -315,9 +308,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
           </Mono>
         </View>
         <View style={styles.privatePill}>
-          <Svg width={10} height={10} viewBox="0 0 16 16">
-            <Path d="M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3Z" stroke={colors.greenDim} strokeWidth={1.5} fill="none" />
-          </Svg>
+          <Glyph name="lock" size={11} color={colors.greenDim} />
           <Mono style={styles.privateText}>PRIVATE</Mono>
         </View>
       </View>
@@ -387,7 +378,7 @@ function DayRule({ iso }: { iso: string }) {
   );
 }
 
-function Tool({ label, on, disabled, onPress, children }: { label: string; on?: boolean; disabled?: boolean; onPress: () => void; children: React.ReactNode }) {
+function Tool({ label, glyph, on, disabled, onPress }: { label: string; glyph: GlyphName; on?: boolean; disabled?: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
@@ -395,19 +386,11 @@ function Tool({ label, on, disabled, onPress, children }: { label: string; on?: 
       accessibilityLabel={label}
       style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.tool, hovered && styles.toolHover, on && styles.toolOn, disabled && { opacity: 0.35 }]}
     >
-      <Svg width={16} height={16} viewBox="0 0 16 16">
-        <G stroke={on ? colors.black : colors.greenDim}>{children}</G>
-      </Svg>
+      <Glyph name={glyph} size={18} color={on ? colors.onSignal : colors.greenDim} active={on} />
     </Pressable>
   );
 }
 
-// react-native-svg's G, typed loosely so stroke props cascade to the paths inside
-const G = ({ stroke, children }: { stroke: string; children: React.ReactNode }) => (
-  <>
-    {React.Children.map(children, (c) => (React.isValidElement(c) ? React.cloneElement(c as React.ReactElement<Record<string, unknown>>, { stroke, strokeWidth: 1.3, fill: 'none' }) : c))}
-  </>
-);
 
 function kindLabel(name: string, kind: string) {
   const ext = name.includes('.') ? name.split('.').pop()!.toUpperCase() : kind.toUpperCase();
@@ -540,7 +523,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
                   <Mono style={styles.codeLang}>{(p.lang ?? 'code').toUpperCase()}</Mono>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 12 }}>
-                  <Mono style={styles.codeText}>{p.body}</Mono>
+                  <CodeText code={p.body} style={[styles.codeText, { fontFamily: fonts.mono }]} />
                 </ScrollView>
               </View>
             ) : (
@@ -633,7 +616,7 @@ const styles = StyleSheet.create({
   presenceFace: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.green },
   presenceTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   presenceName: { fontSize: 24, lineHeight: 24, color: colors.green, letterSpacing: 2 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.signal },
   presenceMood: { fontSize: 10.5, letterSpacing: 1.2, color: colors.greenDim, textTransform: 'uppercase' },
   presenceSub: { marginTop: 2, fontSize: 11, color: colors.greenDim },
   privatePill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
@@ -647,7 +630,7 @@ const styles = StyleSheet.create({
   dayText: { fontSize: 9, letterSpacing: 2, color: colors.greenBorder },
 
   mineRow: { alignItems: 'flex-end', gap: 6 },
-  mine: { maxWidth: '82%', backgroundColor: colors.green, paddingHorizontal: 15, paddingVertical: 11, borderRadius: 20, borderBottomRightRadius: 6 },
+  mine: { maxWidth: '82%', backgroundColor: colors.signal, paddingHorizontal: 15, paddingVertical: 11, borderRadius: 20, borderBottomRightRadius: 6 },
   mineText: { fontSize: 13.5, lineHeight: 21, color: colors.black },
   mineFile: {
     flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '82%', backgroundColor: colors.mint,
@@ -665,17 +648,17 @@ const styles = StyleSheet.create({
   badge: { fontSize: 9.5, color: colors.greenDim, borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   thumbs: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   thumb: { borderWidth: 1, borderColor: 'transparent', borderRadius: 10, paddingHorizontal: 5, paddingVertical: 1, opacity: 0.5 },
-  thumbOn: { borderColor: colors.green, opacity: 1 },
+  thumbOn: { borderColor: colors.signal, opacity: 1 },
   thumbText: { fontSize: 11 },
   thanks: { fontSize: 9.5, color: colors.greenDim },
 
-  code: { borderWidth: 1, borderColor: colors.green, borderRadius: 8, overflow: 'hidden', backgroundColor: '#fafafa' },
+  code: { borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.codeBg },
   codeHead: { backgroundColor: colors.green, paddingHorizontal: 10, paddingVertical: 4 },
   codeLang: { fontSize: 9, letterSpacing: 1.8, color: colors.black },
   codeText: { fontSize: 12, lineHeight: 18, color: colors.green },
 
   thinking: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 8 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.signal },
   thinkingText: { marginLeft: 6, fontSize: 10.5, letterSpacing: 1, color: colors.greenDim },
 
   empty: { alignItems: 'center', paddingTop: 28, gap: 8 },
@@ -687,7 +670,7 @@ const styles = StyleSheet.create({
     flexGrow: 1, flexBasis: 200, maxWidth: 360, minHeight: 78, borderWidth: 1, borderColor: colors.greenBorderDim,
     borderRadius: 14, padding: 12, gap: 6,
   },
-  cardOn: { borderColor: colors.green, backgroundColor: 'rgba(0,0,0,0.03)' },
+  cardOn: { borderColor: colors.signal, backgroundColor: colors.signalSoft },
   cardTag: { fontSize: 8.5, letterSpacing: 2, color: colors.greenBorder },
   cardText: { fontSize: 12.5, lineHeight: 18, color: colors.mint, paddingRight: 16 },
   cardArrow: { position: 'absolute', right: 12, top: 10, fontSize: 12, color: colors.greenBorder },
@@ -702,7 +685,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, backgroundColor: '#ffffff',
     paddingHorizontal: 8, paddingTop: 6, paddingBottom: 6, boxShadow: '0 6px 24px rgba(0,0,0,0.07)',
   } as object,
-  composerFocused: { borderColor: colors.green },
+  composerFocused: { borderColor: colors.signal },
   input: {
     minHeight: 40, maxHeight: 140, paddingHorizontal: 8, paddingVertical: 8,
     color: colors.green, fontFamily: 'ShareTechMono_400Regular', fontSize: 14, outlineStyle: 'none',
@@ -710,9 +693,9 @@ const styles = StyleSheet.create({
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   tool: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   toolHover: { backgroundColor: 'rgba(0,0,0,0.05)' },
-  toolOn: { backgroundColor: colors.green },
+  toolOn: { backgroundColor: colors.signal },
   hint: { flex: 1, textAlign: 'right', fontSize: 9, color: colors.greenBorderDim, marginRight: 8 },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center' },
   sendBtnOff: { opacity: 0.2 },
 
   staged: {
@@ -723,13 +706,13 @@ const styles = StyleSheet.create({
   stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
   stagedX: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.greenBorderDim },
   stagedXText: { fontSize: 10, color: colors.greenDim },
-  stagedReady: { color: colors.green },
+  stagedReady: { color: colors.signal },
   spinner: {
     position: 'absolute', right: -5, bottom: -3, width: 14, height: 14, borderRadius: 7,
-    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.green, backgroundColor: '#fafafa',
+    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.signal, backgroundColor: '#fafafa',
   },
   bar: { marginTop: 6, height: 3, borderRadius: 2, backgroundColor: colors.greenBorderDim, overflow: 'hidden' },
-  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, backgroundColor: colors.green },
+  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, backgroundColor: colors.signal },
   glyph: { width: 30, height: 36, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 },
   glyphText: { fontSize: 7.5, letterSpacing: 0.6 },
 });

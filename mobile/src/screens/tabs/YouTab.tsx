@@ -4,10 +4,11 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { notify } from '../../util/dialog';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
+import { Glyph } from '../../components/glyph/Glyph';
 import { FaceMark } from '../../components/FaceMark';
 import { api } from '../../api/client';
 import { useAuth } from '../../api/AuthContext';
-import { useConversations, useMind, useProfile } from '../../api/hooks';
+import { cachedFetch, useConversations, useMind, useProfile } from '../../api/hooks';
 import type { QuizStats, ReadingItem } from '../../api/types';
 import { sfx, voice } from '../../util/sound';
 
@@ -50,8 +51,8 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
   const [quiz, setQuiz] = useState<QuizStats | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(0); // 0 closed, 1 asking, 2 working
   useEffect(() => {
-    api.libraryList().then(setReading).catch(() => {});
-    api.libraryQuizStats().then(setQuiz).catch(() => {});
+    cachedFetch('libraryList', api.libraryList).then(setReading).catch(() => {});
+    cachedFetch('quizStats', api.libraryQuizStats).then(setQuiz).catch(() => {});
   }, []);
 
   const exportData = async () => {
@@ -330,18 +331,17 @@ function Rings() {
   );
 }
 
-const ic = { width: 16, height: 16, viewBox: '0 0 20 20' };
 function SpeakerIcon() {
-  return <Svg {...ic}><Path d="M3 8 H7 L12 4 V16 L7 12 H3 Z" stroke={colors.mint} strokeWidth={1.4} fill="none" /><Path d="M14.5 7 Q17 10 14.5 13" stroke={colors.mint} strokeWidth={1.4} fill="none" /></Svg>;
+  return <Glyph name="voice" size={18} color={colors.mint} />;
 }
 function ShieldIcon() {
-  return <Svg {...ic}><Path d="M10 2 L17 5 V10 Q17 15 10 18 Q3 15 3 10 V5 Z" stroke={colors.mint} strokeWidth={1.4} fill="none" /><Path d="M7 10 L9.3 12.3 L13.5 8" stroke={colors.mint} strokeWidth={1.4} fill="none" /></Svg>;
+  return <Glyph name="cop" size={18} color={colors.mint} />;
 }
 function BoxIcon() {
-  return <Svg {...ic}><Path d="M3 6 L10 2.5 L17 6 V14 L10 17.5 L3 14 Z M3 6 L10 9.5 L17 6 M10 9.5 V17.5" stroke={colors.mint} strokeWidth={1.3} fill="none" /></Svg>;
+  return <Glyph name="box" size={18} color={colors.mint} />;
 }
 function BinIcon() {
-  return <Svg {...ic}><Path d="M4 6 H16 M8 6 V4 H12 V6 M5.5 6 L6.5 17 H13.5 L14.5 6" stroke={colors.danger} strokeWidth={1.4} fill="none" /></Svg>;
+  return <Glyph name="bin" size={18} color={colors.danger} />;
 }
 
 const styles = StyleSheet.create({
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   readRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   readTitle: { flex: 1.4, fontSize: 14, color: colors.mint },
   readTrack: { flex: 1, flexDirection: 'row', height: 4, backgroundColor: colors.greenBorderDim },
-  readFill: { backgroundColor: colors.mint },
+  readFill: { backgroundColor: colors.signal },
   readPct: { width: 36, fontSize: 10, color: colors.greenDim, textAlign: 'right' },
 
   setting: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.greenBorderDim, padding: 12, backgroundColor: '#fff' },

@@ -5,7 +5,7 @@ import { OverlayShell } from './OverlayShell';
 import { BrainCanvas } from '../../components/BrainCanvas';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
-import { useBrainActivitySignal, useConcepts, useGrowth, useLexicon, useMind } from '../../api/hooks';
+import { useBrainActivitySignal, useBrainMap, useConcepts, useGrowth, useLexicon, useMind } from '../../api/hooks';
 import { useIsDesktop } from '../../util/layout';
 import type { GrowthSnapshot } from '../../api/types';
 
@@ -30,6 +30,7 @@ export function BrainOverlay({ visible, onClose }: { visible: boolean; onClose: 
   const { snapshots } = useGrowth();
   const { graph } = useConcepts();
   const brainActivity = useBrainActivitySignal();
+  const brainMap = useBrainMap();
   const desktop = useIsDesktop();
 
   const learnedToday = useMemo(() => {
@@ -48,7 +49,7 @@ export function BrainOverlay({ visible, onClose }: { visible: boolean; onClose: 
 
   const brain = (
     <View style={desktop ? styles.brainDesktop : styles.brainMobile}>
-      <BrainCanvas nodeCount={Math.min(400, Math.max(80, stats?.learned ?? 150))} activitySignal={brainActivity} />
+      <BrainCanvas nodeCount={Math.min(400, Math.max(80, stats?.learned ?? 150))} activitySignal={brainActivity} map={brainMap} />
       <View style={styles.hud} pointerEvents="none">
         <Mono style={styles.eyebrow}>MOOD</Mono>
         <Display style={styles.mood}>{mind?.mood ?? '—'}</Display>
@@ -189,7 +190,7 @@ const styles = StyleSheet.create({
   conceptRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   conceptName: { width: 92, fontSize: 11.5, color: colors.mint },
   conceptTrack: { flex: 1, height: 6, backgroundColor: colors.greenBorderDim },
-  conceptBar: { height: '100%', backgroundColor: colors.green },
+  conceptBar: { height: '100%', backgroundColor: colors.signal },
   conceptCount: { width: 42, textAlign: 'right', fontSize: 10, color: colors.greenDim },
 
   wordRow: { paddingVertical: 9 },

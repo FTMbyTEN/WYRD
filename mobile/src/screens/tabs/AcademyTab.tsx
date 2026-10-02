@@ -3,6 +3,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, u
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api } from '../../api/client';
+import { cachedFetch } from '../../api/hooks';
 import type { QuizStats, ReadingItem, ReadingSlice } from '../../api/types';
 import { BookCover } from '../academy/BookCover';
 import { ReadingRoom, cleanTitle, isFinished, progressOf } from '../academy/ReadingRoom';
@@ -23,6 +24,13 @@ const BADGE: Record<string, string> = { openstax: 'TEXTBOOK', wikisource: 'ARCHI
 /** The Academy: a campus of the world's free knowledge. Step into the Stacks (75,000 classics),
  *  the Lecture Hall (open university textbooks) or the Archive (texts in 15 languages); your desk
  *  keeps everything you're reading, with your place. Nothing here calls an AI. */
+// the reading desk from the last visit, shown at once when the Academy opens again
+let lastDesk: ReadingItem[] | null = null;
+/** Fetched ahead while the app is idle, so even the first visit shows the desk at once. */
+export function warmDesk() {
+  return api.libraryList().then((d) => { lastDesk ??= d; }).catch(() => {});
+}
+
 export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number } | null; onAsk?: () => void }) {
   const { width } = useWindowDimensions();
   const wide = width >= 900;
@@ -33,12 +41,12 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
   const [quizNonce, setQuizNonce] = useState(0);
 
   const [wing, setWing] = useState<Wing>('stacks');
-  const [items, setItems] = useState<ReadingItem[] | null>(null);
+  const [items, setItems] = useState<ReadingItem[] | null>(lastDesk); // the desk as it was last time, at once; refreshed below
   const [open, setOpen] = useState<ReadingSlice | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [quizStats, setQuizStats] = useState<QuizStats | null>(null);
-  useEffect(() => { api.libraryQuizStats().then(setQuizStats).catch(() => {}); }, []);
+  useEffect(() => { cachedFetch('quizStats', api.libraryQuizStats).then(setQuizStats).catch(() => {}); }, []);
 
   // a book Dialogue Link pulled up: show the passage it just shared, without moving on
   useEffect(() => {
@@ -47,7 +55,7 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.at]);
 
-  const load = useCallback(() => api.libraryList().then(setItems).catch(() => setItems([])), []);
+  const load = useCallback(() => api.libraryList().then((d) => { lastDesk = d; setItems(d); }).catch(() => setItems((cur) => cur ?? [])), []);
   useEffect(() => { load(); }, [load]);
   const show = (slice: ReadingSlice) => {
     setOpen(slice);

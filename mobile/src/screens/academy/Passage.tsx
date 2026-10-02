@@ -1,5 +1,7 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { CodeText } from '../../components/CodeText';
+import { colors } from '../../theme';
 
 /** A passage laid out like a page: paragraphs with room between them, headings ("## …" from
  *  textbooks, or CHAPTER / Letter lines in novels) set apart, bullet lists indented, verse kept
@@ -43,6 +45,16 @@ export function Passage({ text, font, size, color, muted, rtl, dropCap }: {
             </View>
           );
         }
+        if (isCode(p)) {
+          // a program in a textbook: monospaced on its own panel, keywords, strings and numbers in colour
+          return (
+            <View key={i} style={{ borderRadius: 8, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: colors.codeBg }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 12 }}>
+                <CodeText code={p} style={{ fontFamily: 'ShareTechMono_400Regular', fontSize: size * 0.82, lineHeight: size * 1.35, color: colors.codeFn }} />
+              </ScrollView>
+            </View>
+          );
+        }
         const figure = /^(Figure|Table|Example) \d/.test(p);
         // the opening of a chapter: its first few words in bold small capitals. (A large drop cap
         // drawn inline overflowed its line and overlapped the one above, since text can't float.)
@@ -68,6 +80,16 @@ export function Passage({ text, font, size, color, muted, rtl, dropCap }: {
       })}
     </View>
   );
+}
+
+const CODE_LINE = /^\s*(>>>|\.\.\.\s|\$ |def |class |import |from \S+ import |for .+:$|if .+:$|elif .+:$|else:$|while .+:$|try:$|except\b.*:$|return\b|print\(|[A-Za-z_][\w.]*\s*[-+*/]?=\s*\S|[A-Za-z_][\w.]*\(.*\)\s*;?$|#\s|\}|\{$|(const|let|var|function|public|int|void) )/;
+/** A paragraph that is a program: most of its lines look like code, and it isn't ordinary prose. */
+function isCode(p: string) {
+  const lines = p.split('\n').filter((l) => l.trim());
+  if (!lines.length || lines.some((l) => l.length > 160)) return false;
+  const code = lines.filter((l) => CODE_LINE.test(l)).length;
+  if (lines.length === 1) return code === 1 && !/[.!?]["”']?$/.test(lines[0]) && /[()=:]/.test(lines[0]) && lines[0].split(/\s+/).length <= 12;
+  return code / lines.length >= 0.6;
 }
 
 /** Short stand-alone lines that name a chapter, letter, act or part. */

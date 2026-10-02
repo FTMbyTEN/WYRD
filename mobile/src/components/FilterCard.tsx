@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   catRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   catName: { width: 70, fontSize: 11, color: colors.mint },
   catTrack: { flex: 1, height: 5, backgroundColor: colors.greenBorderDim },
-  catFill: { height: 5, backgroundColor: colors.green },
+  catFill: { height: 5, backgroundColor: colors.signal },
   catN: { width: 30, textAlign: 'right', fontSize: 10, color: colors.greenDim },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 7, paddingVertical: 3 },

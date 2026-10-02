@@ -68,6 +68,11 @@ function buildBrain(nodeCount: number): BrainPoint[] {
 
 // Shades of ink, quantized: each made once and reused every frame.
 const SHADES = 32;
+// Signal: the packets travelling the mesh and the digestion bursts are WYRD thinking, so they are cobalt
+const signals: ReturnType<typeof Skia.Color>[] = [];
+function signalInk(bucket: number) {
+  return (signals[bucket] ??= Skia.Color(`rgba(42,70,255,${((bucket + 0.5) / SHADES).toFixed(3)})`));
+}
 const inks: ReturnType<typeof Skia.Color>[] = [];
 function ink(bucket: number) {
   return (inks[bucket] ??= Skia.Color(`rgba(0,0,0,${((bucket + 0.5) / SHADES).toFixed(3)})`));
@@ -110,6 +115,94 @@ function buildEdges(points: BrainPoint[]): Edge[] {
   return edges;
 }
 
+// built once per node count and kept: the mesh is O(n^2), and BRAIN_3D opening shouldn't redo it
+const built = new Map<number, { points: BrainPoint[]; edges: Edge[] }>();
+export function brainFor(nodeCount: number) {
+  let b = built.get(nodeCount);
+  if (!b) {
+    const points = buildBrain(nodeCount);
+    b = { points, edges: buildEdges(points) };
+    built.set(nodeCount, b);
+  }
+  return b;
+}
+
+// ---- WYRD's real brain -------------------------------------------------------------------------
+
+export interface BrainMapData {
+  neurons: { id: string; weight: number; degree: number }[];
+  synapses: { a: string; b: string; weight: number }[];
+  firings: { path: string[]; at: string }[];
+}
+interface RealEdge extends Edge { w: number }
+interface RealBrain { points: BrainPoint[]; edges: RealEdge[]; ids: string[]; index: Map<string, number> }
+
+/** WYRD's real network laid into the brain's shape: every neuron is one of its concepts, every line
+ *  one of its synapses. Related concepts sit together: starting from the most central concept,
+ *  each one takes the free spot nearest the neurons it's already wired to, so clusters of ideas
+ *  become regions of the brain. Bigger neurons are more central concepts. */
+function realBrain(map: BrainMapData): RealBrain {
+  const n = map.neurons.length;
+  const slots = buildBrain(n);
+  const ids = map.neurons.map((x) => x.id);
+  const index = new Map(ids.map((id, i) => [id, i]));
+  const adj = new Map<number, { j: number; w: number }[]>();
+  for (const s of map.synapses) {
+    const a = index.get(s.a), b = index.get(s.b);
+    if (a == null || b == null) continue;
+    (adj.get(a) ?? adj.set(a, []).get(a)!).push({ j: b, w: s.weight });
+    (adj.get(b) ?? adj.set(b, []).get(b)!).push({ j: a, w: s.weight });
+  }
+  const placed = new Array<number>(n).fill(-1); // neuron -> slot
+  const taken = new Array<boolean>(slots.length).fill(false);
+  const nearestFree = (x: number, y: number, z: number) => {
+    let best = -1, bd = Infinity;
+    for (let k = 0; k < slots.length; k++) {
+      if (taken[k]) continue;
+      const d = (slots[k].x - x) ** 2 + (slots[k].y - y) ** 2 + (slots[k].z - z) ** 2;
+      if (d < bd) { bd = d; best = k; }
+    }
+    return best;
+  };
+  // breadth-first from the most central concept (neurons arrive sorted by weight)
+  const order: number[] = [];
+  const seen = new Set<number>();
+  for (let root = 0; root < n; root++) {
+    if (seen.has(root)) continue;
+    const queue = [root];
+    seen.add(root);
+    while (queue.length) {
+      const i = queue.shift()!;
+      order.push(i);
+      for (const { j } of (adj.get(i) ?? []).sort((x, y) => y.w - x.w)) if (!seen.has(j)) { seen.add(j); queue.push(j); }
+    }
+  }
+  const maxW = Math.max(1e-6, ...map.neurons.map((x) => x.weight));
+  for (const i of order) {
+    const near = (adj.get(i) ?? []).filter(({ j }) => placed[j] >= 0);
+    let k: number;
+    if (!near.length) k = nearestFree((Math.random() - 0.5) * 0.6, 0.1 + Math.random() * 0.3, (Math.random() - 0.5) * 0.4);
+    else {
+      let x = 0, y = 0, z = 0;
+      for (const { j } of near) { x += slots[placed[j]].x; y += slots[placed[j]].y; z += slots[placed[j]].z; }
+      k = nearestFree(x / near.length, y / near.length, z / near.length);
+    }
+    if (k < 0) { slots.push({ ...slots[i % slots.length], x: slots[i % slots.length].x * 0.9 }); k = slots.length - 1; } // never short of a place
+    placed[i] = k;
+    taken[k] = true;
+  }
+  const points = ids.map((_, i) => ({ ...slots[placed[i]], s: 0.5 + 1.6 * Math.sqrt(map.neurons[i].weight / maxW) }));
+  const edges: RealEdge[] = [];
+  for (const s of map.synapses) {
+    const a = index.get(s.a), b = index.get(s.b);
+    if (a != null && b != null) edges.push({ a, b, w: s.weight, speed: 1, phase: 0 });
+  }
+  return { points, edges, ids, index };
+}
+
+const HOP_MS = 520; // one synapse crossed
+const IDLE_REPLAY_MS = 2600; // between thoughts, it replays one of its recent real ones
+
 /**
  * The node-brain visualization behind the WYRD home tab and the BRAIN_3D overlay. Shaped like an
  * actual (stylized) brain — two hemispheres split by a fissure, a cerebellum lobe, a wrinkled
@@ -119,7 +212,15 @@ function buildEdges(points: BrainPoint[]): Edge[] {
  * `energy` (1 = resting) speeds up and thickens the signal traffic, e.g. while the brain is
  * opened up on the WYRD tab.
  */
-export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { nodeCount?: number; activitySignal?: number; energy?: number }) {
+export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, onThought }: {
+  nodeCount?: number;
+  activitySignal?: number;
+  energy?: number;
+  /** WYRD's real network: when given, the brain is drawn from it and fires along real paths. */
+  map?: BrainMapData | null;
+  /** Called with the concepts a thought crosses, as it starts crossing them. */
+  onThought?: (path: string[], live: boolean) => void;
+}) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const burstsRef = useRef<Burst[]>([]);
   // Signal travel is integrated per frame (not now * speed) so changing energy never makes the
@@ -127,9 +228,32 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
   const energyRef = useRef(energy);
   energyRef.current = energy;
   const signalClock = useRef({ t: 0, last: 0 });
+  const onThoughtRef = useRef(onThought);
+  onThoughtRef.current = onThought;
 
-  const points = useMemo(() => buildBrain(nodeCount), [nodeCount]);
-  const edges = useMemo(() => buildEdges(points), [points]);
+  // the real brain, rebuilt only when the network itself changes (not on every firing)
+  const shapeKey = map && map.neurons.length >= 8 ? `${map.neurons.map((x) => x.id).join('|')}#${map.synapses.length}` : '';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const real = useMemo(() => (shapeKey && map ? realBrain(map) : null), [shapeKey]);
+  const { points, edges } = useMemo(() => real ?? brainFor(nodeCount), [real, nodeCount]);
+
+  // thoughts to play: new real firings as they arrive; between them, replays of recent ones
+  const play = useRef<{ queue: number[][]; cur: { path: number[]; start: number } | null; lastAt: string; idleSince: number; recent: number[][] }>(
+    { queue: [], cur: null, lastAt: '', idleSince: 0, recent: [] },
+  );
+  useEffect(() => {
+    if (!real || !map) return;
+    const p = play.current;
+    const asIdx = (path: string[]) => path.map((id) => real.index.get(id)).filter((i): i is number => i != null);
+    p.recent = map.firings.map((f) => asIdx(f.path)).filter((x) => x.length >= 2);
+    const fresh = map.firings.filter((f) => f.at > p.lastAt);
+    // on first sight, play only the latest; after that, every new thought in order
+    for (const f of p.lastAt ? fresh : fresh.slice(-1)) {
+      const idx = asIdx(f.path);
+      if (idx.length >= 2) p.queue.push(idx);
+    }
+    if (map.firings.length) p.lastAt = map.firings[map.firings.length - 1].at;
+  }, [map, real]);
 
   useEffect(() => {
     if (activitySignal === undefined) return;
@@ -159,19 +283,79 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
       // with each shade's color made once rather than parsed from a string per item.
       const lines = shadeBuckets<{ x: number; y: number }>();
       const pulses = shadeBuckets<number>();
+      const trails = shadeBuckets<{ x: number; y: number }>();
+      const glow = shadeBuckets<{ x: number; y: number }>();
+      const flashes = shadeBuckets<number>();
       const dots = shadeBuckets<number>();
 
+      if (real) {
+        // the synapses, darker where stronger
+        for (const e of edges as RealEdge[]) {
+          const a = proj[e.a], b = proj[e.b];
+          const depth = (a.d + b.d) / 2;
+          lines[shade(0.1 + Math.min(1, e.w) * 0.45 + depth * 0.25)].push({ x: a.sx, y: a.sy }, { x: b.sx, y: b.sy });
+        }
+        // the thought being played: the signal crosses each synapse of its real path in turn, the
+        // synapses it has crossed stay lit, and each neuron flashes as the signal reaches it
+        const p = play.current;
+        if (!p.cur) {
+          const fresh = p.queue.shift();
+          const next = fresh ?? (now - p.idleSince > IDLE_REPLAY_MS && p.recent.length ? p.recent[Math.floor(Math.random() * p.recent.length)] : null);
+          if (next) {
+            p.cur = { path: next, start: now };
+            onThoughtRef.current?.(next.map((i) => real.ids[i]), fresh != null); // live: a new thought, not a replay
+          }
+        }
+        if (p.cur) {
+          const hop = HOP_MS / Math.max(0.6, energyRef.current);
+          const prog = (now - p.cur.start) / hop;
+          const hops = p.cur.path.length - 1;
+          const after = prog - hops; // > 0 once the signal has landed: the lit path fades out
+          const fade = after > 0 ? Math.max(0, 1 - after / 3) : 1;
+          for (let h = 0; h < hops; h++) {
+            const a = proj[p.cur.path[h]], b = proj[p.cur.path[h + 1]];
+            if (!a || !b || prog < h) break;
+            const depth = (a.d + b.d) / 2;
+            const head = Math.min(1, prog - h), tail = Math.max(0, head - 0.45);
+            const hx = a.sx + (b.sx - a.sx) * head, hy = a.sy + (b.sy - a.sy) * head;
+            // crossed already: lit end to end; crossing now: a streak with a tail
+            const fx = head >= 1 ? a.sx : a.sx + (b.sx - a.sx) * tail, fy = head >= 1 ? a.sy : a.sy + (b.sy - a.sy) * tail;
+            glow[shade((0.22 + depth * 0.2) * fade)].push({ x: fx, y: fy }, { x: hx, y: hy });
+            trails[shade((0.7 + depth * 0.3) * fade)].push({ x: fx, y: fy }, { x: hx, y: hy });
+            if (head < 1) pulses[shade(0.9)].push(hx, hy, (2.2 + depth * 1.6) * (1 + boost * 0.5));
+          }
+          for (let k = 0; k <= Math.min(hops, Math.floor(prog)); k++) {
+            const q = proj[p.cur.path[k]];
+            if (!q) continue;
+            const since = prog - k; // how long ago the signal reached this neuron
+            const r = (3 + q.d * 5) * (1 + Math.max(0, 0.8 - since) * 1.4);
+            flashes[shade(Math.max(0.15, 0.75 - since * 0.15) * fade)].push(q.sx, q.sy, r);
+          }
+          if (after > 3) { p.cur = null; p.idleSince = now; }
+        }
+      }
+
       // Base mesh: dim connective tissue between neighbouring nodes.
-      for (const e of edges) {
+      for (const e of real ? [] : edges) {
         const a = proj[e.a], b = proj[e.b];
         const depth = (a.d + b.d) / 2;
         const l = lines[shade(0.22 + depth * 0.4)];
         l.push({ x: a.sx, y: a.sy }, { x: b.sx, y: b.sy });
 
-        // Firing signal: a bright packet travelling each edge on a continuous loop -- the
-        // "electrons keep firing" part, always running, not just on activity.
-        const tt = (clock.t * 0.00035 * e.speed + e.phase) % 1;
-        pulses[shade(0.55 + depth * 0.45)].push(a.sx + (b.sx - a.sx) * tt, a.sy + (b.sy - a.sy) * tt, (1.3 + depth * 1.1) * (1 + boost * 0.6));
+        // Firing: each synapse fires in turn (about a third of them at any moment), a cobalt streak
+        // with a glowing tail racing from one neuron to the next, and the neuron it reaches flashes.
+        // Firing is sparse and fast so it reads as electricity, not a crawl of dots.
+        const cyc = clock.t * 0.0009 * e.speed + e.phase * 3;
+        if (Math.floor(cyc) % 3 !== 0) continue;
+        const tt = cyc % 1;
+        const head = Math.min(1, tt * 1.35), tail = Math.max(0, head - 0.38);
+        const hx = a.sx + (b.sx - a.sx) * head, hy = a.sy + (b.sy - a.sy) * head;
+        const tx = a.sx + (b.sx - a.sx) * tail, ty = a.sy + (b.sy - a.sy) * tail;
+        const fade = tt > 0.74 ? 1 - (tt - 0.74) / 0.26 : 1; // the streak dies away once it lands
+        glow[shade((0.16 + depth * 0.2) * fade)].push({ x: tx, y: ty }, { x: hx, y: hy });
+        trails[shade((0.55 + depth * 0.45) * fade)].push({ x: tx, y: ty }, { x: hx, y: hy });
+        if (head < 1) pulses[shade(0.75 + depth * 0.25)].push(hx, hy, (1.6 + depth * 1.4) * (1 + boost * 0.5));
+        else flashes[shade(0.6 * fade)].push(b.sx, b.sy, (2.5 + depth * 4) * (1.4 - fade * 0.4));
       }
 
       // Nodes themselves, gently pulsing -- the "neurons".
@@ -188,11 +372,28 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
         linePaint.setColor(ink(b));
         canvas.drawPoints(PointMode.Lines, pts, linePaint);
       });
+      // the firing streaks: a wide faint stroke under a thin bright one reads as a glow
+      const trailPaint = Skia.Paint();
+      trailPaint.setStyle(1);
+      trailPaint.setStrokeCap(1);
+      for (const [group, width] of [[glow, 5], [trails, 1.5]] as const) {
+        trailPaint.setStrokeWidth(width * (1 + boost * 0.4));
+        group.forEach((pts, b) => {
+          if (!pts.length) return;
+          trailPaint.setColor(signalInk(b));
+          canvas.drawPoints(PointMode.Lines, pts, trailPaint);
+        });
+      }
       const fillPaint = Skia.Paint();
+      flashes.forEach((xyr, b) => {
+        if (!xyr.length) return;
+        fillPaint.setColor(signalInk(Math.max(0, b - 10)));
+        fillCircles(canvas, xyr, fillPaint);
+      });
       for (const group of [pulses, dots]) {
         group.forEach((xyr, b) => {
           if (!xyr.length) return;
-          fillPaint.setColor(ink(b));
+          fillPaint.setColor(group === pulses ? signalInk(b) : ink(b));
           fillCircles(canvas, xyr, fillPaint);
         });
       }
@@ -207,7 +408,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1 }: { n
         const p = proj[b.nodeIdx];
         if (!p) return;
         burstPaint.setStrokeWidth(1.4 * (1 - age));
-        burstPaint.setColor(Skia.Color(`rgba(0,0,0,${(0.8 * (1 - age)).toFixed(3)})`));
+        burstPaint.setColor(Skia.Color(`rgba(42,70,255,${(0.8 * (1 - age)).toFixed(3)})`));
         canvas.drawCircle(p.sx, p.sy, 3 + age * 22 * p.d, burstPaint);
       });
     },

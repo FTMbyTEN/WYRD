@@ -1,12 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { Glyph } from '../components/glyph/Glyph';
 import { FaceMark } from '../components/FaceMark';
 import { Display, Mono } from '../components/ui';
 import { colors } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Mind } from '../api/types';
-import { setSound, sfx, unlock, useSound } from '../util/sound';
 
 interface Props {
   mind: Mind | null;
@@ -17,16 +16,6 @@ interface Props {
   onOpenCop: () => void;
 }
 
-/** A clock that ticks every second. */
-function useClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return now;
-}
-
 /** The bar across the top of every screen: WYRD's mark and name, whether its mind is live and
  *  what it's doing, how it feels, its vitals at a glance, and the three switches (voice,
  *  oversight, alerts). */
@@ -35,16 +24,8 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
   const narrow = width < 420;
-  const now = useClock();
 
   const connected = mind != null;
-  const sound = useSound();
-  const soundOn = sound.sfx || sound.music;
-  const toggleSound = () => {
-    unlock();
-    setSound({ sfx: !soundOn, music: !soundOn });
-    if (!soundOn) setTimeout(() => sfx('ready'), 30);
-  };
 
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -77,25 +58,16 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
           </View>
         </View>
 
-        {/* clock + switches */}
+        {/* switches */}
         <View style={styles.right}>
-          {!narrow && (
-            <View style={styles.clock}>
-              <Mono style={styles.clockTime}>{now.toTimeString().slice(0, 8)}</Mono>
-              <Mono style={styles.clockDate}>{now.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}</Mono>
-            </View>
-          )}
-          <Switch label="SOUND" on={soundOn} onPress={toggleSound} hint={soundOn ? 'Interface sound on' : 'Interface sound off'} compact={narrow}>
-            <WaveIcon on={soundOn} />
-          </Switch>
           <Switch label="VOICE" on={tts} onPress={onToggleTts} hint={tts ? 'Spoken replies on' : 'Spoken replies off'} compact={narrow}>
-            <SpeakerIcon on={tts} />
+            <Glyph name={tts ? "voice" : "voiceOff"} size={17} active={tts} />
           </Switch>
           <Switch label="COP" onPress={onOpenCop} hint="COP oversight" compact={narrow}>
-            <ShieldIcon />
+            <Glyph name="cop" size={17} />
           </Switch>
           <Switch label="ALERTS" onPress={onOpenAlerts} hint="Alerts" badge={alertCount} compact={narrow}>
-            <BellIcon ring={alertCount > 0} />
+            <Glyph name="alerts" size={17} active={alertCount > 0} />
           </Switch>
         </View>
       </View>
@@ -130,53 +102,6 @@ function Switch({ label, on, onPress, hint, badge, compact, children }: {
   );
 }
 
-function SpeakerIcon({ on, color = colors.mint }: { on?: boolean; color?: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Path d="M3 8 H7 L12 4 V16 L7 12 H3 Z" stroke={color} strokeWidth={1.5} fill={on ? color : 'none'} strokeLinejoin="round" />
-      {on ? (
-        <>
-          <Path d="M14.5 7 Q16.8 10 14.5 13" stroke={color} strokeWidth={1.5} fill="none" />
-          <Path d="M16.5 5 Q20 10 16.5 15" stroke={color} strokeWidth={1.5} fill="none" />
-        </>
-      ) : (
-        <Path d="M14.5 7.5 L18.5 12.5 M18.5 7.5 L14.5 12.5" stroke={color} strokeWidth={1.5} />
-      )}
-    </Svg>
-  );
-}
-
-/** Sound: a small waveform, flat when off. */
-function WaveIcon({ on, color = colors.mint }: { on?: boolean; color?: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      {on
-        ? <Path d="M2 10h2l2-5 3 10 3-12 3 12 2-5h1" stroke={color} strokeWidth={1.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
-        : <Path d="M2 10h16" stroke={color} strokeWidth={1.5} strokeLinecap="round" />}
-    </Svg>
-  );
-}
-
-function ShieldIcon({ color = colors.mint }: { color?: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Path d="M10 2 L17 5 V10 Q17 15 10 18 Q3 15 3 10 V5 Z" stroke={color} strokeWidth={1.5} fill="none" strokeLinejoin="round" />
-      <Path d="M7 10 L9.3 12.3 L13.5 8" stroke={color} strokeWidth={1.5} fill="none" />
-    </Svg>
-  );
-}
-
-function BellIcon({ ring, color = colors.mint }: { ring?: boolean; color?: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Path d="M5 14 V9 A5 5 0 0 1 15 9 V14 L16.5 15.5 H3.5 Z" stroke={color} strokeWidth={1.5} fill={ring ? color : 'none'} strokeLinejoin="round" />
-      <Path d="M8.5 17.5 Q10 19 11.5 17.5" stroke={color} strokeWidth={1.5} fill="none" />
-      {ring && <Circle cx={16} cy={4} r={2.2} fill={colors.danger} />}
-      <Rect x={9.3} y={2} width={1.4} height={2} fill={color} />
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap: { backgroundColor: 'rgba(255,255,255,0.92)', borderBottomWidth: 1, borderBottomColor: '#d8d8d8' },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingBottom: 10, paddingTop: 2 },
@@ -184,12 +109,12 @@ const styles = StyleSheet.create({
 
   identity: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1, minWidth: 0 },
   markRing: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  markPulse: { position: 'absolute', width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: colors.mint },
+  markPulse: { position: 'absolute', width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: colors.signal },
   mark: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: colors.mint, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   wordmark: { fontSize: 28, lineHeight: 28, letterSpacing: 5, color: colors.mint },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
-  pillLive: { backgroundColor: colors.mint, borderColor: colors.mint },
+  pillLive: { backgroundColor: colors.signal, borderColor: colors.signal },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.greenBorder },
   dotLive: { backgroundColor: '#fff' },
   pillText: { fontSize: 8.5, letterSpacing: 1.6, color: colors.greenDim },
@@ -204,14 +129,11 @@ const styles = StyleSheet.create({
   fill: { backgroundColor: colors.mint },
 
   right: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8 },
-  clock: { alignItems: 'flex-end', marginRight: 6 },
-  clockTime: { fontSize: 13, letterSpacing: 1.5, color: colors.mint },
-  clockDate: { fontSize: 8, letterSpacing: 1.4, color: colors.greenDim },
   switch: {
     flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 10,
     borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, backgroundColor: '#fff', position: 'relative',
   },
-  switchOn: { backgroundColor: colors.mint, borderColor: colors.mint },
+  switchOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   switchHover: { borderColor: colors.mint },
   switchText: { fontSize: 9.5, letterSpacing: 1.4, color: colors.mint },
   badge: {

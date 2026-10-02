@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { Mono } from './ui';
 import { colors } from '../theme';
+import { Glyph } from './glyph/Glyph';
 
 const TYPE_MS = 45;
 const HOLD_MS = 1800;
@@ -80,9 +80,7 @@ export function DialogueLauncher({ onPress, focus }: { onPress: () => void; focu
           <Animated.View style={[styles.cursor, { opacity: blink }]} />
         </View>
         <View style={styles.send}>
-          <Svg width={16} height={16} viewBox="0 0 16 16">
-            <Path d="M2 8h10M8 3.5 12.5 8 8 12.5" stroke={colors.green} strokeWidth={1.8} fill="none" />
-          </Svg>
+          <Glyph name="arrow" size={17} color={colors.green} />
         </View>
       </View>
     </Pressable>

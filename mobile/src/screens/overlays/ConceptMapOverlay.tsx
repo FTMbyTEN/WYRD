@@ -242,6 +242,6 @@ const styles = StyleSheet.create({
   rank: { width: 20, fontSize: 10, color: colors.greenBorder },
   listName: { width: 130, fontSize: 12, color: colors.mint },
   barTrack: { flex: 1, height: 6, backgroundColor: colors.greenBorderDim },
-  bar: { height: 6, backgroundColor: colors.green },
+  bar: { height: 6, backgroundColor: colors.signal },
   listCount: { width: 56, textAlign: 'right', fontSize: 11, color: colors.greenDim },
 });

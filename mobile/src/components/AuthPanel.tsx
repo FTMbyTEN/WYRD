@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999,
   },
   switchBtn: { flex: 1, paddingVertical: 8, borderRadius: 999, alignItems: 'center' },
-  switchOn: { backgroundColor: colors.green },
+  switchOn: { backgroundColor: colors.signal },
   switchText: { fontSize: 10, letterSpacing: 1.8, color: colors.greenDim },
   switchTextOn: { color: colors.black },
 
@@ -252,11 +252,11 @@ const styles = StyleSheet.create({
     width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.greenBorder,
     alignItems: 'center', justifyContent: 'center',
   },
-  stepDotOn: { backgroundColor: colors.green, borderColor: colors.green },
+  stepDotOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   stepNum: { fontSize: 9.5, color: colors.greenDim },
   stepNumOn: { color: colors.black },
   stepLabel: { fontSize: 8.5, letterSpacing: 1.5, color: colors.greenBorder },
-  stepLabelOn: { color: colors.green },
+  stepLabelOn: { color: colors.signal },
 
   fields: { marginTop: 16, gap: 12 },
   fieldHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
@@ -268,12 +268,12 @@ const styles = StyleSheet.create({
   },
   codeInput: { fontSize: 20, letterSpacing: 8, textAlign: 'center' },
   forgot: { alignSelf: 'flex-end', marginTop: -4 },
-  link: { fontSize: 11, color: colors.green, textDecorationLine: 'underline' },
+  link: { fontSize: 11, color: colors.signal, textDecorationLine: 'underline' },
 
   error: { marginTop: 12, borderWidth: 1, borderColor: colors.danger, paddingHorizontal: 10, paddingVertical: 8 },
   errorText: { fontSize: 11, lineHeight: 16, color: colors.danger },
 
-  primary: { marginTop: 16, backgroundColor: colors.green, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', minHeight: 46 },
+  primary: { marginTop: 16, backgroundColor: colors.signal, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', minHeight: 46 },
   primaryText: { fontSize: 12, letterSpacing: 2.5, color: colors.black },
   footerLink: { alignSelf: 'center', marginTop: 14 },
   footnote: { marginTop: 14, fontSize: 10, lineHeight: 15, color: colors.greenDim, textAlign: 'center' },

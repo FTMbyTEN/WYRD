@@ -1,5 +1,6 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import { api } from './client';
+import { shared } from './shared';
 import type { StreamEvent } from './types';
 
 type EventName = StreamEvent['event'];
@@ -70,9 +71,10 @@ function snapshotSource<T>(event: EventName, intervalMs: number, fetch: () => Pr
 }
 
 const SOURCES: Source[] = [
-  snapshotSource('mind', 5000, api.mind),
-  snapshotSource('profile', 30000, api.profile),
-  listSource('ingested', 15000, api.feedRecent),
+  // the same keyed requests the screens use, so a poll here and a screen opening never both ask
+  snapshotSource('mind', 5000, () => shared('mind', api.mind)),
+  snapshotSource('profile', 30000, () => shared('profile', api.profile)),
+  listSource('ingested', 15000, () => shared('feed', api.feedRecent)),
   listSource('diary', 30000, () => api.diary(5)),
   listSource('dream', 30000, () => api.dreams(5)),
   listSource('cop_report', 30000, () => api.copLog(5)),

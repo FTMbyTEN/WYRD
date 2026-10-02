@@ -107,15 +107,22 @@ const PER_GROUP = 8;
 
 const LANG_NAMES: Record<string, string> = { en: 'ENGLISH', es: 'ESPAÑOL', pl: 'POLSKI', fr: 'FRANÇAIS', de: 'DEUTSCH' };
 
+// the open textbook catalogue barely changes: fetched once per session, not on every visit
+let textbooks: Promise<WorkHit[]> | null = null;
+let textbooksNow: WorkHit[] | null = null;
+
 export function LectureHall({ desk, loading, open, coverW, wide }: WingProps) {
-  const [books, setBooks] = useState<WorkHit[] | null>(null);
+  const [books, setBooks] = useState<WorkHit[] | null>(textbooksNow);
   const [failed, setFailed] = useState(false);
   const [subject, setSubject] = useState<string | null>(null);
   const [lang, setLang] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
-  useEffect(() => { api.libraryTextbooks().then(setBooks).catch(() => setFailed(true)); }, []);
+  useEffect(() => {
+    textbooks ??= api.libraryTextbooks().then((b) => (textbooksNow = b));
+    textbooks.then(setBooks).catch(() => { textbooks = null; setFailed(true); });
+  }, []);
 
   const subjects = useMemo(() => {
     const n: Record<string, number> = {};
@@ -359,10 +366,10 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   chip: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#fff' },
   chipSmall: { paddingHorizontal: 8, paddingVertical: 4, borderColor: colors.greenBorderDim },
-  chipOn: { backgroundColor: colors.mint, borderColor: colors.mint },
+  chipOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   chipText: { fontSize: 10, letterSpacing: 1.4, color: colors.mint },
   script: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#fff' },
-  scriptOn: { backgroundColor: colors.mint, borderColor: colors.mint },
+  scriptOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   scriptText: { fontSize: 14, color: colors.mint },
   tryChip: { borderBottomWidth: 1, borderBottomColor: colors.mint, paddingVertical: 2 },
   tryText: { fontSize: 12, color: colors.mint },

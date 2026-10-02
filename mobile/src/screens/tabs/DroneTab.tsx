@@ -58,8 +58,15 @@ export function DroneTab() {
     seen.current = now;
     if (!before) return;
     for (const m of missions) {
-      if (m.id == null || before.get(m.id) === m.status) continue;
-      if (m.kind === 'abort' || m.status === 'aborted') { sfx('alert'); void voice('drone-abort'); return; }
+      // only a change WYRD watched happen: the flight log loading in (or a mission it hasn't seen
+      // before) is history, not news
+      const was = m.id == null ? undefined : before.get(m.id);
+      if (was === undefined || was === m.status) continue;
+      // "returning home" only while a flight is really being called back: an abort command going
+      // out or under way, or a flight that was in the air being aborted
+      const recalling = m.kind === 'abort' ? m.status === 'sent' || m.status === 'running' : m.status === 'aborted' && (was === 'sent' || was === 'running');
+      if (recalling) { sfx('alert'); void voice('drone-abort'); return; }
+      if (m.kind === 'abort') continue;
       if (m.status === 'running') { sfx('gateEnter'); void voice('drone-takeoff'); return; }
       if (m.status === 'done') { sfx('ready'); void voice('drone-home'); return; }
       if (m.status === 'rejected') { sfx('error'); return; }
@@ -335,7 +342,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: colors.mint, paddingBottom: 14 },
   callsign: { fontSize: 36, lineHeight: 40, color: colors.mint, letterSpacing: 2 },
   link: { borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 14, paddingVertical: 10, gap: 3, minWidth: 210, backgroundColor: '#fff' },
-  linkLive: { backgroundColor: colors.mint },
+  linkLive: { backgroundColor: colors.signal },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   linkDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: '#999' },
   linkStatus: { fontSize: 13, letterSpacing: 2.4, color: colors.mint },
@@ -350,7 +357,7 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderColor: colors.mint, padding: 14, gap: 8, backgroundColor: '#fff' },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   readyTag: { fontSize: 9, letterSpacing: 1.6, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3 },
-  readyOn: { color: '#fff', backgroundColor: colors.mint, borderColor: colors.mint },
+  readyOn: { color: '#fff', backgroundColor: colors.signal, borderColor: colors.signal },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
   checkBox: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center' },
   checkOk: { backgroundColor: colors.mint, borderColor: colors.mint },
@@ -389,7 +396,7 @@ const styles = StyleSheet.create({
   logRow: { flexDirection: 'row', gap: 12 },
   rail: { width: 14, alignItems: 'center' },
   node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.greenBorder, backgroundColor: '#fff', marginTop: 2 },
-  nodeLive: { borderColor: colors.mint, backgroundColor: colors.mint },
+  nodeLive: { borderColor: colors.signal, backgroundColor: colors.signal },
   nodeDone: { borderColor: colors.mint },
   nodeBad: { borderColor: colors.danger },
   railLine: { flex: 1, width: 1, backgroundColor: colors.greenBorderDim, marginTop: 2 },
@@ -398,6 +405,6 @@ const styles = StyleSheet.create({
   logQuote: { fontSize: 11.5, color: colors.greenDim, fontStyle: 'italic' },
   logMeta: { fontSize: 10, color: colors.greenDim },
   badge: { fontSize: 9, letterSpacing: 1.2, color: colors.mint, borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeLive: { color: '#fff', backgroundColor: colors.mint },
+  badgeLive: { color: '#fff', backgroundColor: colors.signal },
   badgeBad: { color: colors.danger, borderColor: colors.danger },
 });

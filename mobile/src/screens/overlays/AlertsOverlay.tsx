@@ -4,6 +4,7 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { OverlayShell } from './OverlayShell';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
+import { Glyph } from '../../components/glyph/Glyph';
 import { useAlerts, type AlertItem } from '../../api/alerts';
 
 const serif = Platform.select({ web: 'Georgia, "Iowan Old Style", "Noto Serif", "Times New Roman", serif', ios: 'Georgia', default: 'serif' });
@@ -144,36 +145,16 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
 }
 
 function PenIcon({ c }: { c: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Path d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z" stroke={c} strokeWidth={1.5} fill="none" strokeLinejoin="round" />
-      <Line x1="3" y1="18" x2="17" y2="18" stroke={c} strokeWidth={1.5} />
-    </Svg>
-  );
+  return <Glyph name="pen" size={16} color={c} />;
 }
 function MoonIcon({ c }: { c: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Path d="M13 3 A7 7 0 1 0 17 13 A5.5 5.5 0 1 1 13 3 Z" stroke={c} strokeWidth={1.5} fill="none" />
-      <Circle cx="15.5" cy="4.5" r="0.9" fill={c} />
-    </Svg>
-  );
+  return <Glyph name="dream" size={16} color={c} />;
 }
 function ShieldIcon({ c }: { c: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Path d="M10 2 L17 5 V10 Q17 15 10 18 Q3 15 3 10 V5 Z" stroke={c} strokeWidth={1.5} fill="none" strokeLinejoin="round" />
-      <Path d="M7 10 L9.3 12.3 L13.5 8" stroke={c} strokeWidth={1.5} fill="none" />
-    </Svg>
-  );
+  return <Glyph name="cop" size={16} color={c} />;
 }
 function FlagIcon({ c }: { c: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 20 20">
-      <Line x1="5" y1="2" x2="5" y2="18" stroke={c} strokeWidth={1.5} />
-      <Path d="M5 3 H15 L12.5 6.5 L15 10 H5" stroke={c} strokeWidth={1.5} fill="none" strokeLinejoin="round" />
-    </Svg>
-  );
+  return <Glyph name="flag" size={16} color={c} />;
 }
 
 const styles = StyleSheet.create({
@@ -191,7 +172,7 @@ const styles = StyleSheet.create({
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: '#fff' },
-  chipOn: { backgroundColor: colors.mint, borderColor: colors.mint },
+  chipOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   chipText: { fontSize: 9.5, letterSpacing: 1.4, color: colors.mint },
 
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },

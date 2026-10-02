@@ -212,6 +212,6 @@ const styles = StyleSheet.create({
   starSnippet: { fontSize: 11.5, lineHeight: 17, color: colors.greenDim },
   section: { fontSize: 10, letterSpacing: 2, color: colors.greenDim, marginTop: 10 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 8, borderWidth: 1, borderColor: colors.greenBorderDim },
-  rowOn: { borderColor: colors.green },
+  rowOn: { borderColor: colors.signal },
   rowText: { fontSize: 12, lineHeight: 17, color: colors.mint, marginTop: 2 },
 });

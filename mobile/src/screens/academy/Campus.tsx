@@ -53,16 +53,3 @@ export function Campus({ width = 260, lit = 0 }: { width?: number; lit?: number 
   );
 }
 
-/** The tab-bar icon: a small academy building. */
-export function AcademyIcon({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 20 20">
-      <Path d="M2 7.5 L10 3 L18 7.5 Z" stroke={color} strokeWidth={1.5} fill="none" strokeLinejoin="round" />
-      <Line x1="3" y1="17" x2="17" y2="17" stroke={color} strokeWidth={1.5} />
-      <Line x1="4.5" y1="9.5" x2="4.5" y2="15" stroke={color} strokeWidth={1.5} />
-      <Line x1="8.2" y1="9.5" x2="8.2" y2="15" stroke={color} strokeWidth={1.5} />
-      <Line x1="11.8" y1="9.5" x2="11.8" y2="15" stroke={color} strokeWidth={1.5} />
-      <Line x1="15.5" y1="9.5" x2="15.5" y2="15" stroke={color} strokeWidth={1.5} />
-    </Svg>
-  );
-}
