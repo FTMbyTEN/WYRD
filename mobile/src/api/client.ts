@@ -409,6 +409,9 @@ export const api = {
   dronePlan: (instruction: string) => callEndpoint<DronePlanResult>('drone', 'plan', { instruction }),
   droneAbort: () => callEndpoint<DroneMission>('drone', 'abort', {}),
 
+  // ---- owner ---- (operator accounts only; the server checks)
+  ownerUserStats: () => callEndpoint<string>('owner', 'userStats', {}),
+
   // ---- games ---- (the server holds every position and checks every move)
   gameRatings: () => callEndpoint<PlayerRating[]>('games', 'myRatings', {}),
   gameLeaderboard: (game: string) => callEndpoint<PlayerRating[]>('games', 'leaderboard', { game }),
@@ -417,4 +420,13 @@ export const api = {
   chessMove: (matchId: number, from: string, to: string, promotion?: string) =>
     callEndpoint<GameMatch>('games', 'moveChess', { matchId, from, to, promotion: promotion ?? null }),
   gameResign: (matchId: number) => callEndpoint<GameMatch>('games', 'resign', { matchId }),
+  gameStart: (game: string, side: 'w' | 'b' | 'random') => callEndpoint<GameMatch>('games', 'start', { game, side }),
+  gameMove: (matchId: number, move: string) => callEndpoint<GameMatch>('games', 'move', { matchId, move }),
+  gameChallenge: (game: string) => callEndpoint<GameMatch>('games', 'challenge', { game }),
+  gameOpenChallenges: (game: string) => callEndpoint<GameMatch[]>('games', 'openChallenges', { game }),
+  gameAccept: (matchId: number) => callEndpoint<GameMatch>('games', 'accept', { matchId }),
+  gameCancel: (matchId: number) => callEndpoint<void>('games', 'cancel', { matchId }),
+  gameMyPvp: () => callEndpoint<GameMatch[]>('games', 'myPvp', {}),
+  // pvp: the game if it changed since [version], else null (answered from the server's memory)
+  gamePoll: (matchId: number, version: number) => callEndpoint<GameMatch | null>('games', 'poll', { matchId, version }),
 };

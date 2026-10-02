@@ -13,21 +13,24 @@ import { GLYPHS, type GlyphName } from './glyphs';
  * while the tab is hidden, are skipped, so a screen full of them costs about what one does. It all
  * draws on the device: the server never knows. On native it draws the same strokes, still.
  */
-export function Glyph({ name, size = 20, color = colors.mint, active = false, hud, readout, style }: {
+export function Glyph({ name, size = 20, color = colors.mint, active = false, hud, readout, still, style }: {
   name: GlyphName;
   size?: number;
   color?: string;
   active?: boolean;
   hud?: boolean;
+  /** drawn as still lines. Default for small glyphs (under 24 px): the dust is kept for the ones that matter */
+  still?: boolean;
   readout?: number | string;
   style?: StyleProp<ViewStyle>;
 }) {
   const host = useRef<View>(null);
   const inst = useRef<Inst | null>(null);
   const withHud = hud ?? size >= 30;
+  const isStill = still ?? size < 24;
 
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
+    if (Platform.OS !== 'web' || isStill) return;
     const el = host.current as unknown as HTMLElement | null;
     if (!el) return;
     const cv = document.createElement('canvas');
@@ -39,7 +42,7 @@ export function Glyph({ name, size = 20, color = colors.mint, active = false, hu
     inst.current = i;
     engine.add(i);
     return () => { engine.remove(i); cv.remove(); inst.current = null; };
-  }, [name, size, withHud]);
+  }, [name, size, withHud, isStill]);
 
   // props that change every render are read live, without rebuilding the particles
   useEffect(() => {
@@ -50,7 +53,7 @@ export function Glyph({ name, size = 20, color = colors.mint, active = false, hu
     i.active = active; i.color = color; i.readout = readout;
   }, [active, color, readout]);
 
-  if (Platform.OS !== 'web') return <StaticGlyph name={name} size={size} color={color} style={style} />;
+  if (Platform.OS !== 'web' || isStill) return <StaticGlyph name={name} size={size} color={color} style={style} />;
   return (
     <View
       ref={host}

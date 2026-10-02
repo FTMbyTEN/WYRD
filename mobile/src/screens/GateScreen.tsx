@@ -193,7 +193,7 @@ export function GateScreen() {
       {canWebGL2
         ? <DustVortex ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />
         : <VortexCanvas ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />}
-      <DustField />
+      {!canWebGL2 && <DustField />}{/* the GPU dust draws its own fine-grain background */}
       <ScreenEffects />
 
       <KeyboardAvoidingView

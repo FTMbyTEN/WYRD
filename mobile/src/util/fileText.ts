@@ -93,7 +93,7 @@ async function pdfText(file: File, onProgress?: Progress): Promise<{ text: strin
   const pages = Math.min(doc.numPages, MAX_PDF_PAGES);
   const out: string[] = [];
   let total = 0;
-  for (let i = 1; i <= pages && total < MAX_CHARS; i++) {
+  const readPage = async (i: number) => {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
     let line = '';
@@ -104,13 +104,20 @@ async function pdfText(file: File, onProgress?: Progress): Promise<{ text: strin
       if (item.hasEOL) { lines.push(line); line = ''; }
     }
     if (line) lines.push(line);
-    // join wrapped lines into paragraphs; keep blank lines as paragraph breaks
-    const text = lines.join('\n').replace(/([^\n.!?:])\n(?=[a-z(])/g, '$1 ').trim();
-    out.push(text);
-    total += text.length;
     page.cleanup?.();
-    onProgress?.(i, pages);
-    if (i % 4 === 0) await breathe();
+    // join wrapped lines into paragraphs; keep blank lines as paragraph breaks
+    return lines.join('\n').replace(/([^\n.!?:])\n(?=[a-z(])/g, '$1 ').trim();
+  };
+  // pages are read eight at a time (the pdf.js worker works on them together) instead of one
+  // after another -- several times faster on a long PDF; order and progress are kept
+  const BATCH = 8;
+  for (let i = 1; i <= pages && total < MAX_CHARS; i += BATCH) {
+    const batch = await Promise.all(
+      Array.from({ length: Math.min(BATCH, pages - i + 1) }, (_, k) => readPage(i + k)),
+    );
+    for (const text of batch) { out.push(text); total += text.length; }
+    onProgress?.(Math.min(pages, i + BATCH - 1), pages);
+    await breathe();
   }
   await doc.destroy?.();
   return { text: out.join('\n\n'), pages: doc.numPages };

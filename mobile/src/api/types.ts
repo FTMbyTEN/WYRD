@@ -372,9 +372,16 @@ export interface GameMatch {
   state: string; // chess: FEN
   moves: string[];
   playerSide: 'w' | 'b';
-  status: 'active' | 'won' | 'lost' | 'draw' | 'resigned';
+  status: 'active' | 'won' | 'lost' | 'draw' | 'resigned' | 'waiting' | 'over';
   wyrdLevel: number;
   ratingBefore: number;
   ratingAfter: number | null;
   remark: string | null;
+  mode: 'wyrd' | 'pvp';
+  opponentId: string | null;
+  playerName: string | null;
+  opponentName: string | null;
+  result: string | null; // pvp, once over: 'starter:how', 'opponent:how' or 'draw:how'
+  version: number;
+  viewerSide: 'w' | 'b' | null; // the side of whoever asked
 }

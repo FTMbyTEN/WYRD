@@ -8,7 +8,7 @@ import { Glyph } from '../../components/glyph/Glyph';
 import { FaceMark } from '../../components/FaceMark';
 import { api } from '../../api/client';
 import { useAuth } from '../../api/AuthContext';
-import { cachedFetch, useConversations, useMind, useProfile } from '../../api/hooks';
+import { cachedFetch, useConversations, useDroneAccess, useMind, useProfile } from '../../api/hooks';
 import type { QuizStats, ReadingItem } from '../../api/types';
 import { sfx, voice } from '../../util/sound';
 
@@ -28,7 +28,42 @@ interface Props {
 
 /** YOU: who you are to WYRD. Your mark and your history together, when you talk, everything
  *  it has learned about you (kept private), what you're reading, and your settings and data. */
+/** Owner only: how many people have accounts, counted in each table they could live in, and the
+ *  newest sign-ups -- so "where are the users?" has an answer without opening the database. */
+function OwnerPeople() {
+  const [s, setS] = useState<{ counts: Record<string, number | null>; recent: { name: string; at: string }[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api.ownerUserStats().then((j) => setS(JSON.parse(j))).catch((e) => setErr(String(e?.message ?? e))); }, []);
+  const label: Record<string, string> = {
+    serverpod_auth_core_user: 'Accounts (auth)',
+    serverpod_auth_idp_email_account: 'Email sign-ups',
+    serverpod_auth_idp_email_account_request: 'Unfinished sign-ups',
+    serverpod_user_info: 'Old auth table',
+    user_profile: 'WYRD profiles',
+  };
+  return (
+    <Section title="OWNER · PEOPLE">
+      {err ? <Mono style={styles.eyebrow}>{err}</Mono> : !s ? <Mono style={styles.eyebrow}>counting…</Mono> : (
+        <View style={{ gap: 6 }}>
+          {Object.entries(s.counts).map(([t, n]) => (
+            <View key={t} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Mono style={{ fontSize: 12, color: colors.mint }}>{label[t] ?? t}</Mono>
+              <Mono style={{ fontSize: 12, color: n == null ? colors.greenDim : colors.signal }}>{n == null ? 'no table' : n}</Mono>
+            </View>
+          ))}
+          {s.recent.length ? (
+            <Mono style={[styles.eyebrow, { marginTop: 6 }]}>
+              NEWEST · {s.recent.map((r) => `${r.name} (${new Date(r.at).toLocaleDateString()})`).join(' · ')}
+            </Mono>
+          ) : null}
+        </View>
+      )}
+    </Section>
+  );
+}
+
 export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
+  const owner = useDroneAccess(); // the operator accounts are WYRD's owners
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
   const { email, logout } = useAuth();
@@ -120,6 +155,8 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
         </Setting>
         <Setting icon={<ShieldIcon />} title="COP oversight" detail="Every change WYRD made to itself, independently reviewed" onPress={onOpenCop} />
       </Section>
+
+      {owner ? <OwnerPeople /> : null}
 
       <Section title="YOUR DATA">
         <Setting icon={<BoxIcon />} title="Export my data" detail="Conversations, facts, photos, reading and quizzes, as a file" onPress={exportData} />

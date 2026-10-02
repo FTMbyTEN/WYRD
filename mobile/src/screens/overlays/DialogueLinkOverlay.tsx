@@ -9,6 +9,7 @@ import { RichText } from '../../components/RichText';
 import { colors, fonts } from '../../theme';
 import { CodeText } from '../../components/CodeText';
 import { Glyph } from '../../components/glyph/Glyph';
+import { DustThinking } from '../../components/dust/DustThinking';
 import type { GlyphName } from '../../components/glyph/glyphs';
 import { api, ApiError } from '../../api/client';
 import { useConversations, useMind } from '../../api/hooks';
@@ -654,7 +655,7 @@ function Thinking({ reading }: { reading?: boolean }) {
         <FaceMark mode="scan" />
       </View>
       <View style={styles.thinking}>
-        {dots.map((d, i) => (
+        {Platform.OS === 'web' ? <DustThinking width={58} height={20} /> : dots.map((d, i) => (
           <Animated.View
             key={i}
             style={[

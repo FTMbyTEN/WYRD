@@ -57,6 +57,32 @@ void main(){
   vAlpha = clamp((0.55 + uIntensity * 0.25) * (7.0 / d) - carry * 0.15, 0.12, 0.95) * (1.0 - s * 0.8) * smoothstep(1.2, 4.0, d); // dust passing the lens fades out
 }`;
 
+// The background: fine grains through deep space behind the shape, drifting on the same slow
+// current and turning gently with the scene -- the same material as the vortex, just far and faint.
+const BG_COUNT = LITE ? 2500 : 7000;
+const BG_VERT = /* glsl */ `#version 300 es
+precision highp float;
+${NOISE}
+in vec4 aBg; // xyz home in a wide box behind the shape, w random 0..1
+uniform float uTime, uYaw, uScale, uPx, uAspect, uScatter;
+out float vAlpha;
+void main(){
+  vec3 p = aBg.xyz;
+  p += curl(p * 0.35 + vec3(0.0, uTime * 0.035, aBg.w * 3.0)) * 0.45; // the slow current
+  p.y = mod(p.y + uTime * (0.02 + aBg.w * 0.03) + 4.0, 8.0) - 4.0;   // rising very slowly, wrapping round
+  float yaw = uYaw * 0.35; // turns with the scene, slower: it's further away
+  float cy = cos(yaw), sy = sin(yaw);
+  // turned about the field's own middle, so it stays spread across the whole screen
+  vec3 q = p - vec3(0.0, 0.0, -5.5);
+  vec3 r = vec3(q.x * cy - q.z * sy, q.y, q.x * sy + q.z * cy) + vec3(0.0, 0.0, -5.5);
+  float d = 7.5 - r.z;
+  float k = uScale / max(d, 0.5);
+  gl_Position = vec4(r.x * k / uAspect, r.y * k, 0.0, 1.0);
+  gl_PointSize = uPx * (1.0 + aBg.w * 1.0) * clamp(6.0 / d, 0.6, 1.5);
+  // faint, and fainter far away; a little brighter while the stage is cleared for sign-in
+  vAlpha = (0.22 + aBg.w * 0.3) * clamp(7.0 / d, 0.45, 1.0) * (1.0 + uScatter * 0.4) * smoothstep(1.2, 4.0, d);
+}`;
+
 const FRAG = /* glsl */ `#version 300 es
 precision mediump float;
 in float vAlpha;
@@ -143,6 +169,30 @@ export const DustVortex = forwardRef<VortexHandle, { active?: boolean; style?: S
       buf('aSeed', seed, 4);
       const U = (n: string) => gl.getUniformLocation(prog, n);
       const u = { flow: U('uFlow'), time: U('uTime'), yaw: U('uYaw'), pitch: U('uPitch'), scale: U('uScale'), px: U('uPx'), intensity: U('uIntensity'), aspect: U('uAspect'), scatter: U('uScatter') };
+      // the background grains: their own small program and buffer
+      const bgProg = gl.createProgram()!;
+      gl.attachShader(bgProg, shader(gl.VERTEX_SHADER, BG_VERT));
+      gl.attachShader(bgProg, shader(gl.FRAGMENT_SHADER, FRAG));
+      gl.linkProgram(bgProg);
+      const bgData = new Float32Array(BG_COUNT * 4);
+      for (let i = 0; i < BG_COUNT; i++) {
+        bgData[i * 4] = (Math.random() - 0.5) * 12;      // wide
+        bgData[i * 4 + 1] = (Math.random() - 0.5) * 8;   // tall
+        bgData[i * 4 + 2] = -1 - Math.random() * 9;      // behind the shape, into the distance
+        bgData[i * 4 + 3] = Math.random();
+      }
+      const bgVao = gl.createVertexArray();
+      gl.bindVertexArray(bgVao);
+      const bgBuf = gl.createBuffer()!;
+      gl.bindBuffer(gl.ARRAY_BUFFER, bgBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, bgData, gl.STATIC_DRAW);
+      const bgLoc = gl.getAttribLocation(bgProg, 'aBg');
+      gl.enableVertexAttribArray(bgLoc);
+      gl.vertexAttribPointer(bgLoc, 4, gl.FLOAT, false, 0, 0);
+      const B = (n: string) => gl.getUniformLocation(bgProg, n);
+      const bu = { time: B('uTime'), yaw: B('uYaw'), scale: B('uScale'), px: B('uPx'), aspect: B('uAspect'), scatter: B('uScatter') };
+      gl.bindVertexArray(vao);
+
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -199,9 +249,23 @@ export const DustVortex = forwardRef<VortexHandle, { active?: boolean; style?: S
         const pulse = bt >= 0 && bt < 1 ? Math.sin(bt * Math.PI) * 0.12 : 0;
         gl.clearColor(1, 1, 1, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
+        const time = (now - t0) / 1000, yaw = (now - t0) * (0.00026 + intensity * 0.0006);
+        const fit = 1.6 * Math.min(cv.width, cv.height) / cv.height;
+        // the far dust first, then the shape over it
+        gl.useProgram(bgProg);
+        gl.bindVertexArray(bgVao);
+        gl.uniform1f(bu.time, time);
+        gl.uniform1f(bu.yaw, yaw);
+        gl.uniform1f(bu.scale, fit);
+        gl.uniform1f(bu.px, 1.1 * dpr);
+        gl.uniform1f(bu.aspect, cv.width / cv.height);
+        gl.uniform1f(bu.scatter, scatter);
+        gl.drawArrays(gl.POINTS, 0, BG_COUNT);
+        gl.useProgram(prog);
+        gl.bindVertexArray(vao);
         gl.uniform1f(u.flow, Math.min(1, (now - flowStart) / FLOW_MS));
-        gl.uniform1f(u.time, (now - t0) / 1000);
-        gl.uniform1f(u.yaw, (now - t0) * (0.00026 + intensity * 0.0006));
+        gl.uniform1f(u.time, time);
+        gl.uniform1f(u.yaw, yaw);
         gl.uniform1f(u.pitch, Math.sin((now - t0) * 0.00015) * 0.15);
         // the old vortex's framing: 0.8 of the shorter side, in clip space
         gl.uniform1f(u.scale, 1.6 * (1 + pulse) * Math.min(cv.width, cv.height) / cv.height);

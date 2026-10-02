@@ -1,6 +1,7 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Header } from './Header';
+import { FirstRunTour } from '../components/FirstRunTour';
 import { TabBar, type TabKey } from './TabBar';
 import { WyrdTab } from './tabs/WyrdTab';
 import { ScreenEffects } from '../components/ScreenEffects';
@@ -81,6 +82,8 @@ export function AppShell() {
   const openAlerts = () => { open('alerts'); markAllAlertsRead(); };
   const close = () => { if (overlay) sfx('close'); setOverlay(null); };
   const changeTab = (t: TabKey) => { if (t !== tab) sfx('tab'); setTab(t); };
+  // the tour brings each tab forward as it describes it (a stable callback, so it doesn't re-run)
+  const tourTab = useCallback((t: string) => setTab(t as TabKey), []);
 
   // a signal when new alerts arrive (not for the ones already waiting on arrival)
   const lastUnread = useRef<number | null>(null);
@@ -166,6 +169,8 @@ export function AppShell() {
       </View>
 
       <Suspense fallback={null}>
+        {/* first time only: a short tour of the place */}
+        <FirstRunTour onTab={tourTab} />
         {overlay === 'alerts' && <AlertsOverlay visible onClose={close} />}
         {linkOpened && (
           <DialogueLinkOverlay
