@@ -4,7 +4,10 @@ import { Chess, type Square } from 'chess.js';
 import { colors } from '../theme';
 
 const FILES = 'abcdefgh';
-const GLYPH: Record<string, string> = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+// U+FE0E asks for the text form: without it the pawn (♟) renders as a fixed-colour emoji on many
+// systems, so both sides' pawns looked the same
+const TEXT = '︎';
+const GLYPH: Record<string, string> = { p: `♟${TEXT}`, n: `♞${TEXT}`, b: `♝${TEXT}`, r: `♜${TEXT}`, q: `♛${TEXT}`, k: `♚${TEXT}` };
 
 /** A tap-to-move chessboard. Legal moves come from chess.js here (so the board feels instant); the
  *  server checks every move again. Signal: your selection and its legal squares in cobalt, the last
@@ -92,7 +95,8 @@ const styles = StyleSheet.create({
   dark: { backgroundColor: '#e9ebf1' },
   last: { backgroundColor: 'rgba(42,70,255,0.16)' },
   picked: { backgroundColor: colors.signal },
-  piece: { textAlign: 'center', includeFontPadding: false } as object,
+  // symbol fonts first: an emoji font would ignore the colour
+  piece: { textAlign: 'center', includeFontPadding: false, fontFamily: '"Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", "Apple Symbols", serif' } as object,
   // white pieces: white glyphs drawn with an ink outline, so they read on both square colours
   whitePiece: { textShadowColor: colors.ink, textShadowRadius: 1.2, textShadowOffset: { width: 0, height: 0 } } as object,
   dot: { position: 'absolute', backgroundColor: colors.signal, opacity: 0.85 },

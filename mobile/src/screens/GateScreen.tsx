@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { VortexCanvas, type VortexHandle } from '../components/VortexCanvas';
+import { DustVortex } from '../components/DustVortex';
 import { AuthPanel } from '../components/AuthPanel';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { Display, Mono } from '../components/ui';
@@ -164,7 +165,7 @@ export function GateScreen() {
   React.useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (open) { setOpen(false); return true; }
+      if (open) { setOpen(false); vortexRef.current?.scatter?.(false); return true; }
       return false;
     });
     return () => sub.remove();
@@ -173,8 +174,10 @@ export function GateScreen() {
   const enter = () => {
     unlock();
     sfx('gateEnter');
-    vortexRef.current?.burst();
     vortexRef.current?.setIntensity(1);
+    // the dust blows outwards and clears the stage; the sign-in panel rises into the space it leaves
+    if (vortexRef.current?.scatter) vortexRef.current.scatter(true);
+    else vortexRef.current?.burst();
     setBlastKey((k) => k + 1);
     // Let the blast actually read before the panel covers it -- opening instantly made the
     // effect invisible in practice.
@@ -186,7 +189,10 @@ export function GateScreen() {
 
   return (
     <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
-      <VortexCanvas ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />
+      {/* fine dust on the GPU where it can run; the older 2D vortex everywhere else */}
+      {canWebGL2
+        ? <DustVortex ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />
+        : <VortexCanvas ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />}
       <DustField />
       <ScreenEffects />
 
@@ -208,12 +214,12 @@ export function GateScreen() {
         )}
 
         {open && (
-          <View style={styles.panelWrap}>
+          <PanelReveal style={styles.panelWrap}>
             <AuthPanel
-              onClose={() => { resetToLogin(); setOpen(false); }}
+              onClose={() => { resetToLogin(); setOpen(false); vortexRef.current?.scatter?.(false); }}
               onActivity={() => vortexRef.current?.burst()}
             />
-          </View>
+          </PanelReveal>
         )}
       </KeyboardAvoidingView>
 
@@ -257,3 +263,24 @@ const styles = StyleSheet.create({
   },
   hint: { marginTop: 7, textAlign: 'center', fontSize: 8.5, color: colors.greenDim, opacity: 0.7 },
 });
+
+/** The sign-in panel appearing out of the cleared dust: it fades in and settles upward, unhurried. */
+function PanelReveal({ style, children }: { style: object; children: React.ReactNode }) {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(t, { toValue: 1, duration: 650, delay: 120, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [t]);
+  return (
+    <Animated.View
+      style={[style, {
+        opacity: t,
+        transform: [
+          { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+          { scale: t.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
+        ],
+      }]}
+    >
+      {children}
+    </Animated.View>
+  );
+}

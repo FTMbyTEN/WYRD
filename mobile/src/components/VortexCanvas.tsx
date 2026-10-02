@@ -11,6 +11,8 @@ export interface VortexHandle {
   setIntensity: (v: number) => void;
   /** morph to one of its shapes (by index; 0 is the sphere) */
   goTo: (i: number) => void;
+  /** blow the dust outwards to clear the stage (true), or gather it back (false); dust only */
+  scatter?: (on: boolean) => void;
 }
 
 interface Props {

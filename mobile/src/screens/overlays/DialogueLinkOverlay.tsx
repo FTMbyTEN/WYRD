@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Speech from 'expo-speech';
 import { OverlayShell } from './OverlayShell';
@@ -43,7 +43,37 @@ const SUGGESTIONS: { tag: string; text: string }[] = [
 /** A file read in this browser: its details, and its passages indexed for questions. */
 type OpenDoc = { name: string; kind: string; pages?: number; words: number; ix: DocIndex };
 /** A file in the composer: being read (with progress), or ready for the message that goes with it. */
-type Staged = { status: 'reading'; name: string; done: number; total: number } | { status: 'ready'; doc: OpenDoc };
+type Staged =
+  | { status: 'reading'; name: string; done: number; total: number }
+  | { status: 'ready'; doc: OpenDoc }
+  | { status: 'photo'; name: string; base64: string; preview: string }; // a picture, for WYRD to look at
+
+/** A picked photo, shrunk in the browser to at most 1280 px and re-encoded as JPEG: quick to send,
+ *  and what the photo endpoint expects (base64, no data: prefix). */
+async function photoFromFile(file: File): Promise<{ base64: string; preview: string }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new window.Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error("That image couldn't be opened (HEIC photos from iPhones may need converting to JPEG first)."));
+      i.src = url;
+    });
+    const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(img.naturalWidth * k));
+    cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+    const x = cv.getContext('2d')!;
+    x.fillStyle = '#fff';
+    x.fillRect(0, 0, cv.width, cv.height); // transparent PNGs on white, not black
+    x.drawImage(img, 0, 0, cv.width, cv.height);
+    const preview = cv.toDataURL('image/jpeg', 0.82);
+    return { base64: preview.slice(preview.indexOf(',') + 1), preview };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+const isImage = (f: File) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f.name);
 
 const ATTACHED = /^📎 ([^\n]+)\n*/;
 
@@ -81,6 +111,15 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
 
   const send = async (override?: string) => {
     const text = (override ?? draft).trim();
+    // a staged photo goes to WYRD's eyes, with the message as the question about it
+    if (override == null && staged?.status === 'photo') {
+      const photo = staged;
+      setDraft('');
+      setStaged(null);
+      sfx('send');
+      await lookAt(photo.base64, text || `[shared a photo: ${photo.name}]`);
+      return;
+    }
     const file = override == null && staged?.status === 'ready' ? staged.doc : null;
     if ((!text && !file) || sending || staged?.status === 'reading') return;
     const shown = file ? `📎 ${file.name}${text ? `\n${text}` : ''}` : text;
@@ -183,6 +222,19 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     const file = await pickFile();
     if (!file) return;
     const me = ++reading.current;
+    // a photo: shown in the composer, sent to WYRD's eyes with whatever you ask about it
+    if (isImage(file)) {
+      setStaged({ status: 'reading', name: file.name, done: 0, total: 0 });
+      try {
+        const { base64, preview } = await photoFromFile(file);
+        if (reading.current !== me) return;
+        setStaged({ status: 'photo', name: file.name, base64, preview });
+        sfx('ready');
+      } catch (e) {
+        if (reading.current === me) { setStaged(null); setError((e as Error).message); }
+      }
+      return;
+    }
     setStaged({ status: 'reading', name: file.name, done: 0, total: 0 });
     sfx('scan');
     preloadVoice(['file-received', 'file-ready']);
@@ -234,7 +286,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   }, [turns.length, pending]);
 
-  const canSend = (draft.trim().length > 0 || staged?.status === 'ready') && !sending && staged?.status !== 'reading';
+  const canSend = (draft.trim().length > 0 || staged?.status === 'ready' || staged?.status === 'photo') && !sending && staged?.status !== 'reading';
 
   // web: Enter sends, Shift+Enter is a new line
   const onKeyPress = (e: { nativeEvent: { key: string; shiftKey?: boolean }; preventDefault?: () => void }) => {
@@ -437,6 +489,20 @@ function IndeterminateBar() {
 }
 
 function StagedFile({ staged, onRemove }: { staged: Staged; onRemove: () => void }) {
+  if (staged.status === 'photo') {
+    return (
+      <View style={styles.staged}>
+        <Image source={{ uri: staged.preview }} style={styles.photoThumb} resizeMode="cover" />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Mono style={styles.stagedName} numberOfLines={1}>{staged.name}</Mono>
+          <Mono style={[styles.stagedMeta, styles.stagedReady]} numberOfLines={1}>✓ photo · ask about it, or just send</Mono>
+        </View>
+        <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove photo" style={styles.stagedX}>
+          <Mono style={styles.stagedXText}>✕</Mono>
+        </Pressable>
+      </View>
+    );
+  }
   const reading = staged.status === 'reading';
   const name = reading ? staged.name : staged.doc.name;
   const meta = reading
@@ -706,6 +772,7 @@ const styles = StyleSheet.create({
   stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
   stagedX: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.greenBorderDim },
   stagedXText: { fontSize: 10, color: colors.greenDim },
+  photoThumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 1, borderColor: colors.greenBorderDim },
   stagedReady: { color: colors.signal },
   spinner: {
     position: 'absolute', right: -5, bottom: -3, width: 14, height: 14, borderRadius: 7,

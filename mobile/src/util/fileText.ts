@@ -10,7 +10,8 @@ export interface ExtractedFile {
 }
 
 /** What can be attached, for the file picker. */
-export const ACCEPT = '.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.html,.htm,.xml,.rtf,.log,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.cs,.go,.rs,.rb,.php,.swift,.kt,.dart,.sql,.yaml,.yml,.ini,.tex';
+// documents, and photos (which go to WYRD's eyes rather than the text reader)
+export const ACCEPT = 'image/*,.jpg,.jpeg,.png,.webp,.gif,.heic,.pdf,.docx,.txt,.md,.markdown,.csv,.tsv,.json,.html,.htm,.xml,.rtf,.log,.js,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.cs,.go,.rs,.rb,.php,.swift,.kt,.dart,.sql,.yaml,.yml,.ini,.tex';
 
 // The file stays in this browser (only a sample and, per question, the relevant passages are
 // sent), so the limits are about what a browser can comfortably read, not what the server takes.
