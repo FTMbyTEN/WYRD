@@ -1,5 +1,6 @@
 import { callEndpoint, ServerpodClientError, SERVERPOD_BASE_URL } from './serverpodClient';
 import type { BrainMapData } from '../components/BrainCanvas';
+import type { CharacterLook, CityCharter, CityDecree, CityDesignNote, CityLiveDesign } from './types';
 import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
   AlertNote,
   ChatResult,
@@ -32,6 +33,8 @@ import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkP
   SelfConfig,
   DroneMission,
   GameMatch,
+  AgentTask,
+  AgentStep,
   PlayerRating,
   DronePlanResult,
   DroneState,
@@ -128,7 +131,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     chosenPath: 'serverpod',
     mind: adaptMind(r.mind),
     netFetched: false,
-    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'open_drone' || r.action.type === 'open_book')
+    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'open_drone' || r.action.type === 'open_book' || r.action.type === 'open_tasks')
       ? (r.action as ChatResult['action'])
       : null,
   };
@@ -408,6 +411,32 @@ export const api = {
   droneIsOperator: () => callEndpoint<boolean>('drone', 'isOperator', {}),
   dronePlan: (instruction: string) => callEndpoint<DronePlanResult>('drone', 'plan', { instruction }),
   droneAbort: () => callEndpoint<DroneMission>('drone', 'abort', {}),
+
+  // ---- agent tasks ----
+  agentTasks: () => callEndpoint<AgentTask[]>('agent', 'mine', {}),
+  agentCreate: (goal: string, everyHours: number | null) => callEndpoint<AgentTask>('agent', 'create', { goal, everyHours }),
+  agentSteps: (taskId: number) => callEndpoint<AgentStep[]>('agent', 'steps', { taskId }),
+  agentDecide: (taskId: number, approve: boolean) => callEndpoint<AgentTask>('agent', 'decide', { taskId, approve }),
+  agentCancel: (taskId: number) => callEndpoint<AgentTask>('agent', 'cancel', { taskId }),
+  agentRunNow: (taskId: number) => callEndpoint<AgentTask>('agent', 'runNow', { taskId }),
+  agentMarkRead: (taskId: number) => callEndpoint<AgentTask>('agent', 'markRead', { taskId }),
+
+  // ---- the open world's Authority (WYRD) ----
+  cityAddress: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, situation: object) =>
+    callEndpoint<string>('city', 'address', { channel, text, situation: JSON.stringify(situation) }).then((j) => JSON.parse(j) as CityDecree),
+  cityStatus: () => callEndpoint<string>('city', 'status', {}).then((j) => JSON.parse(j) as CityDecree),
+  cityCharter: () => callEndpoint<string>('city', 'charter', {}).then((j) => JSON.parse(j) as CityCharter),
+  /** Your NAIJA 2099 character, or null before you've made one. */
+  myCharacter: () => callEndpoint<string>('city', 'myCharacter', {}).then((j) => JSON.parse(j) as CharacterLook | null),
+  saveCharacter: (look: CharacterLook) => callEndpoint<string>('city', 'saveCharacter', { character: JSON.stringify(look) }).then((j) => JSON.parse(j) as CharacterLook),
+  /** Let WYRD learn from your play in NAIJA 2099 (or stop). */
+  citySetTraining: (optIn: boolean) => callEndpoint<string>('city', 'setTraining', { optIn }).then((j) => JSON.parse(j) as CityDecree),
+  cityDesign: () => callEndpoint<string>('city', 'design', {}).then((j) => JSON.parse(j) as CityLiveDesign),
+  // the design studio: the owner designs the game with WYRD (operators only)
+  cityCanDesign: () => callEndpoint<boolean>('city', 'canDesign', {}),
+  cityDesignChat: (text: string) => callEndpoint<string>('city', 'designChat', { text }).then((j) => JSON.parse(j) as { reply: string; proposals: CityDesignNote[] }),
+  cityDesignNotes: () => callEndpoint<string>('city', 'designNotes', {}).then((j) => JSON.parse(j) as CityDesignNote[]),
+  cityDesignDecide: (id: number, approve: boolean) => callEndpoint<string>('city', 'designDecide', { id, approve }).then((j) => JSON.parse(j) as CityDesignNote),
 
   // ---- owner ---- (operator accounts only; the server checks)
   ownerUserStats: () => callEndpoint<string>('owner', 'userStats', {}),

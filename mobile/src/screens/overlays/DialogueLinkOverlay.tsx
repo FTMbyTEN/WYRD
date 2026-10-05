@@ -29,6 +29,7 @@ interface Props {
   onOpenGlobe: (countryName: string | null) => void;
   onOpenAppPreview: (html: string) => void;
   onOpenDrone: () => void;
+  onOpenTasks?: () => void;
   onOpenBook: (readingItemId: number) => void;
 }
 
@@ -82,7 +83,7 @@ const ATTACHED = /^📎 ([^\n]+)\n*/;
  *  from chat.getHistory kept live by the stream's `chat` event, and the tool hand-offs routed to
  *  the real overlays. A file you attach waits in the composer until you send your message with
  *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
-export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook }: Props) {
+export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks }: Props) {
   const { turns } = useConversations(60);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
@@ -108,7 +109,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     else if (action.type === 'preview_app') onOpenAppPreview(action.html);
     else if (action.type === 'open_drone') onOpenDrone();
     else if (action.type === 'open_book') onOpenBook(action.readingItemId);
-  }, [onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook]);
+    else if (action.type === 'open_tasks') onOpenTasks?.();
+  }, [onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks]);
 
   const send = async (override?: string) => {
     const text = (override ?? draft).trim();

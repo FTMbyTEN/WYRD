@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Chess } from 'chess.js';
 import { ChessBoard } from '../../components/ChessBoard';
@@ -11,6 +12,29 @@ import type { GameMatch, PlayerRating } from '../../api/types';
 import { sfx } from '../../util/sound';
 
 type GameKey = 'chess' | 'connect4' | 'reversi' | 'tictactoe';
+
+// the open world loads only when someone walks in: its 3D engine stays out of everyone else's download
+const LagosWorld = lazy(() => import('../../world/LagosWorld').then((m) => ({ default: m.LagosWorld })));
+/** If the world fails to load or crashes (an old phone, a lost connection), only the world goes:
+ *  the rest of WYRD stays up, and there's a way back. */
+class WorldBoundary extends React.Component<{ onExit: () => void; children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(e: unknown) { console.warn('[world]', e); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
+        <Display style={{ fontSize: 28, color: colors.mint }}>Lagos couldn't load</Display>
+        <Mono style={{ fontSize: 12, color: colors.greenDim, textAlign: 'center' }}>Your device or connection didn't manage the 3D world this time. Try again in a moment.</Mono>
+        <Pressable onPress={this.props.onExit} style={{ borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 16, paddingVertical: 10 }}>
+          <Mono style={{ fontSize: 11, letterSpacing: 2, color: colors.mint }}>BACK TO GAMES</Mono>
+        </Pressable>
+      </View>
+    );
+  }
+}
+const canWebGL = (() => { try { return Platform.OS === 'web' && !!document.createElement('canvas').getContext('webgl2'); } catch { return false; } })();
 
 // the games WYRD plays; the ones still being built say so
 const CATALOG: { key: string; name: string; blurb: string; ready: boolean }[] = [
@@ -49,6 +73,7 @@ export function GamesTab() {
   const [board, setBoard] = useState<PlayerRating[]>([]);
   const [boardGame, setBoardGame] = useState<GameKey>('chess');
   const [room, setRoom] = useState<GameKey | null>(() => loadRoom()?.game ?? null);
+  const [world, setWorld] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -58,6 +83,17 @@ export function GamesTab() {
   }, [boardGame]);
   useEffect(() => { void refresh(); }, [refresh]);
 
+  if (world) {
+    return (
+      <View style={styles.worldWrap}>
+        <WorldBoundary onExit={() => setWorld(false)}>
+          <Suspense fallback={<View style={styles.worldLoading}><ActivityIndicator color={colors.signal} /><Mono style={styles.muted}>Building Lagos…</Mono></View>}>
+            <LagosWorld onExit={() => setWorld(false)} />
+          </Suspense>
+        </WorldBoundary>
+      </View>
+    );
+  }
   if (room) return <GameRoom game={room} wide={wide} width={width} onBack={() => { saveRoom(null); setRoom(null); void refresh(); }} onRated={refresh} />;
 
   const mine = ratings.find((r) => r.game === boardGame);
@@ -68,6 +104,17 @@ export function GamesTab() {
         <Display style={styles.title}>Play WYRD</Display>
         <Mono style={styles.muted}>Every win and loss moves your rating. Play WYRD at your level, or challenge another person while WYRD keeps score.</Mono>
       </View>
+
+      {canWebGL ? (
+        <Pressable onPress={() => { sfx('open'); setWorld(true); }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
+          <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+            <Mono style={styles.worldEyebrow}>NEW · OPEN WORLD · PROTOTYPE</Mono>
+            <Display style={styles.worldName}>Lagos, run by WYRD</Display>
+            <Mono style={styles.worldBlurb}>Walk an Ojuelegba-inspired district. Danfos in the traffic, a market under umbrellas, and WYRD's real brain on a tower in the plaza: its mood sets the sky, and every thought it fires lights up the city.</Mono>
+          </View>
+          <Mono style={styles.worldGo}>ENTER ›</Mono>
+        </Pressable>
+      ) : null}
 
       <View style={styles.grid}>
         {CATALOG.map((g) => {
@@ -416,6 +463,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 44, lineHeight: 46, color: colors.mint },
   muted: { fontSize: 12, lineHeight: 18, color: colors.greenDim },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  worldWrap: { flex: 1, minHeight: 480, backgroundColor: '#fff8ea' },
+  worldLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  worldCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#16171a', padding: 18, borderLeftWidth: 4, borderLeftColor: '#f2c200' },
+  worldEyebrow: { fontSize: 9.5, letterSpacing: 2.4, color: '#f2c200' },
+  worldName: { fontSize: 30, lineHeight: 32, color: '#ffffff' },
+  worldBlurb: { fontSize: 12, lineHeight: 18, color: '#c9cbd1' },
+  worldGo: { fontSize: 12, letterSpacing: 2, color: '#f2c200' },
   card: { width: '100%', borderWidth: 1, borderColor: colors.greenBorderDim, padding: 14, gap: 6, backgroundColor: '#fff' },
   cardWide: { width: '32%', minWidth: 260, flexGrow: 1 },
   cardSoon: { opacity: 0.55 },

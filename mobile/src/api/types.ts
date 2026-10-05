@@ -247,6 +247,7 @@ export type ChatAction =
   | { type: 'preview_app'; html: string }
   | { type: 'open_drone' }
   | { type: 'open_book'; readingItemId: number }
+  | { type: 'open_tasks' }
   | null;
 
 export interface ChatResult {
@@ -385,3 +386,57 @@ export interface GameMatch {
   version: number;
   viewerSide: 'w' | 'b' | null; // the side of whoever asked
 }
+
+// ---- agent tasks ----
+export interface AgentTask {
+  id: number;
+  goal: string;
+  everyHours: number | null;
+  status: 'queued' | 'running' | 'waiting_approval' | 'scheduled' | 'done' | 'failed' | 'cancelled';
+  result: string | null;
+  previousResult: string | null;
+  notes: string | null;
+  pendingAction: string | null; // JSON: { kind, summary, url?, ... }
+  stepsUsed: number;
+  maxSteps: number;
+  runs: number;
+  unread: boolean;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface AgentStep {
+  id: number;
+  taskId: number;
+  run: number;
+  at: string;
+  kind: 'tool' | 'note' | 'ask' | 'approved' | 'declined' | 'result' | 'error';
+  tool: string | null;
+  detail: string;
+  output: string | null;
+}
+
+/** A mission from WYRD, the open world's Authority: on a real street (or at x/z, metres from Ojuelegba). */
+export interface CityMission { id?: string; kind: 'reach' | 'deliver' | 'find' | 'greet'; title: string; brief: string; street: string | null; x?: number | null; z?: number | null; reward: number; minStanding?: number }
+export type CityAction =
+  | ({ type: 'mission' } & CityMission)
+  | { type: 'mission_done' }
+  | { type: 'standing'; delta: number; reason: string }
+  | { type: 'weather'; weather: 'clear' | 'rain' | 'harmattan' | 'storm' }
+  | { type: 'traffic'; mode: 'normal' | 'stop' | 'rush' }
+  | { type: 'drone'; toPlayer: boolean; x: number | null; z: number | null; purpose: string }
+  | { type: 'broadcast'; text: string }
+  | { type: 'danfo'; destination: string | null };
+/** What the Authority said and did, and where you stand with it. */
+export interface CityDecree { say: string; actions: CityAction[]; standing: number; rank: string; missionsDone: number; mission: CityMission | null; trainingOptIn?: boolean; trainingAsked?: boolean }
+/** WYRD's charter for the city, in its words, and its mission board (those open to you). */
+export interface CityCharter { charter: string; author: 'wyrd' | 'seed'; writtenAt: string; missions: CityMission[] }
+
+/** A design proposal for the open world, from WYRD (or the owner) in the design studio. */
+export interface CityDesignNote { id: number; author: 'wyrd' | 'owner'; kind: 'idea' | 'rule' | 'mission' | 'npc_lines' | 'tuning' | 'event'; title: string; body: string; payload: Record<string, unknown> | null; status: 'proposed' | 'approved' | 'rejected'; createdAt: string }
+/** The approved, live part of the design the game applies. */
+export interface CityLiveDesign { traffic: number; crowd: number; npcLines: string[]; events: { title: string; startHour: number; endHour: number; weather?: 'clear' | 'rain' | 'harmattan' | 'storm'; traffic?: 'normal' | 'stop' | 'rush'; broadcast?: string }[]; missions: CityMission[] }
+
+/** A player's character in NAIJA 2099, from the character creator. Proportions and skin are -1..1. */
+export interface CharacterLook { base: 'ten' | 'ama'; outfit?: number; name: string; height: number; build: number; shoulders: number; hips: number; skin: number; outfitHue: number; neon: number }

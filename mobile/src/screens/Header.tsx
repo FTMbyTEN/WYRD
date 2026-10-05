@@ -14,12 +14,14 @@ interface Props {
   alertCount: number;
   onOpenAlerts: () => void;
   onOpenCop: () => void;
+  taskCount: number;
+  onOpenTasks: () => void;
 }
 
 /** The bar across the top of every screen: WYRD's mark and name, whether its mind is live and
  *  what it's doing, how it feels, its vitals at a glance, and the three switches (voice,
  *  oversight, alerts). */
-export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpenCop }: Props) {
+export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpenCop, taskCount, onOpenTasks }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
@@ -62,6 +64,9 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
         <View style={styles.right}>
           <Switch label="VOICE" on={tts} onPress={onToggleTts} hint={tts ? 'Spoken replies on' : 'Spoken replies off'} compact={narrow}>
             <Glyph name={tts ? "voice" : "voiceOff"} size={17} active={tts} />
+          </Switch>
+          <Switch label="TASKS" onPress={onOpenTasks} hint="WYRD's tasks" badge={taskCount} compact={narrow}>
+            <Glyph name="spark" size={17} active={taskCount > 0} />
           </Switch>
           <Switch label="COP" onPress={onOpenCop} hint="COP oversight" compact={narrow}>
             <Glyph name="cop" size={17} />

@@ -250,6 +250,14 @@ export function useBrainMap() {
   return data;
 }
 
+/** How many agent tasks have something new: a result not yet read, or an action waiting for an
+ *  answer. Checked once a minute (cheap), and again whenever the Tasks panel closes. */
+export function useAgentBadge() {
+  const { data, reload } = usePolled(api.agentTasks, 60000, [], 'agentTasks');
+  const count = (data ?? []).filter((t) => t.unread || t.status === 'waiting_approval').length;
+  return { count, reload };
+}
+
 export function useDroneAccess() {
   const { data } = usePolled<boolean>(api.droneIsOperator, null, [], 'droneAccess');
   return data === true;

@@ -5,7 +5,7 @@ import { FirstRunTour } from '../components/FirstRunTour';
 import { TabBar, type TabKey } from './TabBar';
 import { WyrdTab } from './tabs/WyrdTab';
 import { ScreenEffects } from '../components/ScreenEffects';
-import { prefetchBrain, prefetchDialogue, useDroneAccess, useMind } from '../api/hooks';
+import { prefetchBrain, prefetchDialogue, useAgentBadge, useDroneAccess, useMind } from '../api/hooks';
 import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
 import { colors } from '../theme';
 import { useIsDesktop } from '../util/layout';
@@ -43,9 +43,10 @@ const GlobeOverlay = named(() => import('./overlays/GlobeOverlay'), 'GlobeOverla
 const ConceptMapOverlay = named(() => import('./overlays/ConceptMapOverlay'), 'ConceptMapOverlay') as unknown as typeof import('./overlays/ConceptMapOverlay').ConceptMapOverlay;
 const GrowthOverlay = named(() => import('./overlays/GrowthOverlay'), 'GrowthOverlay') as unknown as typeof import('./overlays/GrowthOverlay').GrowthOverlay;
 const AppPreviewOverlay = named(() => import('./overlays/AppPreviewOverlay'), 'AppPreviewOverlay') as unknown as typeof import('./overlays/AppPreviewOverlay').AppPreviewOverlay;
+const TasksOverlay = named(() => import('./overlays/TasksOverlay'), 'TasksOverlay') as unknown as typeof import('./overlays/TasksOverlay').TasksOverlay;
 const CopOverlay = named(() => import('./overlays/CopOverlay'), 'CopOverlay') as unknown as typeof import('./overlays/CopOverlay').CopOverlay;
 
-type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | 'cop' | null;
+type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | 'cop' | 'tasks' | null;
 
 function Loading() {
   return (
@@ -58,6 +59,8 @@ function Loading() {
 export function AppShell() {
   const [tab, setTab] = useState<TabKey>('wyrd');
   const droneAccess = useDroneAccess();
+  // agent tasks with something new for you: a result you haven't read, or a question waiting
+  const { count: taskBadge, reload: refreshTasks } = useAgentBadge();
   // a book Dialogue Link pulled up: the Academy opens it (behind the chat, which stays open)
   const [bookFocus, setBookFocus] = useState<{ id: number; at: number } | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
@@ -112,7 +115,7 @@ export function AppShell() {
       () => import('./tabs/JournalTab'), () => import('./tabs/AcademyTab').then((m) => m.warmDesk()), () => import('./tabs/GamesTab'),
       () => import('./tabs/YouTab'), () => import('./overlays/AlertsOverlay'), () => import('./overlays/CopOverlay'),
       () => import('./overlays/ConceptMapOverlay'), () => import('./overlays/GrowthOverlay'),
-      () => import('./overlays/GlobeOverlay'), () => import('./tabs/DroneTab'),
+      () => import('./overlays/GlobeOverlay'), () => import('./overlays/TasksOverlay'), () => import('./tabs/DroneTab'),
     ];
     let i = 0, timer: ReturnType<typeof setTimeout>;
     const next = () => { if (i < rest.length) void rest[i++]().finally(() => { timer = setTimeout(next, 250); }); };
@@ -143,6 +146,8 @@ export function AppShell() {
           alertCount={unread}
           onOpenAlerts={openAlerts}
           onOpenCop={() => open('cop')}
+          taskCount={taskBadge}
+          onOpenTasks={() => open('tasks')}
         />
 
         <View style={{ flex: 1, minHeight: 0 }}>
@@ -180,6 +185,7 @@ export function AppShell() {
             onOpenGlobe={(country) => { setGlobeFocus(country); open('globe'); }}
             onOpenAppPreview={(html) => { setAppPreviewHtml(html); open('appPreview'); }}
             onOpenDrone={() => { setOverlay(null); changeTab('drone'); }}
+            onOpenTasks={() => { setOverlay('tasks'); void refreshTasks(); }}
             onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
           />
         )}
@@ -189,6 +195,7 @@ export function AppShell() {
         {overlay === 'growth' && <GrowthOverlay visible onClose={close} />}
         {overlay === 'appPreview' && <AppPreviewOverlay visible onClose={close} html={appPreviewHtml} />}
         {overlay === 'cop' && <CopOverlay visible onClose={close} />}
+        {overlay === 'tasks' && <TasksOverlay visible onClose={() => { close(); void refreshTasks(); }} />}
       </Suspense>
     </View>
   );

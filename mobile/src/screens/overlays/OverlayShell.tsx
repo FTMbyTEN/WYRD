@@ -9,7 +9,7 @@ import type { GlyphName } from '../../components/glyph/glyphs';
 // each panel's glyph, live while the panel is open
 const PANEL_GLYPH: Record<string, GlyphName> = {
   ALERTS: 'alerts', APP_PREVIEW: 'eye', BRAIN_3D: 'brain', CONCEPT_MAP: 'concept', COP: 'cop',
-  DIALOGUE_LINK: 'chat', GROWTH: 'growth', WORLD_MAP: 'globe',
+  DIALOGUE_LINK: 'chat', GROWTH: 'growth', WORLD_MAP: 'globe', TASKS: 'spark',
 };
 
 interface Props {
