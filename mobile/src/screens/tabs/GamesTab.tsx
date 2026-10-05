@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { Chess } from 'chess.js';
 import { ChessBoard } from '../../components/ChessBoard';
 import { ConnectFourBoard, ReversiBoard, TicTacToeBoard, reversiCount } from '../../components/games/Boards';
@@ -14,6 +14,20 @@ import { sfx } from '../../util/sound';
 type GameKey = 'chess' | 'connect4' | 'reversi' | 'tictactoe';
 
 // the open world loads only when someone walks in: its 3D engine stays out of everyone else's download
+/** On a phone the game plays landscape: fullscreen, then lock sideways (Android); iOS can't lock, so it asks. */
+const isPhone = () => Platform.OS === 'web' && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+function enterLandscape() {
+  if (!isPhone()) return;
+  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+  Promise.resolve(el.requestFullscreen?.({ navigationUI: 'hide' }) ?? el.webkitRequestFullscreen?.())
+    .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape'))
+    .catch(() => {});
+}
+function leaveLandscape() {
+  if (!isPhone()) return;
+  try { (screen.orientation as ScreenOrientation & { unlock?: () => void })?.unlock?.(); } catch { /* not locked */ }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
 const LagosWorld = lazy(() => import('../../world/LagosWorld').then((m) => ({ default: m.LagosWorld })));
 /** If the world fails to load or crashes (an old phone, a lost connection), only the world goes:
  *  the rest of WYRD stays up, and there's a way back. */
@@ -67,7 +81,7 @@ function withSide(m: GameMatch | null): GameMatch | null {
 
 /** GAMES: play WYRD, or another person, for a rating. */
 export function GamesTab() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const wide = width >= 1000;
   const [ratings, setRatings] = useState<PlayerRating[]>([]);
   const [board, setBoard] = useState<PlayerRating[]>([]);
@@ -83,14 +97,22 @@ export function GamesTab() {
   }, [boardGame]);
   useEffect(() => { void refresh(); }, [refresh]);
 
+  const wantsTurn = world && isPhone() && height > width;
   if (world) {
     return (
       <View style={styles.worldWrap}>
-        <WorldBoundary onExit={() => setWorld(false)}>
+        <WorldBoundary onExit={() => { leaveLandscape(); setWorld(false); }}>
           <Suspense fallback={<View style={styles.worldLoading}><ActivityIndicator color={colors.signal} /><Mono style={styles.muted}>Building Lagos…</Mono></View>}>
-            <LagosWorld onExit={() => setWorld(false)} />
+            <LagosWorld onExit={() => { leaveLandscape(); setWorld(false); }} />
           </Suspense>
         </WorldBoundary>
+        {wantsTurn && (
+          <View style={styles.turn}>
+            <Mono style={styles.turnBig}>⟲</Mono>
+            <Mono style={styles.turnText}>TURN YOUR PHONE SIDEWAYS</Mono>
+            <Mono style={styles.muted}>NAIJA 2099 plays in landscape.</Mono>
+          </View>
+        )}
       </View>
     );
   }
@@ -106,7 +128,7 @@ export function GamesTab() {
       </View>
 
       {canWebGL ? (
-        <Pressable onPress={() => { sfx('open'); setWorld(true); }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
+        <Pressable onPress={() => { sfx('open'); enterLandscape(); setWorld(true); }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
           <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
             <Mono style={styles.worldEyebrow}>NEW · OPEN WORLD · PROTOTYPE</Mono>
             <Display style={styles.worldName}>Lagos, run by WYRD</Display>
@@ -463,7 +485,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 44, lineHeight: 46, color: colors.mint },
   muted: { fontSize: 12, lineHeight: 18, color: colors.greenDim },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  worldWrap: { flex: 1, minHeight: 480, backgroundColor: '#fff8ea' },
+  // the game takes the whole screen (over the header and tab bar), as a game should on a phone
+  turn: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000, backgroundColor: '#0d0f14', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
+  turnBig: { fontSize: 54, color: '#00e5ff' },
+  turnText: { fontSize: 16, color: '#00e5ff', letterSpacing: 2, textAlign: 'center' },
+  worldWrap: Platform.OS === 'web'
+    ? ({ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, backgroundColor: '#0d0f14' } as unknown as ViewStyle)
+    : { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, backgroundColor: '#0d0f14' },
   worldLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   worldCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#16171a', padding: 18, borderLeftWidth: 4, borderLeftColor: '#f2c200' },
   worldEyebrow: { fontSize: 9.5, letterSpacing: 2.4, color: '#f2c200' },

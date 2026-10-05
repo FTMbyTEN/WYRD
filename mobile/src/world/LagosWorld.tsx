@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -129,6 +129,10 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const [intro, setIntro] = useState(false);
   const [caption, setCaption] = useState<string | null>(null);
   const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
+  // a phone on its side is short: the HUD corners shrink so the city stays in view
+  const { height: screenH } = useWindowDimensions();
+  const compact = screenH < 500;
+  const shrink = compact ? { transform: [{ scale: 0.7 }] } : null;
   useEffect(() => { const t = setTimeout(() => setShowHelp(false), 25000); return () => clearTimeout(t); }, []);
   const host = useRef<View>(null);
   const { mind } = useMind();
@@ -698,7 +702,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     const kd = (e: KeyboardEvent) => {
       if (introOn && (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter')) { endIntro(); e.preventDefault(); return; }
       if (e.key === 'Escape' || (e.key.toLowerCase() === 'm' && !live.current.typing)) { setMenu((m) => !m); keys.clear(); return; }
-      if (live.current.typing) { keys.clear(); return; }
+      const tg = e.target as HTMLElement | null;
+      if (live.current.typing || tg?.tagName === 'INPUT' || tg?.tagName === 'TEXTAREA') { keys.clear(); return; } // typing to WYRD never drives the game
       const k = e.key.toLowerCase();
       if (k === 't') { setAsk('speak'); keys.clear(); e.preventDefault(); return; }
       if (k === 'v') { setBird((b) => !b); return; }
@@ -1011,10 +1016,11 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       (scene.fog as THREE.Fog).color.copy(skyU.bottom.value).lerp(c.setHex(0x6a4a8a), 0.35).lerp(c.setHex(0x1e1440), night);
       sun.intensity = 2.6 * (1 - night) + 0.05;
       sun.color.setHSL(0.09, 0.6, 0.62 + 0.3 * Math.max(0, sunDir.y));
-      hemi.intensity = 0.45 + 0.4 * (1 - night); // nights stay readable: the city's own glow fills the haze
+      hemi.intensity = 0.7 + 0.15 * (1 - night); // nights stay readable: the city's own glow fills the haze
       city.bulbMat.emissiveIntensity = night * 3.5;
+      city.poolMat.opacity = night * 0.85; // street lamps light the road under them
       (scene as unknown as { environmentIntensity: number }).environmentIntensity = 0.06 + 0.22 * (1 - night); // the studio map is for reflections; at full strength it floodlights every roof and the ground
-      renderer.toneMappingExposure = 1.0 - night * 0.15;
+      renderer.toneMappingExposure = 1.0 + night * 0.25; // the eye adjusts: night is dark blue, not black
       if (bloom) bloom.strength = 0.06 + night * 0.2; // restrained: the city has a lot of light in it
       // the Authority's weather: rain and storm dim the day and close in the haze; harmattan is a dusty wall
       const wx = authority.sky(now);
@@ -1550,7 +1556,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       ) : null}
 
       {/* ---- top left: who you are, where you are ---- */}
-      <View style={[styles.topLeft, intro && { opacity: 0 }]} pointerEvents="none">
+      <View style={[styles.topLeft, shrink && { ...shrink, transformOrigin: 'top left' }, intro && { opacity: 0 }]} pointerEvents="none">
         <Panel style={styles.idCard}>
           <Mono style={styles.idEyebrow}>NAIJA 2099 · {(standing?.rank ?? 'Newcomer').toUpperCase()}</Mono>
           <Display style={styles.idName} numberOfLines={1}>{look.name}</Display>
@@ -1575,7 +1581,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       {!bird && !intro ? <View style={styles.topCentre} pointerEvents="none"><Compass feed={feed} /></View> : null}
 
       {/* ---- top right: menu, minimap, mission ---- */}
-      <View style={[styles.topRight, intro && { opacity: 0 }]} pointerEvents={intro ? 'none' : 'box-none'}>
+      <View style={[styles.topRight, shrink && { ...shrink, transformOrigin: 'top right' }, intro && { opacity: 0 }]} pointerEvents={intro ? 'none' : 'box-none'}>
         <View style={styles.topButtons}>
           <Pressable onPress={() => setAsk('speak')} style={styles.iconBtn} accessibilityLabel="Speak to WYRD (T)"><Mono style={styles.iconText}>WYRD · T</Mono></Pressable>
           <Pressable onPress={() => setBird((b) => !b)} style={[styles.iconBtn, bird && styles.iconOn]} accessibilityLabel="Map (V)"><Mono style={[styles.iconText, bird && { color: colors.onSignal }]}>{bird ? 'STREET · V' : 'MAP · V'}</Mono></Pressable>
@@ -1627,7 +1633,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
 
       {/* ---- bottom left: the car's gauges, or the controls (for a while) ---- */}
       <View style={[styles.bottomLeft, intro && { opacity: 0 }]} pointerEvents="none">
-        {flying ? <VehicleGauges feed={feed} /> : showHelp && !bird ? (
+        {flying ? <VehicleGauges feed={feed} /> : showHelp && !bird && !touch && !compact ? (
           <Panel style={styles.controls}>
             <Mono style={styles.idEyebrow}>CONTROLS</Mono>
             {[['WASD', 'walk'], ['SHIFT', 'run'], ['SPACE', 'jump'], ['E', 'act'], ['F', 'hover-car'], ['T', 'speak to WYRD'], ['V', 'map'], ['ESC', 'menu']].map(([k, t]) => (

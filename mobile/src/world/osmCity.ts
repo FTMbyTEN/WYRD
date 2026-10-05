@@ -92,6 +92,15 @@ export class OsmCity {
   private poleMat = new THREE.MeshStandardMaterial({ color: 0x55585e, metalness: 0.5, roughness: 0.5 });
   readonly bulbMat = new THREE.MeshStandardMaterial({ color: 0xffeac0, emissive: 0xffd28a, emissiveIntensity: 0 });
   private poleGeo = new THREE.CylinderGeometry(0.08, 0.11, 6, 4, 1, true).translate(0, 3, 0);
+  /** the pool of light under each street lamp: additive, black at the rim, faded in by night */
+  readonly poolMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  private poolGeo = (() => {
+    const g = new THREE.CircleGeometry(9, 12).rotateX(-Math.PI / 2).translate(0, 0.08, 0);
+    const n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { const r = Math.hypot(g.attributes.position.getX(i), g.attributes.position.getZ(i)) / 9, k = r < 0.01 ? 1 : 0; col.set([1 * k, 0.72 * k, 0.4 * k], i * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g;
+  })();
   private bulbGeo = new THREE.OctahedronGeometry(0.32, 0).translate(0, 6.1, 0); // a glowing dot: 8 triangles
   readonly ready: Promise<void>;
 
@@ -245,6 +254,7 @@ export class OsmCity {
     // each material's geometry is written straight into one growing buffer: nothing to merge at the end
     const roadB = new Batch(), lineB = new Batch(), bridgeB = new Batch(), aoB = new Batch();
     const lamps: THREE.Matrix4[] = [];
+    const poolB = new Batch();
 
     // ---- roads ----
     let nr = 0;
@@ -523,7 +533,15 @@ export class OsmCity {
     add(bldB, this.wallMat, true);
     add(propB, this.propMat, true);
     for (const t of tops) bridgeB.add(tone(this.antennaGeo.clone().scale(1, t.h, 1).translate(t.x, t.y, t.z), 0.25));
-    for (const m4 of lamps) {
+    const onRoad = (x: number, z: number) => roads.some((r) => r.kind !== KIND.foot && r.pts.some((a, i) => {
+      const b = r.pts[i + 1];
+      if (!b) return false;
+      const dx = b.x - a.x, dz = b.y - a.y, L = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.y) * dz) / L));
+      return Math.hypot(a.x + dx * t - x, a.y + dz * t - z) < r.width / 2 + 0.4;
+    }));
+    for (const m4 of lamps.filter((m) => !onRoad(m.elements[12], m.elements[14]))) {
+      poolB.add(this.poolGeo.clone().applyMatrix4(m4));
       bridgeB.add(tone(this.poleGeo.clone().applyMatrix4(m4), 0.4));
       const bulb = this.bulbGeo.clone().applyMatrix4(m4);
       bulb.setAttribute('color', new THREE.BufferAttribute(new Float32Array(bulb.attributes.position.count * 3).map((_, i) => [1, 0.85, 0.55][i % 3]), 3));
@@ -531,6 +549,7 @@ export class OsmCity {
     }
     add(bridgeB, this.bridgeMat, true);
     add(lineB, this.lineMat, false);
+    add(poolB, this.poolMat, false);
     add(waterB, this.waterMat, false);
     add(railB, this.railMat, false);
     if (tops.length) {
