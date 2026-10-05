@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './api/AuthContext';
 import { colors } from './theme';
@@ -16,8 +16,20 @@ function Loading() {
   );
 }
 
+// a direct link to the game: wryd00.serverpod.space/#play opens NAIJA 2099 full screen, no tabs on the way
+const DirectGame = lazy(() => import('./world/LagosWorld').then((m) => ({ default: m.LagosWorld })));
 function Root() {
   const { status } = useAuth();
+  const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));
+  if (play) {
+    return (
+      <View style={styles.game}>
+        <Suspense fallback={<Loading />}>
+          <DirectGame onExit={() => { history.replaceState(null, '', location.pathname); setPlay(false); }} />
+        </Suspense>
+      </View>
+    );
+  }
   if (status === 'checking') return <Loading />;
   return (
     <Suspense fallback={<Loading />}>
@@ -40,5 +52,6 @@ export default function AppRoot() {
 }
 
 const styles = StyleSheet.create({
+  game: { flex: 1, backgroundColor: '#0d0f14' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff' },
 });

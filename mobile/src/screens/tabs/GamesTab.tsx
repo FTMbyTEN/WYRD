@@ -97,7 +97,8 @@ export function GamesTab() {
   }, [boardGame]);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const wantsTurn = world && isPhone() && height > width;
+  const [upright, setUpright] = useState(false);
+  const wantsTurn = world && !upright && isPhone() && height > width;
   if (world) {
     return (
       <View style={styles.worldWrap}>
@@ -110,7 +111,8 @@ export function GamesTab() {
           <View style={styles.turn}>
             <Mono style={styles.turnBig}>⟲</Mono>
             <Mono style={styles.turnText}>TURN YOUR PHONE SIDEWAYS</Mono>
-            <Mono style={styles.muted}>NAIJA 2099 plays in landscape.</Mono>
+            <Mono style={styles.muted}>NAIJA 2099 plays best in landscape.</Mono>
+            <Pressable onPress={() => setUpright(true)} style={styles.turnBtn}><Mono style={styles.turnBtnText}>PLAY UPRIGHT INSTEAD</Mono></Pressable>
           </View>
         )}
       </View>
@@ -487,6 +489,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   // the game takes the whole screen (over the header and tab bar), as a game should on a phone
   turn: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000, backgroundColor: '#0d0f14', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
+  turnBtn: { marginTop: 14, borderWidth: 1, borderColor: '#00e5ff', paddingHorizontal: 16, paddingVertical: 11 },
+  turnBtnText: { fontSize: 11, letterSpacing: 1.8, color: '#00e5ff' },
   turnBig: { fontSize: 54, color: '#00e5ff' },
   turnText: { fontSize: 16, color: '#00e5ff', letterSpacing: 2, textAlign: 'center' },
   worldWrap: Platform.OS === 'web'

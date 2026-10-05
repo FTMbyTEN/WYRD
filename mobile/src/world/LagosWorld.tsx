@@ -130,8 +130,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const [caption, setCaption] = useState<string | null>(null);
   const touch = typeof window !== 'undefined' && 'ontouchstart' in window;
   // a phone on its side is short: the HUD corners shrink so the city stays in view
-  const { height: screenH } = useWindowDimensions();
-  const compact = screenH < 500;
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  const compact = screenH < 500 || screenW < 560;
   const shrink = compact ? { transform: [{ scale: 0.7 }] } : null;
   useEffect(() => { const t = setTimeout(() => setShowHelp(false), 25000); return () => clearTimeout(t); }, []);
   const host = useRef<View>(null);
