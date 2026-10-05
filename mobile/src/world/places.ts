@@ -112,6 +112,12 @@ export function makePlaces(scene: THREE.Scene, host: HTMLElement) {
   let only: Set<PlaceKind> | null = null;
   return {
     get list() { return places; },
+    /** The nearest place within [r] metres of (x, z), or null. */
+    nearest(x: number, z: number, r: number) {
+      let best: Place | null = null, bd = r;
+      for (const { p } of pins) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
+      return best;
+    },
     /** Add tags of our own (the famous buildings), shown first. */
     addTags(list: Place[]) {
       for (const p of list) {

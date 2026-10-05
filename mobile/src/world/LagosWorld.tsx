@@ -29,6 +29,8 @@ import { CharacterCreator } from './CharacterCreator';
 import { LagosFM } from './Radio';
 import { CityPulse } from './CityPulse';
 import { HomesPanel, naira } from './HomesPanel';
+import { PlacePanel } from './PlacePanel';
+import type { Place } from './places';
 import { STARTER_MISSIONS } from './missions';
 import { makePlaces, PLACE_FILTERS } from './places';
 import { makeMaglev, type Maglev } from './maglev';
@@ -149,7 +151,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const [bird, setBird] = useState(true);
   const [placeFilter, setPlaceFilter] = useState('all');
   const [wallet, setWallet] = useState<CityWallet | null>(null);
-  const [homesOpen, setHomesOpen] = useState(false); // the game opens on the clean map of Lagos: missions and places pinned
+  const [homesOpen, setHomesOpen] = useState(false);
+  const [inside, setInside] = useState<Place | null>(null); // the game opens on the clean map of Lagos: missions and places pinned
   const [hint, setHint] = useState<string | null>(null);
   const [speech, setSpeech] = useState<string | null>(null);
   const [street, setStreet] = useState<string | null>(null);
@@ -177,14 +180,15 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   };
   const [canDesign, setCanDesign] = useState(false);
   useEffect(() => { api.cityCanDesign().then(setCanDesign).catch(() => setCanDesign(false)); }, []);
-  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void } | null>(null);
+  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void; heal: (n: number) => void } | null>(null);
   const [flying, setFlying] = useState(false);
-  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void), wallet: null as CityWallet | null, setWallet: undefined as undefined | ((w: CityWallet) => void) });
+  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void), wallet: null as CityWallet | null, enter: undefined as undefined | ((p: Place) => void), setWallet: undefined as undefined | ((w: CityWallet) => void) });
   live.current.look = look;
   live.current.typing = intro || ask !== null || boardOpen || studioOpen || editing || menu || (training !== null && !training.asked);
   live.current.mood = mind?.mood;
   live.current.brain = brain;
   live.current.bird = bird;
+  live.current.enter = (p: Place) => setInside(p);
   live.current.wallet = wallet;
   live.current.setWallet = (w: CityWallet) => { setWallet(w); ctl.current?.setHome(w.home); };
   live.current.onEnterMap = () => setBird(true);
@@ -311,6 +315,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       api.cityPay(reason).then((r) => { if (!('error' in r)) live.current.setWallet?.(r); }).catch(() => {});
     };
     const canAfford = (n: number) => !live.current.wallet || live.current.wallet.naira >= n; // signed out: rides are free
+    let placeHere: Place | null = null, nextPlace = 0;
     let maglev: Maglev | null = null;
     let onTrain = -1; // the train you're riding, or -1
     void city.ready.then(() => {
@@ -1025,6 +1030,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         say(`Home: ${h.name}.`);
       },
       setHome,
+      heal: (n: number) => { hp = Math.min(100, hp + n); showVitals(); },
       take: (m: CityMission) => { setTask(m); say(`Mission: ${m.title}. Follow the gold line.`); } };
     api.cityStatus().then(apply).catch(() => {});
 
@@ -1316,6 +1322,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       const atTower = plaza.placed && Math.hypot(pos.x - plaza.x, pos.z - plaza.z) < plaza.r + 3;
       const droneHere = authority.droneState.active && !droneAnswered && Math.hypot(authority.drone.position.x - pos.x, authority.drone.position.z - pos.z) < 18;
       const nearCar = !inCar && !riding && car.state.mode === 'parked' && car.state.pos.distanceTo(pos) < 4.2;
+      if (now > nextPlace) { nextPlace = now + 400; placeHere = !inCar && !riding && onTrain < 0 ? places.nearest(pos.x, pos.z, 22) : null; }
       const stn = maglev && onTrain < 0 && !inCar && !riding ? maglev.stationAt(pos.x, pos.z) : -1;
       const ride = maglev && onTrain >= 0 ? maglev.ride(onTrain) : null;
       if (ride) near = ride.at >= 0 ? `E TO GET OFF AT ${maglev!.stations[ride.at].name.toUpperCase()}` : `EKO MAGLEV · NEXT: ${ride.next.toUpperCase()}`;
@@ -1328,6 +1335,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       else if (droneHere) near = "E TO ANSWER WYRD'S DRONE";
       else if (closestDanfo) near = 'E TO HOP ON THE DANFO';
       else if (closestLocal) near = 'E TO GREET';
+      else if (placeHere) near = `E TO ENTER ${(placeHere.n ?? placeHere.k).toUpperCase()}`;
       if (near !== lastHint) { lastHint = near; setHint(near); }
       if (wantAct) {
         wantAct = false;
@@ -1362,6 +1370,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
           car.board();
           inCar = true; setFlying(true);
           say('Hover-car: W/S to fly, A/D to turn, SPACE to climb, C to descend.');
+        } else if (placeHere && !riding && !inCar && !atTower && !droneHere && !closestDanfo) {
+          live.current.enter?.(placeHere); keys.clear();
         } else if (!riding && atTower) {
           setAsk('petition'); keys.clear();
         } else if (!riding && droneHere) {
@@ -1752,6 +1762,10 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         </View>
       ) : null}
 
+      {inside ? (
+        <PlacePanel kind={inside.k} name={inside.n ?? inside.k} wallet={wallet} compact={compact} onClose={() => setInside(null)}
+          onResult={(w, heal) => { live.current.setWallet?.(w); if (heal) ctl.current?.heal(heal); }} />
+      ) : null}
       {homesOpen ? (
         <HomesPanel wallet={wallet} compact={compact} onClose={() => setHomesOpen(false)}
           onWallet={(w) => live.current.setWallet?.(w)}

@@ -446,5 +446,7 @@ export interface CityStats { online: number; joined: number; joinedToday: number
 
 /** A home in NAIJA 2099 (rent per week, price to buy). */
 export interface CityHome { slug: string; name: string; district: string; kind: string; x: number; z: number; rent: number; price: number; taken?: boolean; mine?: boolean; mode?: 'rent' | 'own'; paidUntil?: string | null }
+/** Something to do at a place: cost (negative naira) or pay, health given back, standing, cooldown. */
+export interface CityActivity { id: string; label: string; naira: number; heal: number; standing: number; againS: number }
 /** Your naira and your home. */
 export interface CityWallet { naira: number; home: CityHome | null; paid?: number }

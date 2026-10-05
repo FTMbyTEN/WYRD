@@ -1,6 +1,6 @@
 import { callEndpoint, ServerpodClientError, SERVERPOD_BASE_URL } from './serverpodClient';
 import type { BrainMapData } from '../components/BrainCanvas';
-import type { CharacterLook, CityCharter, CityDecree, CityStats, CityHome, CityWallet, CityDesignNote, CityLiveDesign } from './types';
+import type { CharacterLook, CityCharter, CityDecree, CityStats, CityHome, CityWallet, CityActivity, CityDesignNote, CityLiveDesign } from './types';
 import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
   AlertNote,
   ChatResult,
@@ -430,6 +430,8 @@ export const api = {
   cityHomes: () => callEndpoint<string>('city', 'homes', {}).then((j) => JSON.parse(j) as CityHome[]),
   cityTakeHome: (slug: string, mode: 'rent' | 'own') => callEndpoint<string>('city', 'takeHome', { slug, mode }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   cityLeaveHome: () => callEndpoint<string>('city', 'leaveHome', {}).then((j) => JSON.parse(j) as CityWallet | { error: string }),
+  cityPlaceActivities: (kind: string) => callEndpoint<string>('city', 'placeActivities', { kind }).then((j) => JSON.parse(j) as CityActivity[]),
+  cityVisit: (kind: string, activity: string, place: string) => callEndpoint<string>('city', 'visit', { kind, activity, place }).then((j) => JSON.parse(j) as (CityWallet & { text: string; delta: number; heal: number; standing: number }) | { error: string }),
   cityPay: (reason: 'maglev' | 'danfo') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   cityMissionPaid: (id: string) => callEndpoint<string>('city', 'missionPaid', { id }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   cityStats: () => callEndpoint<string>('city', 'stats', {}).then((j) => JSON.parse(j) as CityStats),
