@@ -26,6 +26,10 @@ import { api } from '../api/client';
 import type { CityCharter, CityDecree, CityLiveDesign, CityMission } from '../api/types';
 import { DesignStudio } from './DesignStudio';
 import { CharacterCreator } from './CharacterCreator';
+import { LagosFM } from './Radio';
+import { STARTER_MISSIONS } from './missions';
+import { makePlaces } from './places';
+import { MissionCard, MissionDeck } from './MissionDeck';
 import { Compass, KeyCap, Minimap, newFeed, Panel, PauseMenu, StandingBar, VehicleGauges } from './Hud';
 import type { CharacterLook } from '../api/types';
 import { AutoTier, loadChoice, PHONE, saveChoice, startTier, TIERS, type GfxChoice, type Tier } from './quality';
@@ -138,7 +142,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const { mind } = useMind();
   const brain = useBrainMap();
   const [thought, setThought] = useState<string | null>(null);
-  const [bird, setBird] = useState(false);
+  const [bird, setBird] = useState(true); // the game opens on the clean map of Lagos: missions and places pinned
   const [hint, setHint] = useState<string | null>(null);
   const [speech, setSpeech] = useState<string | null>(null);
   const [street, setStreet] = useState<string | null>(null);
@@ -166,14 +170,16 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   };
   const [canDesign, setCanDesign] = useState(false);
   useEffect(() => { api.cityCanDesign().then(setCanDesign).catch(() => setCanDesign(false)); }, []);
-  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void } | null>(null);
+  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void } | null>(null);
   const [flying, setFlying] = useState(false);
-  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look });
+  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void) });
   live.current.look = look;
   live.current.typing = intro || ask !== null || boardOpen || studioOpen || editing || menu || (training !== null && !training.asked);
   live.current.mood = mind?.mood;
   live.current.brain = brain;
   live.current.bird = bird;
+  live.current.onEnterMap = () => setBird(true);
+  live.current.onTake = () => setBird(false);
   live.current.gfx = gfx;
 
   useEffect(() => {
@@ -300,6 +306,23 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     });
     const proj = new THREE.Vector3();
     city.far = TIERS[tier].far;
+    // clubs, police, government, factories... from the real map
+    const places = makePlaces(scene, el);
+    const pins = new Map<string, { m: CityMission; div: HTMLDivElement }>();
+    const syncPins = () => {
+      const want = live.current.pins;
+      for (const [id, p] of pins) if (!want.some((m) => (m.id ?? m.title) === id)) { p.div.remove(); pins.delete(id); }
+      for (const m of want) {
+        const id = m.id ?? m.title;
+        if (pins.has(id) || m.x == null || m.z == null) continue;
+        const div = document.createElement('div');
+        div.innerHTML = `<b style="color:#ffc400">◆</b> ${m.title.replace(/</g, '&lt;')} <span style="color:#8ea0ff">+${m.reward}</span>`;
+        div.style.cssText = 'position:absolute;left:0;top:0;transform:translate(-9999px,0);padding:5px 9px;background:rgba(10,12,18,0.88);color:#fff;border:1px solid #ffc400;font:11px/1.3 "Share Tech Mono",monospace;letter-spacing:0.6px;white-space:nowrap;cursor:pointer;user-select:none;z-index:2';
+        div.onclick = () => { ctl.current?.take(m); live.current.onTake?.(); };
+        el.appendChild(div);
+        pins.set(id, { m, div });
+      }
+    };
 
     // ---- WYRD's tower, crowned with its real brain (placed on open ground near the junction) ----
     const rnd = (() => { let s = 20261005; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
@@ -570,7 +593,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       (globalThis as { __world?: { pos: THREE.Vector3 } }).__world!.pos = me.root.position;
     }).catch((e) => console.warn('[world] player model failed; keeping the built body', e));
     const vel = new THREE.Vector3();
-    let vy = 0, grounded = true, yaw = Math.PI, pitch = 0.32, birdH = 110, lastFacing = 0, lastSpeed = 0;
+    let vy = 0, grounded = true, yaw = Math.PI, pitch = 0.32, birdH = 650, lastFacing = 0, lastSpeed = 0;
     let riding: Vehicle | null = null;
     // ---- health and lives ----
     // health 0..100: hard falls, being hit by traffic, crashing the hover-car; it recovers after a
@@ -671,7 +694,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       introOn = false;
       me.root.visible = true;
       setIntro(false); setCaption(null);
-      if (!task) setTask(firstJob);
+      if (!task) { setTask(firstJob); live.current.onEnterMap?.(); }
       try { localStorage.setItem(INTRO_KEY, '1'); } catch { /* no storage */ }
       happened('arrived in Lagos by danfo at Ojuelegba');
     };
@@ -719,17 +742,35 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     const canvas = renderer.domElement;
     const touches = new Map<number, { x: number; y: number; ox: number; oy: number; move: boolean }>();
     const stick = { x: 0, y: 0 };
+    // the joystick you can see: a ring where the left thumb lands, a knob that follows it
+    const joy = document.createElement('div'), knob = document.createElement('div');
+    joy.style.cssText = 'position:absolute;left:0;top:0;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;border:2px solid rgba(0,229,255,0.7);background:radial-gradient(circle,rgba(0,229,255,0.08),rgba(255,43,214,0.06));box-shadow:0 0 18px rgba(0,229,255,0.35);pointer-events:none;display:none;z-index:3';
+    knob.style.cssText = 'position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:rgba(0,229,255,0.85);box-shadow:0 0 14px #00e5ff';
+    joy.appendChild(knob);
+    el.appendChild(joy);
+    let pinch = 0;
     const onDown = (e: PointerEvent) => {
       canvas.focus();
       canvas.setPointerCapture(e.pointerId);
-      touches.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, move: e.pointerType === 'touch' && e.clientX < canvas.clientWidth / 2 });
+      const move = e.pointerType === 'touch' && e.clientX < canvas.clientWidth / 2 && !live.current.bird;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, move });
+      if (move) { const r = canvas.getBoundingClientRect(); joy.style.left = `${e.clientX - r.left}px`; joy.style.top = `${e.clientY - r.top}px`; joy.style.display = 'block'; knob.style.transform = ''; }
+      if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
     };
     const onMove = (e: PointerEvent) => {
       const t = touches.get(e.pointerId);
       if (!t) return;
       if (t.move) {
-        stick.x = Math.max(-1, Math.min(1, (e.clientX - t.ox) / 60));
-        stick.y = Math.max(-1, Math.min(1, (e.clientY - t.oy) / 60));
+        stick.x = Math.max(-1, Math.min(1, (e.clientX - t.ox) / 50));
+        stick.y = Math.max(-1, Math.min(1, (e.clientY - t.oy) / 50));
+        knob.style.transform = `translate(${stick.x * 34}px, ${stick.y * 34}px)`;
+      } else if (live.current.bird && touches.size === 2) {
+        // two fingers on the map: pinch to zoom
+        t.x = e.clientX; t.y = e.clientY;
+        const [a, b] = [...touches.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch > 0) birdH = Math.max(40, Math.min(9000, birdH * (pinch / Math.max(1, d))));
+        pinch = d;
+        return;
       } else if (live.current.bird) {
         const k = birdH * 0.0022;
         mapTarget.x -= (e.clientX - t.x) * k;
@@ -742,7 +783,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       }
       t.x = e.clientX; t.y = e.clientY;
     };
-    const onUp = (e: PointerEvent) => { if (touches.get(e.pointerId)?.move) { stick.x = 0; stick.y = 0; } touches.delete(e.pointerId); };
+    const onUp = (e: PointerEvent) => { if (touches.get(e.pointerId)?.move) { stick.x = 0; stick.y = 0; joy.style.display = 'none'; } touches.delete(e.pointerId); pinch = 0; };
     const onWheel = (e: WheelEvent) => {
       if (live.current.bird) birdH = Math.max(40, Math.min(9000, birdH * Math.exp(e.deltaY * 0.0012)));
       else camDist = Math.max(2.6, Math.min(18, camDist * Math.exp(e.deltaY * 0.001))); // zoom in on TEN, or out
@@ -934,7 +975,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (ev.broadcast) { setBroadcast(ev.broadcast); clearTimeout(castTimer); castTimer = setTimeout(() => setBroadcast(null), 10000); }
       happened(`the city event "${ev.title}" began`);
     };
-    ctl.current = { skipIntro: () => endIntro(), act: () => { wantAct = true; }, jump: () => { if (grounded && !inCar) { vy = 7.2; grounded = false; } }, setLook: (l: CharacterLook) => me.setLook?.(l), address, reloadDesign, findMe: () => { follow = true; flying = false; }, callCar: () => { if (!inCar) { car.call(me.root.position, me.root.rotation.y, world); say('You call your hover-car. It drops out of the sky.'); } } };
+    ctl.current = { skipIntro: () => endIntro(), act: () => { wantAct = true; }, jump: () => { if (grounded && !inCar) { vy = 7.2; grounded = false; } }, setLook: (l: CharacterLook) => me.setLook?.(l), address, reloadDesign, findMe: () => { follow = true; flying = false; }, callCar: () => { if (!inCar) { car.call(me.root.position, me.root.rotation.y, world); say('You call your hover-car. It drops out of the sky.'); } },
+      peek: (m: CityMission) => { if (m.x != null && m.z != null) { flyTo.set(m.x, 0, m.z); flying = true; follow = false; } },
+      take: (m: CityMission) => { setTask(m); say(`Mission: ${m.title}. Follow the gold line.`); } };
     api.cityStatus().then(apply).catch(() => {});
 
     // for measuring (draw calls, triangles, tier) from the console or a test
@@ -1013,15 +1056,16 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       skyBottom.lerp(c.setHex(0xff8fb8), 0.3); skyTop.lerp(c.setHex(0x3a5aa8), 0.25); // a neon-smog horizon
       skyU.top.value.lerp(skyTop, dt * 0.8);
       skyU.bottom.value.lerp(skyBottom, dt * 0.8);
-      (scene.fog as THREE.Fog).color.copy(skyU.bottom.value).lerp(c.setHex(0x6a4a8a), 0.35).lerp(c.setHex(0x1e1440), night);
+      (scene.fog as THREE.Fog).color.copy(skyU.bottom.value).lerp(c.setHex(0x6a4a8a), 0.35).lerp(c.setHex(0x3a2470), night); // a neon-lit haze at night: violet, not black
       sun.intensity = 2.6 * (1 - night) + 0.05;
       sun.color.setHSL(0.09, 0.6, 0.62 + 0.3 * Math.max(0, sunDir.y));
-      hemi.intensity = 0.7 + 0.15 * (1 - night); // nights stay readable: the city's own glow fills the haze
+      hemi.intensity = 0.85 + 0.55 * night; // neon city: the night is lit by its own signs and screens
+      hemi.color.setHex(night > 0.5 ? 0xb8a8ff : 0xdfeaff); hemi.groundColor.setHex(night > 0.5 ? 0x6a3a7a : 0x8a7a66); // magenta bounce off the streets // nights stay readable: the city's own glow fills the haze
       city.bulbMat.emissiveIntensity = night * 3.5;
       city.poolMat.opacity = night * 0.85; // street lamps light the road under them
       (scene as unknown as { environmentIntensity: number }).environmentIntensity = 0.06 + 0.22 * (1 - night); // the studio map is for reflections; at full strength it floodlights every roof and the ground
-      renderer.toneMappingExposure = 1.0 + night * 0.25; // the eye adjusts: night is dark blue, not black
-      if (bloom) bloom.strength = 0.06 + night * 0.2; // restrained: the city has a lot of light in it
+      renderer.toneMappingExposure = 1.0 + night * 0.45; // the eye adjusts: night is dark blue, not black
+      if (bloom) bloom.strength = 0.06 + night * 0.4; // restrained: the city has a lot of light in it
       // the Authority's weather: rain and storm dim the day and close in the haze; harmattan is a dusty wall
       const wx = authority.sky(now);
       const fog = scene.fog as THREE.Fog;
@@ -1327,7 +1371,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       marker.visible = bird;
       if (bird) {
         camTarget.set(mapTarget.x, birdH, mapTarget.z + birdH * 0.38);
-        camera.position.lerp(camTarget, 1 - Math.pow(0.02, dt));
+        // a long way off (opening the map, a slow first frame while the city loads): be there, don't crawl
+        if (camera.position.distanceTo(camTarget) > 250) camera.position.copy(camTarget);
+        else camera.position.lerp(camTarget, 1 - Math.pow(0.02, dt));
         camera.lookAt(mapTarget.x, 0, mapTarget.z);
         // TEN's beacon: a column of light that stays readable at any height
         marker.position.set(pos.x, 0, pos.z);
@@ -1472,6 +1518,18 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       } else sun.position.copy(sunDir).multiplyScalar(180);
 
       // district labels, placed over the map
+      places.update(now, pos, camera, bird, birdH, night);
+      syncPins();
+      for (const { m, div } of pins.values()) {
+        const active = task && (task.id ?? task.title) === (m.id ?? m.title);
+        if (!bird || active) { div.style.transform = 'translate(-9999px,0)'; continue; }
+        proj.set(m.x!, 20, m.z!).project(camera);
+        // off the map's edge: held at the edge, so you can see which way it is
+        const k = Math.max(Math.abs(proj.x) / 0.9, Math.abs(proj.y) / 0.88, 1);
+        const px = proj.x / k, py = proj.y / k;
+        div.style.opacity = k > 1 ? '0.7' : '1';
+        div.style.transform = proj.z < 1 ? `translate(${((px + 1) / 2) * el.clientWidth}px, ${((1 - py) / 2) * el.clientHeight}px) translate(-50%,-50%)` : 'translate(-9999px,0)';
+      }
       for (const { d, div } of labels) {
         if (!bird || !landmarks) { div.style.transform = 'translate(-9999px,0)'; continue; }
         const p = landmarks.toWorld(d.at);
@@ -1494,6 +1552,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       disposed = true;
       for (const l of labels) l.div.remove();
+      joy.remove();
+      for (const p of pins.values()) p.div.remove();
+      places.dispose();
       wp.remove();
       delete (globalThis as { __world?: unknown }).__world;
       ctl.current = null;
@@ -1556,7 +1617,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       ) : null}
 
       {/* ---- top left: who you are, where you are ---- */}
-      <View style={[styles.topLeft, shrink && { ...shrink, transformOrigin: 'top left' }, intro && { opacity: 0 }]} pointerEvents="none">
+      <View style={[styles.topLeft, bird && { opacity: 0 }, shrink && { ...shrink, transformOrigin: 'top left' }, intro && { opacity: 0 }]} pointerEvents="none">
         <Panel style={styles.idCard}>
           <Mono style={styles.idEyebrow}>NAIJA 2099 · {(standing?.rank ?? 'Newcomer').toUpperCase()}</Mono>
           <Display style={styles.idName} numberOfLines={1}>{look.name}</Display>
@@ -1577,31 +1638,39 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         </Panel>
       </View>
 
+      {bird && !intro ? (
+        <MissionDeck
+          missions={[...(board?.missions ?? []).filter((m) => m.x != null), ...STARTER_MISSIONS]}
+          active={mission} from={feed.current} compact={compact}
+          onPeek={(m) => ctl.current?.peek(m)}
+          onTake={(m) => { ctl.current?.take(m); setBird(false); }}
+        />
+      ) : null}
+      {!bird && !intro && mission ? (
+        <View style={[styles.leftMission, compact && { top: 150, left: 8 }, shrink && { ...shrink, transformOrigin: 'top left' }]} pointerEvents="none">
+          <MissionCard m={mission} distance={missionDist} />
+        </View>
+      ) : null}
+
       {/* ---- top centre: compass ---- */}
       {!bird && !intro ? <View style={styles.topCentre} pointerEvents="none"><Compass feed={feed} /></View> : null}
 
       {/* ---- top right: menu, minimap, mission ---- */}
-      <View style={[styles.topRight, shrink && { ...shrink, transformOrigin: 'top right' }, intro && { opacity: 0 }]} pointerEvents={intro ? 'none' : 'box-none'}>
+      <View style={[styles.topRight, shrink && { transform: [{ scale: 0.6 }], transformOrigin: 'top right' }, intro && { opacity: 0 }]} pointerEvents={intro ? 'none' : 'box-none'}>
         <View style={styles.topButtons}>
+          <Pressable onPress={openBoard} style={[styles.iconBtn, { borderColor: '#ffc400' }]} accessibilityLabel="Missions"><Mono style={[styles.iconText, { color: '#ffc400' }]}>◆ MISSIONS</Mono></Pressable>
           <Pressable onPress={() => setAsk('speak')} style={styles.iconBtn} accessibilityLabel="Speak to WYRD (T)"><Mono style={styles.iconText}>WYRD · T</Mono></Pressable>
           <Pressable onPress={() => setBird((b) => !b)} style={[styles.iconBtn, bird && styles.iconOn]} accessibilityLabel="Map (V)"><Mono style={[styles.iconText, bird && { color: colors.onSignal }]}>{bird ? 'STREET · V' : 'MAP · V'}</Mono></Pressable>
           <Pressable onPress={() => setMenu(true)} style={styles.iconBtn} accessibilityLabel="Menu (Esc)"><Mono style={styles.iconText}>≡ MENU</Mono></Pressable>
         </View>
+        <LagosFM />
         {!bird ? <Minimap feed={feed} /> : null}
-        {mission ? (
-          <Panel style={styles.tracker} accent="#ffc400">
-            <Mono style={styles.trackerEyebrow}>◆ {mission.kind.toUpperCase()} · +{mission.reward} STANDING</Mono>
-            <Mono style={styles.trackerTitle}>{mission.title}</Mono>
-            <Mono style={styles.trackerBrief} numberOfLines={3}>{mission.brief}</Mono>
-            <Mono style={styles.trackerWhere}>{mission.street ?? 'The marked place'}{missionDist != null ? ` · ${missionDist > 999 ? `${(missionDist / 1000).toFixed(1)} km` : `${missionDist} m`}` : ''}</Mono>
-          </Panel>
-        ) : null}
       </View>
 
       {bird ? (
-        <View style={styles.mapBar}>
+        <View style={styles.mapBar} pointerEvents="box-none">
           <Pressable onPress={() => ctl.current?.findMe()} style={styles.iconBtn}><Mono style={styles.iconText}>FIND {look.name.toUpperCase()}</Mono></Pressable>
-          <Mono style={styles.mapHelp}>DRAG TO EXPLORE · WHEEL TO ZOOM · CLICK A DISTRICT TO FLY THERE</Mono>
+          {!compact ? <Mono style={styles.mapHelp}>{touch ? 'DRAG TO EXPLORE · PINCH TO ZOOM · TAP A MISSION' : 'DRAG TO EXPLORE · WHEEL TO ZOOM · CLICK A DISTRICT TO FLY THERE'}</Mono> : null}
         </View>
       ) : null}
 
@@ -1646,10 +1715,11 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
 
       {/* ---- touch: act, jump, car ---- */}
       {touch && !bird ? (
-        <View style={styles.touchPad}>
-          <Pressable onPress={() => ctl.current?.act()} style={styles.touchBtn}><Mono style={styles.touchText}>ACT</Mono></Pressable>
-          <Pressable onPress={() => ctl.current?.jump()} style={styles.touchBtn}><Mono style={styles.touchText}>JUMP</Mono></Pressable>
-          {!flying ? <Pressable onPress={() => ctl.current?.callCar()} style={styles.touchBtn}><Mono style={styles.touchText}>CAR</Mono></Pressable> : null}
+        <View style={[styles.touchPad, compact && styles.touchPadPhone]} pointerEvents="box-none">
+          <Pressable onPress={() => ctl.current?.jump()} style={[styles.touchBtn, styles.touchBig, compact && styles.arcJump]}><Mono style={styles.touchText}>JUMP</Mono></Pressable>
+          <Pressable onPress={() => ctl.current?.act()} style={[styles.touchBtn, compact && styles.arcAct, { borderColor: '#ffc400' }]}><Mono style={[styles.touchText, { color: '#ffc400' }]}>ACT</Mono></Pressable>
+          {!flying ? <Pressable onPress={() => ctl.current?.callCar()} style={[styles.touchBtn, compact && styles.arcCar]}><Mono style={styles.touchText}>CAR</Mono></Pressable> : null}
+          <Pressable onPress={() => setAsk('speak')} style={[styles.touchBtn, compact && styles.arcTalk, { borderColor: '#ff2bd6' }]}><Mono style={[styles.touchText, { color: '#ff2bd6' }]}>WYRD</Mono></Pressable>
         </View>
       ) : null}
 
@@ -1674,8 +1744,12 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
           <ScrollView style={{ maxHeight: 420 }}>
             <Mono style={styles.charter}>{board?.charter ?? 'Reading the charter…'}</Mono>
             <Mono style={[styles.commsEyebrow, { marginTop: 12 }]}>MISSIONS ON THE BOARD</Mono>
-            {(board?.missions ?? []).map((m) => (
-              <Pressable key={m.id ?? m.title} style={styles.boardItem} onPress={() => { setBoardOpen(false); ctl.current?.address('speak', `I'd like the mission "${m.title}" from your board.`); }}>
+            {[...(board?.missions ?? []), ...STARTER_MISSIONS].map((m) => (
+              <Pressable key={m.id ?? m.title} style={styles.boardItem} onPress={() => {
+                setBoardOpen(false); setBird(false);
+                if (m.x != null || STARTER_MISSIONS.includes(m)) ctl.current?.take(m);
+                else ctl.current?.address('speak', `I'd like the mission "${m.title}" from your board.`);
+              }}>
                 <Mono style={styles.missionTitle}>{m.title} · +{m.reward}</Mono>
                 <Mono style={styles.missionBrief}>{m.brief}</Mono>
                 <Mono style={styles.missionWhere}>{m.street} · {m.kind}</Mono>
@@ -1731,6 +1805,7 @@ const angleDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI)
 const fmtHour = () => { const h = lagosHour(); return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; };
 
 const styles = StyleSheet.create({
+  leftMission: { position: 'absolute', top: 222, left: 14 },
   topLeft: { position: 'absolute', top: 14, left: 14, maxWidth: 300 },
   letterTop: { position: 'absolute', top: 0, left: 0, right: 0, height: '11%', backgroundColor: '#000' },
   letterBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '11%', backgroundColor: '#000' },
@@ -1782,7 +1857,14 @@ const styles = StyleSheet.create({
   ctrlRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ctrlText: { fontSize: 10.5, color: '#d6d9e0' },
   touchPad: { position: 'absolute', bottom: 90, right: 18, gap: 10, alignItems: 'flex-end' },
-  touchBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(10,12,18,0.7)', borderWidth: 1.5, borderColor: '#00e5ff', alignItems: 'center', justifyContent: 'center' },
+  // on a phone on its side: a thumb arc in the bottom-right corner
+  touchPadPhone: { bottom: 0, right: 0, width: 190, height: 170 },
+  touchBig: { width: 76, height: 76, borderRadius: 38 },
+  arcJump: { position: 'absolute', right: 16, bottom: 18 },
+  arcAct: { position: 'absolute', right: 102, bottom: 14 },
+  arcCar: { position: 'absolute', right: 24, bottom: 104 },
+  arcTalk: { position: 'absolute', right: 98, bottom: 86 },
+  touchBtn: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(10,12,18,0.7)', borderWidth: 1.5, borderColor: '#00e5ff', alignItems: 'center', justifyContent: 'center' },
   touchText: { fontSize: 10, letterSpacing: 1.4, color: '#ffffff' },
   hud: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', padding: 16, gap: 12 },
   title: { gap: 2, flexShrink: 1 },

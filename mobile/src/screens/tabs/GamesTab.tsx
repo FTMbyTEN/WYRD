@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { createPortal } from 'react-dom';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { Chess } from 'chess.js';
 import { ChessBoard } from '../../components/ChessBoard';
@@ -27,6 +28,12 @@ function leaveLandscape() {
   if (!isPhone()) return;
   try { (screen.orientation as ScreenOrientation & { unlock?: () => void })?.unlock?.(); } catch { /* not locked */ }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+/** On the web the game is drawn straight into the page body, above the app's header and tab bar
+ *  (a fixed box inside the tab navigator still sits under its tab bar). */
+function OverApp({ children }: { children: React.ReactElement }) {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return children;
+  return createPortal(children, document.body);
 }
 const LagosWorld = lazy(() => import('../../world/LagosWorld').then((m) => ({ default: m.LagosWorld })));
 /** If the world fails to load or crashes (an old phone, a lost connection), only the world goes:
@@ -101,6 +108,7 @@ export function GamesTab() {
   const wantsTurn = world && !upright && isPhone() && height > width;
   if (world) {
     return (
+      <OverApp>
       <View style={styles.worldWrap}>
         <WorldBoundary onExit={() => { leaveLandscape(); setWorld(false); }}>
           <Suspense fallback={<View style={styles.worldLoading}><ActivityIndicator color={colors.signal} /><Mono style={styles.muted}>Building Lagos…</Mono></View>}>
@@ -116,6 +124,7 @@ export function GamesTab() {
           </View>
         )}
       </View>
+      </OverApp>
     );
   }
   if (room) return <GameRoom game={room} wide={wide} width={width} onBack={() => { saveRoom(null); setRoom(null); void refresh(); }} onRated={refresh} />;

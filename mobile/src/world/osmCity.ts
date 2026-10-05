@@ -91,17 +91,21 @@ export class OsmCity {
   private railMat = new THREE.MeshStandardMaterial({ color: 0x5a4a3c, roughness: 0.9, vertexColors: true });
   private poleMat = new THREE.MeshStandardMaterial({ color: 0x55585e, metalness: 0.5, roughness: 0.5 });
   readonly bulbMat = new THREE.MeshStandardMaterial({ color: 0xffeac0, emissive: 0xffd28a, emissiveIntensity: 0 });
-  private poleGeo = new THREE.CylinderGeometry(0.08, 0.11, 6, 4, 1, true).translate(0, 3, 0);
+  private poleGeo = new THREE.CylinderGeometry(0.09, 0.15, 8, 6, 1, true).translate(0, 4, 0);
+  /** the arm reaching out over the road (local +x is toward the carriageway) */
+  private armGeo = new THREE.BoxGeometry(2.8, 0.14, 0.16).translate(1.35, 7.95, 0);
+  /** a neon band round the pole at head height */
+  private ringGeo = new THREE.CylinderGeometry(0.17, 0.17, 0.5, 8, 1, true).translate(0, 3.0, 0);
   /** the pool of light under each street lamp: additive, black at the rim, faded in by night */
   readonly poolMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   private poolGeo = (() => {
-    const g = new THREE.CircleGeometry(9, 12).rotateX(-Math.PI / 2).translate(0, 0.08, 0);
+    const g = new THREE.CircleGeometry(9, 14).rotateX(-Math.PI / 2).scale(0.75, 1, 1.15).translate(2.2, 0.08, 0);
     const n = g.attributes.position.count, col = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { const r = Math.hypot(g.attributes.position.getX(i), g.attributes.position.getZ(i)) / 9, k = r < 0.01 ? 1 : 0; col.set([1 * k, 0.72 * k, 0.4 * k], i * 3); }
+    for (let i = 0; i < n; i++) { const k = i === 0 ? 1 : 0; col.set([1 * k, 0.72 * k, 0.4 * k], i * 3); } // the centre (vertex 0) glows, the rim is black
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     return g;
   })();
-  private bulbGeo = new THREE.OctahedronGeometry(0.32, 0).translate(0, 6.1, 0); // a glowing dot: 8 triangles
+  private bulbGeo = new THREE.BoxGeometry(1.5, 0.08, 0.34).translate(2.15, 7.84, 0); // the LED bar under the arm's end
   readonly ready: Promise<void>;
 
   constructor(private scene: THREE.Scene, private shadows: boolean) {
@@ -276,7 +280,7 @@ export class OsmCity {
       roadB.add(ribbon(pts, cum, width, y, ROAD_TONE[kind], full ? 0.7 : 0.8));
       // the dusty shoulder either side: red earth, scuffed paler where people walk
       if (full && !bridge && kind <= KIND.service) aoB.add(shoulder(pts, cum, width + (kind <= KIND.tertiary ? 5 : 3)));
-      if (!full) continue;
+      // the neon road lines are drawn at every distance, so they're already there as you walk (not popping in)
       if (kind <= KIND.tertiary && width >= 8) dashes(lineB, pts, cum, y);
       if (kind <= KIND.secondary) for (const side of [-1, 1]) {
         const off = offset(pts, side * (width / 2 - 0.25));
@@ -285,9 +289,11 @@ export class OsmCity {
         for (let i = 0; i < sc.count; i++) sc.setXYZ(i, 1.0, 0.12, 0.75);
         lineB.add(strip);
       }
+      if (!full) continue;
       if (kind <= KIND.tertiary && !bridge) for (let s = 12; s < len - 6; s += 36) {
         const p = pointAt(road, s), dir = dirAt(road, s);
-        lamps.push(new THREE.Matrix4().makeTranslation(p.x - dir.y * (width / 2 + 0.6), 0, p.y + dir.x * (width / 2 + 0.6)));
+        const lx = p.x - dir.y * (width / 2 + 0.6), lz = p.y + dir.x * (width / 2 + 0.6);
+        lamps.push(new THREE.Matrix4().makeRotationY(Math.atan2(dir.x, dir.y)).setPosition(lx, 0, lz));
       }
       if (bridge) {
         bridgeB.add(ribbon(pts, cum, width + 0.6, (s) => y(s) - 0.6, 0.82, 0.6));
@@ -540,12 +546,18 @@ export class OsmCity {
       const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.y) * dz) / L));
       return Math.hypot(a.x + dx * t - x, a.y + dz * t - z) < r.width / 2 + 0.4;
     }));
+    let li = 0;
     for (const m4 of lamps.filter((m) => !onRoad(m.elements[12], m.elements[14]))) {
+      // a 2099 street lamp: dark pole and arm over the road, an LED bar, a neon ring round the pole
       poolB.add(this.poolGeo.clone().applyMatrix4(m4));
-      bridgeB.add(tone(this.poleGeo.clone().applyMatrix4(m4), 0.4));
-      const bulb = this.bulbGeo.clone().applyMatrix4(m4);
-      bulb.setAttribute('color', new THREE.BufferAttribute(new Float32Array(bulb.attributes.position.count * 3).map((_, i) => [1, 0.85, 0.55][i % 3]), 3));
-      lineB.add(bulb);
+      bridgeB.add(tone(this.poleGeo.clone().applyMatrix4(m4), 0.22));
+      bridgeB.add(tone(this.armGeo.clone().applyMatrix4(m4), 0.22));
+      const glow = (g: THREE.BufferGeometry, rgb: number[]) => {
+        g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).map((_, i) => rgb[i % 3]), 3));
+        lineB.add(g.applyMatrix4(m4));
+      };
+      glow(this.bulbGeo.clone(), [1, 0.93, 0.8]);
+      glow(this.ringGeo.clone(), li++ % 2 ? [1, 0.17, 0.84] : [0, 0.9, 1]);
     }
     add(bridgeB, this.bridgeMat, true);
     add(lineB, this.lineMat, false);
