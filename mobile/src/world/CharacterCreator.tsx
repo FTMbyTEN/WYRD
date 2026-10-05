@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Display, Mono } from '../components/ui';
@@ -113,6 +113,9 @@ export function CharacterCreator({ initial, onDone, onCancel, saving, error }: {
       camera.updateProjectionMatrix();
     };
     resize();
+    // the stage changes shape when the phone turns (after the window resize): follow the stage itself
+    const ro = new ResizeObserver(resize);
+    ro.observe(el);
     window.addEventListener('resize', resize);
     let raf = 0, last = performance.now();
     const frame = (now: number) => {
@@ -129,6 +132,7 @@ export function CharacterCreator({ initial, onDone, onCancel, saving, error }: {
     return () => {
       disposed = true;
       clearInterval(bodyTimer);
+      ro.disconnect();
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
       renderer.dispose();
@@ -148,17 +152,22 @@ export function CharacterCreator({ initial, onDone, onCancel, saving, error }: {
     }));
   };
   const ready = look.name.trim().length >= 2;
+  const [nudge, setNudge] = useState(false);
+  // a phone on its side: character left, choices right; upright: character on top; either way the
+  // choices scroll and the button stays on screen
+  const { width: sw, height: sh } = useWindowDimensions();
+  const wide = sw > sh, short = sh < 520;
 
   return (
-    <View style={styles.root}>
-      <View ref={host} style={styles.stage} />
+    <View style={[styles.root, { flexDirection: wide ? 'row' : 'column' }]}>
+      <View ref={host} style={[styles.stage, wide ? { flex: 1 } : { height: '38%' }]} />
       <View style={styles.titleBox} pointerEvents="none">
         <Mono style={styles.eyebrow}>NAIJA 2099 · WHO ARE YOU IN LAGOS?</Mono>
-        <Display style={styles.title}>{look.name.trim() || 'Your character'}</Display>
+        <Display style={[styles.title, short && { fontSize: 22, lineHeight: 26 }]}>{look.name.trim() || 'Your character'}</Display>
         <Mono style={styles.hint}>Drag to turn · every choice is free · you can change it later</Mono>
       </View>
-      <View style={styles.panel}>
-        <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
+      <View style={[styles.panel, wide ? { width: Math.min(400, sw * 0.5), height: '100%' } : { flex: 1 }, short && { padding: 12, gap: 8 }]}>
+        <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: 14, paddingBottom: 12 }}>
           <Section title="STREET NAME">
             <TextInput value={look.name} onChangeText={(t) => set('name', t.slice(0, 20))} placeholder="What does Lagos call you?" placeholderTextColor="#8a8f99" style={styles.input} maxLength={20} />
           </Section>
@@ -213,11 +222,11 @@ export function CharacterCreator({ initial, onDone, onCancel, saving, error }: {
             </View>
           </Section>
         </ScrollView>
-        {error ? <Mono style={styles.error}>{error}</Mono> : null}
+        {error ? <Mono style={styles.error}>{error}</Mono> : nudge && !ready ? <Mono style={styles.error}>Type a street name (2+ letters) to enter Lagos.</Mono> : null}
         <View style={styles.actions}>
           {onCancel ? <Pressable onPress={onCancel} style={styles.ghost}><Mono style={styles.ghostText}>CANCEL</Mono></Pressable> : null}
           <Pressable onPress={randomise} style={styles.ghost}><Mono style={styles.ghostText}>SURPRISE ME</Mono></Pressable>
-          <Pressable onPress={() => ready && !saving && onDone({ ...look, name: look.name.trim() })} style={[styles.go, (!ready || saving) && { opacity: 0.45 }]}>
+          <Pressable onPress={() => { if (!ready) { setNudge(true); return; } if (!saving) onDone({ ...look, name: look.name.trim() }); }} style={[styles.go, (!ready || saving) && { opacity: 0.45 }]}>
             <Mono style={styles.goText}>{saving ? 'SAVING…' : onCancel ? 'SAVE' : 'ENTER LAGOS →'}</Mono>
           </Pressable>
         </View>
@@ -236,13 +245,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const styles = StyleSheet.create({
-  root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0d0f14', flexDirection: 'row', flexWrap: 'wrap' },
-  stage: { flexGrow: 1, flexBasis: 360, minHeight: 360 },
+  root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0d0f14', },
+  stage: { minHeight: 0 },
   titleBox: { position: 'absolute', top: 18, left: 20, gap: 4 },
   eyebrow: { fontSize: 10, letterSpacing: 2.4, color: '#8ea0ff' },
   title: { fontSize: 34, lineHeight: 38, color: '#ffffff' },
   hint: { fontSize: 10.5, color: '#9aa0aa' },
-  panel: { flexBasis: 340, flexGrow: 1, maxWidth: 420, backgroundColor: 'rgba(22,23,26,0.96)', padding: 18, gap: 12, borderLeftWidth: 1, borderLeftColor: '#262a33' },
+  panel: { minHeight: 0, backgroundColor: 'rgba(22,23,26,0.96)', padding: 18, gap: 12, borderLeftWidth: 1, borderLeftColor: '#262a33' },
   label: { fontSize: 9.5, letterSpacing: 2, color: '#8ea0ff' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   input: { backgroundColor: '#ffffff', color: '#16171a', fontSize: 15, paddingHorizontal: 10, paddingVertical: 9 },

@@ -28,7 +28,7 @@ import { DesignStudio } from './DesignStudio';
 import { CharacterCreator } from './CharacterCreator';
 import { Compass, KeyCap, Minimap, newFeed, Panel, PauseMenu, StandingBar, VehicleGauges } from './Hud';
 import type { CharacterLook } from '../api/types';
-import { AutoTier, loadChoice, saveChoice, startTier, TIERS, type GfxChoice, type Tier } from './quality';
+import { AutoTier, loadChoice, PHONE, saveChoice, startTier, TIERS, type GfxChoice, type Tier } from './quality';
 
 /**
  * NAIJA 2099 · OPEN WORLD: the real mainland Lagos, from OpenStreetMap, raised into a neon future --
@@ -181,7 +181,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     if (!el) return;
     let tier: Tier = startTier(live.current.gfx);
     let auto: AutoTier | null = live.current.gfx === 'auto' ? new AutoTier(tier) : null;
-    const renderer = new THREE.WebGLRenderer({ antialias: !LITE, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({ antialias: !LITE && !PHONE, powerPreference: 'high-performance' });
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
