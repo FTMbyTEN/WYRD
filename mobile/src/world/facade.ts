@@ -96,13 +96,19 @@ export function facadeMaterial(opts: { glass?: boolean; bay?: number; tint?: num
          float win = step(lo.x, f.x) * step(f.x, hi.x) * step(lo.y, f.y) * step(f.y, hi.y);
          // the ground floor of a painted building is shops, not windows (glass towers keep their lobby glass)
          float shopFloor = (1.0 - glass) * isWall * (1.0 - step(3.2, vWp.y));
-         win *= step(1.0, vWp.y - 0.4) * isWall * (1.0 - shopFloor);
+         float wMask = step(1.0, vWp.y - 0.4) * isWall * (1.0 - shopFloor);
+         win *= wMask;
+         // distance: once a window is only a few pixels, blend the grid to its average (no checkerboard)
+         float aa = clamp(1.8 - 2.2 * max(fwidth(fx), fwidth(fy)), 0.0, 1.0);
+         float cover = clamp((hi.x - lo.x) * (hi.y - lo.y), 0.0, 1.0);
+         win = mix(cover * wMask, win, aa);
          // the frame round each window, a sill, and a band at every floor
-         float frame = isWall * (1.0 - win) * step(lo.x - 0.05, f.x) * step(f.x, hi.x + 0.05) * step(lo.y - 0.05, f.y) * step(f.y, hi.y + 0.05);
-         float band = isWall * (1.0 - glass) * step(0.96, f.y);
+         float frame = aa * isWall * (1.0 - win) * step(lo.x - 0.05, f.x) * step(f.x, hi.x + 0.05) * step(lo.y - 0.05, f.y) * step(f.y, hi.y + 0.05);
+         float band = aa * isWall * (1.0 - glass) * step(0.96, f.y);
          float h = hash(cell + floor(vWp.x * 0.01) * 7.3 + floor(vWp.z * 0.01) * 3.1);
          // by day: dark glass with a hint of sky; some windows open (darker), some with curtains
-         vec3 day = mix(uTint * 0.55, uTint, h) * mix(1.0, 1.15, glass);
+         vec3 day = uTint * (0.86 + 0.14 * h) * mix(1.0, 1.15, glass);
+         day *= 0.82 + 0.36 * clamp(vWp.y / max(Hb, 8.0), 0.0, 1.0); // more sky in the glass up high
          day = mix(day, vec3(0.2, 0.32, 0.36) * (0.8 + 0.4 * h), isOffice); // tinted office glass
          // tower glass, one tint per tower: teal, bronze, blue, near-black or green
          float gt = fract(seed * 3.9);
@@ -111,7 +117,7 @@ export function facadeMaterial(opts: { glass?: boolean; bay?: number; tint?: num
          tg = mix(tg, vec3(0.04, 0.07, 0.17), step(0.4, gt));
          tg = mix(tg, vec3(0.03, 0.035, 0.04), step(0.6, gt));
          tg = mix(tg, vec3(0.05, 0.12, 0.08), step(0.8, gt));
-         day = mix(day, tg * (0.85 + 0.3 * h), glassTower);
+         day = mix(day, tg * (0.94 + 0.12 * h) * (0.85 + 0.4 * clamp(vWp.y / max(Hb, 8.0), 0.0, 1.0)), glassTower);
          // louvre blades (most Lagos houses) or a casement's cross, by building
          float louvre = step(0.5, fract(seed * 5.7)) * (1.0 - isOffice) * (1.0 - isRaw);
          day *= 1.0 - louvre * 0.35 * step(0.5, fract(f.y * 14.0));
@@ -120,10 +126,14 @@ export function facadeMaterial(opts: { glass?: boolean; bay?: number; tint?: num
          day = mix(day, vec3(0.03), isRaw * step(0.4, h)); // unfinished: empty dark openings
          // by night: a share of windows lit warm, a few cool white; each switches at its own moment
          // towers: scattered lit floors against dark glass, the way real towers look at night
-         float lit = step(0.42 - 0.12 * glass + 0.26 * isTower, h) * step(0.5, fract(h * 13.7 + floor(uTime / 40.0 + h * 9.0) * 0.37));
+         float roomW = 2.0 + floor(fract(seed * 4.3) * 3.0);
+         float room = hash(vec2(floor(cell.x / roomW), cell.y) + seed * 17.0);
+         float lit = step(0.5 - 0.1 * glass + 0.18 * isTower, room) * step(0.35, fract(room * 13.7 + floor(uTime / 60.0 + room * 9.0) * 0.37));
+         lit *= aa; // far off, the lit rooms melt into an even glow (below)
          vec3 warm = mix(vec3(1.0, 0.72, 0.38), vec3(0.85, 0.92, 1.0), step(0.85, fract(h * 7.1)));
          warm = mix(warm, vec3(0.3, 0.95, 1.0), step(0.72, fract(h * 3.3))); // and the cyan glow of screens
-         vec3 night = mix(mix(uTint * 0.12, tg * 0.5, isTower), warm * mix(1.4, 0.8, isTower), lit);
+         vec3 night = mix(mix(uTint * 0.2, tg * 0.7, isTower), warm * mix(1.15, 0.8, isTower), lit);
+         night = mix(mix(uTint * 0.2, tg * 0.7, isTower) + warm * 0.3, night, aa); // far: the average of lit and dark
          vec3 winCol = mix(day, night, uNight);
          // weathering (painted walls only): sun-faded paint varying wall to wall, grime rising from
          // the street, and rain streaks running down from under each window

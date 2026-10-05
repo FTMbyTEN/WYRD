@@ -440,3 +440,6 @@ export interface CityLiveDesign { traffic: number; crowd: number; npcLines: stri
 
 /** A player's character in NAIJA 2099, from the character creator. Proportions and skin are -1..1. */
 export interface CharacterLook { base: 'ten' | 'ama'; outfit?: number; name: string; height: number; build: number; shoulders: number; hips: number; skin: number; outfitHue: number; neon: number }
+
+/** Who is in NAIJA 2099 right now and overall. */
+export interface CityStats { online: number; joined: number; joinedToday: number; citizens: number; missionsDone: number; talksToday: number; bodies: { ten: number; ama: number }; leaders: { name: string; standing: number; missions: number }[]; at: string }

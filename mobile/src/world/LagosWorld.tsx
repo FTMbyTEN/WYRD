@@ -27,8 +27,11 @@ import type { CityCharter, CityDecree, CityLiveDesign, CityMission } from '../ap
 import { DesignStudio } from './DesignStudio';
 import { CharacterCreator } from './CharacterCreator';
 import { LagosFM } from './Radio';
+import { CityPulse } from './CityPulse';
 import { STARTER_MISSIONS } from './missions';
-import { makePlaces } from './places';
+import { makePlaces, PLACE_FILTERS } from './places';
+import { makeMaglev, type Maglev } from './maglev';
+import { makeFamous } from './famous';
 import { MissionCard, MissionDeck } from './MissionDeck';
 import { Compass, KeyCap, Minimap, newFeed, Panel, PauseMenu, StandingBar, VehicleGauges } from './Hud';
 import type { CharacterLook } from '../api/types';
@@ -142,7 +145,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const { mind } = useMind();
   const brain = useBrainMap();
   const [thought, setThought] = useState<string | null>(null);
-  const [bird, setBird] = useState(true); // the game opens on the clean map of Lagos: missions and places pinned
+  const [bird, setBird] = useState(true);
+  const [placeFilter, setPlaceFilter] = useState('all'); // the game opens on the clean map of Lagos: missions and places pinned
   const [hint, setHint] = useState<string | null>(null);
   const [speech, setSpeech] = useState<string | null>(null);
   const [street, setStreet] = useState<string | null>(null);
@@ -172,7 +176,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   useEffect(() => { api.cityCanDesign().then(setCanDesign).catch(() => setCanDesign(false)); }, []);
   const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void } | null>(null);
   const [flying, setFlying] = useState(false);
-  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void) });
+  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void) });
   live.current.look = look;
   live.current.typing = intro || ask !== null || boardOpen || studioOpen || editing || menu || (training !== null && !training.asked);
   live.current.mood = mind?.mood;
@@ -284,7 +288,17 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     scene.add(ground);
     const city = new OsmCity(scene, TIERS[tier].shadows);
     let landmarks: ReturnType<typeof makeLandmarks> | null = null;
-    void city.ready.then(() => { if (city.index) landmarks = makeLandmarks(scene, city.index.origin); });
+    let maglev: Maglev | null = null;
+    let onTrain = -1; // the train you're riding, or -1
+    void city.ready.then(() => {
+      if (!city.index) return;
+      landmarks = makeLandmarks(scene, city.index.origin);
+      maglev = makeMaglev(scene, (at) => landmarks!.toWorld(at));
+      // Lagos' famous buildings, modelled; the city leaves their sites (and the track's path) clear
+      const famous = makeFamous(scene, (at) => landmarks!.toWorld(at));
+      places.addTags(famous.tags.map((t) => ({ k: 'landmark' as const, n: t.name, x: t.p.x, z: t.p.y })));
+      city.keepClear = (pts) => maglev!.inCorridor(pts) || famous.tags.some((t) => pts.some((q) => Math.hypot(q.x - t.p.x, q.y - t.p.y) < 85));
+    });
     // ---- bird's-eye is a map: pan and zoom across Lagos; a beacon marks TEN ----
     const mapTarget = new THREE.Vector3();
     const flyTo = new THREE.Vector3();
@@ -308,9 +322,10 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     city.far = TIERS[tier].far;
     // clubs, police, government, factories... from the real map
     const places = makePlaces(scene, el);
+    live.current.setPlaceFilter = places.setFilter;
     const pins = new Map<string, { m: CityMission; div: HTMLDivElement }>();
     const syncPins = () => {
-      const want = live.current.pins;
+      const want = live.current.pins ?? [];
       for (const [id, p] of pins) if (!want.some((m) => (m.id ?? m.title) === id)) { p.div.remove(); pins.delete(id); }
       for (const m of want) {
         const id = m.id ?? m.title;
@@ -1241,6 +1256,16 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         yaw += angleDiff(yaw, car.state.yaw + Math.PI) * Math.min(1, dt * 2.5); // the camera swings in behind the car
       }
 
+      // ---- the maglev: the trains run whether you ride or not ----
+      maglev?.update(dt);
+      if (maglev && onTrain >= 0) {
+        const r = maglev.ride(onTrain);
+        pos.copy(r.pos);
+        vel.set(0, 0, 0); vy = 0;
+        me.root.visible = false;
+        yaw += angleDiff(yaw, r.yaw + Math.PI) * Math.min(1, dt * 1.5);
+      }
+
       // ---- riding a danfo: you sit inside; it carries you through the real streets ----
       if (riding) {
         pos.copy(riding.pos).setY(riding.pos.y + 0.18);
@@ -1258,7 +1283,11 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       const atTower = plaza.placed && Math.hypot(pos.x - plaza.x, pos.z - plaza.z) < plaza.r + 3;
       const droneHere = authority.droneState.active && !droneAnswered && Math.hypot(authority.drone.position.x - pos.x, authority.drone.position.z - pos.z) < 18;
       const nearCar = !inCar && !riding && car.state.mode === 'parked' && car.state.pos.distanceTo(pos) < 4.2;
-      if (inCar) near = car.canLeave(world) ? 'E TO STEP OUT' : 'SPACE CLIMB · C DESCEND · LAND TO STEP OUT';
+      const stn = maglev && onTrain < 0 && !inCar && !riding ? maglev.stationAt(pos.x, pos.z) : -1;
+      const ride = maglev && onTrain >= 0 ? maglev.ride(onTrain) : null;
+      if (ride) near = ride.at >= 0 ? `E TO GET OFF AT ${maglev!.stations[ride.at].name.toUpperCase()}` : `EKO MAGLEV · NEXT: ${ride.next.toUpperCase()}`;
+      else if (stn >= 0) { const eta = maglev!.eta(stn); near = eta === 0 ? 'E TO BOARD THE MAGLEV' : `MAGLEV · ${maglev!.stations[stn].name.toUpperCase()} · TRAIN IN ${eta}s`; }
+      else if (inCar) near = car.canLeave(world) ? 'E TO STEP OUT' : 'SPACE CLIMB · C DESCEND · LAND TO STEP OUT';
       else if (nearCar) near = 'E TO BOARD THE HOVER-CAR';
       else if (riding) near = 'E TO GET OFF';
       else if (atTower) near = 'E TO PETITION WYRD';
@@ -1268,7 +1297,21 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (near !== lastHint) { lastHint = near; setHint(near); }
       if (wantAct) {
         wantAct = false;
-        if (inCar) {
+        if (ride) {
+          if (ride.at >= 0) {
+            const st = maglev!.stations[ride.at];
+            onTrain = -1;
+            pos.set(st.base.x + 3, 0.18, st.base.z + 3);
+            city.collide(pos, RADIUS);
+            me.root.visible = true;
+            happened(`rode the Eko Maglev to ${st.name}`);
+            say(`Eko Maglev: ${st.name}. Mind the gap.`);
+          } else say(`Next stop: ${ride.next}. Get off when the train stops.`);
+        } else if (stn >= 0) {
+          const k = maglev!.trainAt(stn);
+          if (k >= 0) { onTrain = k; say(`Eko Maglev from ${maglev!.stations[stn].name}. Next stop: ${maglev!.ride(k).next}.`); }
+          else say(`The next train is ${maglev!.eta(stn)}s away. Wait at the lift.`);
+        } else if (inCar) {
           if (car.canLeave(world)) {
             const side = car.state.yaw + Math.PI / 2;
             pos.set(car.state.pos.x + Math.sin(side) * 2.4, 0, car.state.pos.z + Math.cos(side) * 2.4);
@@ -1553,6 +1596,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       disposed = true;
       for (const l of labels) l.div.remove();
       joy.remove();
+      maglev?.dispose();
       for (const p of pins.values()) p.div.remove();
       places.dispose();
       wp.remove();
@@ -1639,6 +1683,15 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       </View>
 
       {bird && !intro ? (
+        <ScrollView horizontal style={[styles.chips, compact && { left: 210, top: 6 }]} contentContainerStyle={{ gap: 6, paddingRight: 12 }} showsHorizontalScrollIndicator={false}>
+          {PLACE_FILTERS.map((f) => (
+            <Pressable key={f.id} onPress={() => { setPlaceFilter(f.id); live.current.setPlaceFilter?.(f.kinds.length ? f.kinds : null); }} style={[styles.chip, placeFilter === f.id && styles.chipOn]}>
+              <Mono style={[styles.chipText, placeFilter === f.id && { color: '#0d0f14' }]}>{f.label}</Mono>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+      {bird && !intro ? (
         <MissionDeck
           missions={[...(board?.missions ?? []).filter((m) => m.x != null), ...STARTER_MISSIONS]}
           active={mission} from={feed.current} compact={compact}
@@ -1663,7 +1716,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
           <Pressable onPress={() => setBird((b) => !b)} style={[styles.iconBtn, bird && styles.iconOn]} accessibilityLabel="Map (V)"><Mono style={[styles.iconText, bird && { color: colors.onSignal }]}>{bird ? 'STREET · V' : 'MAP · V'}</Mono></Pressable>
           <Pressable onPress={() => setMenu(true)} style={styles.iconBtn} accessibilityLabel="Menu (Esc)"><Mono style={styles.iconText}>≡ MENU</Mono></Pressable>
         </View>
-        <LagosFM />
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start' }} pointerEvents="box-none"><CityPulse /><LagosFM /></View>
         {!bird ? <Minimap feed={feed} /> : null}
       </View>
 
@@ -1805,6 +1858,10 @@ const angleDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI)
 const fmtHour = () => { const h = lagosHour(); return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; };
 
 const styles = StyleSheet.create({
+  chips: { position: 'absolute', top: 14, left: 280, right: 330, flexGrow: 0 },
+  chip: { borderWidth: 1, borderColor: '#2a3a4a', backgroundColor: 'rgba(8,10,18,0.85)', paddingHorizontal: 9, paddingVertical: 6 },
+  chipOn: { backgroundColor: '#00e5ff', borderColor: '#00e5ff' },
+  chipText: { fontSize: 9.5, letterSpacing: 1.2, color: '#d8dce6' },
   leftMission: { position: 'absolute', top: 222, left: 14 },
   topLeft: { position: 'absolute', top: 14, left: 14, maxWidth: 300 },
   letterTop: { position: 'absolute', top: 0, left: 0, right: 0, height: '11%', backgroundColor: '#000' },

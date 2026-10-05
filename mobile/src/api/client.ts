@@ -1,6 +1,6 @@
 import { callEndpoint, ServerpodClientError, SERVERPOD_BASE_URL } from './serverpodClient';
 import type { BrainMapData } from '../components/BrainCanvas';
-import type { CharacterLook, CityCharter, CityDecree, CityDesignNote, CityLiveDesign } from './types';
+import type { CharacterLook, CityCharter, CityDecree, CityStats, CityDesignNote, CityLiveDesign } from './types';
 import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkPartInfo,
   AlertNote,
   ChatResult,
@@ -425,6 +425,8 @@ export const api = {
   cityAddress: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, situation: object) =>
     callEndpoint<string>('city', 'address', { channel, text, situation: JSON.stringify(situation) }).then((j) => JSON.parse(j) as CityDecree),
   cityStatus: () => callEndpoint<string>('city', 'status', {}).then((j) => JSON.parse(j) as CityDecree),
+  cityPulse: () => callEndpoint<void>('city', 'pulse', {}),
+  cityStats: () => callEndpoint<string>('city', 'stats', {}).then((j) => JSON.parse(j) as CityStats),
   cityCharter: () => callEndpoint<string>('city', 'charter', {}).then((j) => JSON.parse(j) as CityCharter),
   /** Your NAIJA 2099 character, or null before you've made one. */
   myCharacter: () => callEndpoint<string>('city', 'myCharacter', {}).then((j) => JSON.parse(j) as CharacterLook | null),

@@ -86,6 +86,8 @@ export class OsmCity {
   private propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.05 });
   /** how much street life to place: 1 = full, 0.5 on low-end devices */
   propDensity = 1;
+  /** a corridor no building may stand in (the maglev's path): true if this footprint is in it */
+  keepClear: ((pts: THREE.Vector2[]) => boolean) | null = null;
   private aoMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
   private waterMat = new THREE.MeshStandardMaterial({ color: 0x3d6b6a, roughness: 0.15, metalness: 0.3 });
   private railMat = new THREE.MeshStandardMaterial({ color: 0x5a4a3c, roughness: 0.9, vertexColors: true });
@@ -317,7 +319,7 @@ export class OsmCity {
       for (let i = 1; i + 1 < b.length; i += 2) pts.push(new THREE.Vector2(b[i] / 10 + ox, b[i + 1] / 10 + oz));
       const c = pts.reduce((a, p) => a.add(p), new THREE.Vector2()).divideScalar(pts.length);
       return { lv: b[0], pts, c, area: Math.abs(signedArea(pts)) };
-    });
+    }).filter((b) => !this.keepClear?.([b.c, ...b.pts]));
     const near = new Map<string, typeof blds>();
     for (const b of blds) { const k = `${Math.floor(b.c.x / 14)}_${Math.floor(b.c.y / 14)}`; (near.get(k) ?? near.set(k, []).get(k)!).push(b); }
     const propB = new Batch();
@@ -351,8 +353,10 @@ export class OsmCity {
       // and any decent plot may carry a tower -- the larger, the likelier and the taller
       if (b.area < 60) continue;
       const tower = (b.area > 260 && seed > 0.22) || (b.area > 160 && seed > 0.62);
-      if (!tower && b.area < 320 && fract(seed * 3.3) < 0.5) continue;
-      if (!full && !tower && b.area < 200) continue;
+      // only buildings that matter stay: small houses mostly cleared (fewer meshes, less lag)
+      if (!tower && b.area < 140 && b.lv < 3) continue;
+      if (!tower && b.area < 400 && fract(seed * 3.3) < 0.55) continue;
+      if (!full && !tower && b.area < 320) continue;
       let crowd = 0;
       const gx = Math.floor(b.c.x / 14), gz = Math.floor(b.c.y / 14);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const o of near.get(`${gx + i}_${gz + j}`) ?? []) if (o !== b && o.c.distanceTo(b.c) < 14) crowd++;
@@ -414,6 +418,15 @@ export class OsmCity {
               const sx = mid.x + n.x * Math.min(2.4, kd + 0.6), sz = mid.y + n.y * Math.min(2.4, kd + 0.6);
               if (rnd() < 0.8) for (const g of place(PREFABS.stall, sx, 0.05, sz, yaw, [1, 1, 1], UMBRELLA_COLORS[Math.floor(rnd() * UMBRELLA_COLORS.length)], GOODS_COLORS[Math.floor(rnd() * GOODS_COLORS.length)])) propB.add(g);
               else for (const g of place(PREFABS.kiosk, sx, 0.05, sz, yaw + Math.PI, [1, 1, 1], KIOSK_COLORS[Math.floor(rnd() * KIOSK_COLORS.length)], 0xf2eee2)) propB.add(g);
+            }
+          }
+          // a flat roof is a real roof: a parapet wall round its edge, a stair-and-lift housing on taller blocks
+          if (!tower && !hipped) {
+            bldB.add(parapet(pts, h, wall));
+            if (lv >= 3 && b.area > 160) {
+              const box = tone(new THREE.BoxGeometry(3.2, 2.8, 3.6).translate(0, 1.4, 0), 0.62);
+              box.rotateY(seed * Math.PI).translate(b.c.x + Math.cos(seed * 9) * 1.5, h, b.c.y + Math.sin(seed * 9) * 1.5);
+              bldB.add(box);
             }
           }
           // the roof: a black water tank, solar panels, a dish (not on hipped roofs or towers)
@@ -647,6 +660,23 @@ function offset(pts: THREE.Vector2[], by: number) {
 // ---- geometry, with light baked into vertex colours ----
 const UP_NORMALS = (n: number) => { const a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a[i * 3 + 1] = 1; return a; };
 /** Geometry for one material, appended piece by piece into plain arrays (position, normal, colour, uv). */
+/** A roof's parapet: a 0.9 m wall round the footprint at height [h], in the wall's colour, darkened. */
+function parapet(pts: THREE.Vector2[], h: number, color: number) {
+  const pos: number[] = [], col: number[] = [], c = new THREE.Color(color).multiplyScalar(0.8);
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const quad = [a.x, h, a.y, b.x, h, b.y, b.x, h + 0.9, b.y, a.x, h, a.y, b.x, h + 0.9, b.y, a.x, h + 0.9, a.y];
+    pos.push(...quad);
+    pos.push(a.x, h, a.y, b.x, h + 0.9, b.y, b.x, h, b.y, a.x, h, a.y, a.x, h + 0.9, a.y, b.x, h + 0.9, b.y); // the inside face
+    for (let k = 0; k < 12; k++) col.push(c.r, c.g, c.b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 class Batch {
   private p: number[] = []; private n: number[] = []; private c: number[] = []; private uv: number[] = []; private i: number[] = [];
   get empty() { return this.i.length === 0; }
