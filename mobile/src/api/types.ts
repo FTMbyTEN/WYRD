@@ -443,3 +443,8 @@ export interface CharacterLook { base: 'ten' | 'ama'; outfit?: number; name: str
 
 /** Who is in NAIJA 2099 right now and overall. */
 export interface CityStats { online: number; joined: number; joinedToday: number; citizens: number; missionsDone: number; talksToday: number; bodies: { ten: number; ama: number }; leaders: { name: string; standing: number; missions: number }[]; at: string }
+
+/** A home in NAIJA 2099 (rent per week, price to buy). */
+export interface CityHome { slug: string; name: string; district: string; kind: string; x: number; z: number; rent: number; price: number; taken?: boolean; mine?: boolean; mode?: 'rent' | 'own'; paidUntil?: string | null }
+/** Your naira and your home. */
+export interface CityWallet { naira: number; home: CityHome | null; paid?: number }

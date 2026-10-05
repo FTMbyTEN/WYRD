@@ -23,11 +23,12 @@ import { along, Router, type Path, type Stop } from './routes';
 import { PREFABS, place } from './props';
 import { makeHoloTalk } from './holoTalk';
 import { api } from '../api/client';
-import type { CityCharter, CityDecree, CityLiveDesign, CityMission } from '../api/types';
+import type { CityCharter, CityDecree, CityHome, CityLiveDesign, CityMission, CityWallet } from '../api/types';
 import { DesignStudio } from './DesignStudio';
 import { CharacterCreator } from './CharacterCreator';
 import { LagosFM } from './Radio';
 import { CityPulse } from './CityPulse';
+import { HomesPanel, naira } from './HomesPanel';
 import { STARTER_MISSIONS } from './missions';
 import { makePlaces, PLACE_FILTERS } from './places';
 import { makeMaglev, type Maglev } from './maglev';
@@ -146,7 +147,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const brain = useBrainMap();
   const [thought, setThought] = useState<string | null>(null);
   const [bird, setBird] = useState(true);
-  const [placeFilter, setPlaceFilter] = useState('all'); // the game opens on the clean map of Lagos: missions and places pinned
+  const [placeFilter, setPlaceFilter] = useState('all');
+  const [wallet, setWallet] = useState<CityWallet | null>(null);
+  const [homesOpen, setHomesOpen] = useState(false); // the game opens on the clean map of Lagos: missions and places pinned
   const [hint, setHint] = useState<string | null>(null);
   const [speech, setSpeech] = useState<string | null>(null);
   const [street, setStreet] = useState<string | null>(null);
@@ -174,14 +177,16 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   };
   const [canDesign, setCanDesign] = useState(false);
   useEffect(() => { api.cityCanDesign().then(setCanDesign).catch(() => setCanDesign(false)); }, []);
-  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void } | null>(null);
+  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void } | null>(null);
   const [flying, setFlying] = useState(false);
-  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void) });
+  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void), wallet: null as CityWallet | null, setWallet: undefined as undefined | ((w: CityWallet) => void) });
   live.current.look = look;
   live.current.typing = intro || ask !== null || boardOpen || studioOpen || editing || menu || (training !== null && !training.asked);
   live.current.mood = mind?.mood;
   live.current.brain = brain;
   live.current.bird = bird;
+  live.current.wallet = wallet;
+  live.current.setWallet = (w: CityWallet) => { setWallet(w); ctl.current?.setHome(w.home); };
   live.current.onEnterMap = () => setBird(true);
   live.current.onTake = () => setBird(false);
   live.current.gfx = gfx;
@@ -288,6 +293,24 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     scene.add(ground);
     const city = new OsmCity(scene, TIERS[tier].shadows);
     let landmarks: ReturnType<typeof makeLandmarks> | null = null;
+    // ---- your home: a gold ring and a sign where it stands; rest there to heal ----
+    let home: CityHome | null = null;
+    const homeMark = new THREE.Group();
+    {
+      homeMark.add(new THREE.Mesh(new THREE.TorusGeometry(4, 0.18, 6, 40).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffc400, toneMapped: false })));
+      homeMark.add(new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 30, 16, 1, true).translate(0, 15, 0), new THREE.MeshBasicMaterial({ color: 0xffc400, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })));
+      homeMark.visible = false;
+      scene.add(homeMark);
+    }
+    const setHome = (h: CityHome | null) => {
+      home = h;
+      homeMark.visible = !!h;
+      if (h) homeMark.position.set(h.x, city.floorAt(h.x, h.z, 30) + 0.1, h.z);
+    };
+    const payFor = (reason: 'maglev' | 'danfo') => {
+      api.cityPay(reason).then((r) => { if (!('error' in r)) live.current.setWallet?.(r); }).catch(() => {});
+    };
+    const canAfford = (n: number) => !live.current.wallet || live.current.wallet.naira >= n; // signed out: rides are free
     let maglev: Maglev | null = null;
     let onTrain = -1; // the train you're riding, or -1
     void city.ready.then(() => {
@@ -990,8 +1013,18 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (ev.broadcast) { setBroadcast(ev.broadcast); clearTimeout(castTimer); castTimer = setTimeout(() => setBroadcast(null), 10000); }
       happened(`the city event "${ev.title}" began`);
     };
+    // the wallet: fetched now and every minute (rent falls due on the server)
+    const loadWallet = () => api.cityWallet().then((w) => live.current.setWallet?.(w)).catch(() => {});
+    void loadWallet();
+    const walletTimer = setInterval(loadWallet, 60000);
     ctl.current = { skipIntro: () => endIntro(), act: () => { wantAct = true; }, jump: () => { if (grounded && !inCar) { vy = 7.2; grounded = false; } }, setLook: (l: CharacterLook) => me.setLook?.(l), address, reloadDesign, findMe: () => { follow = true; flying = false; }, callCar: () => { if (!inCar) { car.call(me.root.position, me.root.rotation.y, world); say('You call your hover-car. It drops out of the sky.'); } },
       peek: (m: CityMission) => { if (m.x != null && m.z != null) { flyTo.set(m.x, 0, m.z); flying = true; follow = false; } },
+      goHome: (h: CityHome) => {
+        if (inCar || riding || onTrain >= 0) { say('Get out first.'); return; }
+        me.root.position.set(h.x + 5, 0.2, h.z + 5); city.collide(me.root.position, RADIUS); follow = true; flying = false;
+        say(`Home: ${h.name}.`);
+      },
+      setHome,
       take: (m: CityMission) => { setTask(m); say(`Mission: ${m.title}. Follow the gold line.`); } };
     api.cityStatus().then(apply).catch(() => {});
 
@@ -1287,6 +1320,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       const ride = maglev && onTrain >= 0 ? maglev.ride(onTrain) : null;
       if (ride) near = ride.at >= 0 ? `E TO GET OFF AT ${maglev!.stations[ride.at].name.toUpperCase()}` : `EKO MAGLEV · NEXT: ${ride.next.toUpperCase()}`;
       else if (stn >= 0) { const eta = maglev!.eta(stn); near = eta === 0 ? 'E TO BOARD THE MAGLEV' : `MAGLEV · ${maglev!.stations[stn].name.toUpperCase()} · TRAIN IN ${eta}s`; }
+      else if (home && !inCar && !riding && Math.hypot(home.x - pos.x, home.z - pos.z) < 8) near = hp < 100 ? 'E TO REST AT HOME' : 'HOME';
       else if (inCar) near = car.canLeave(world) ? 'E TO STEP OUT' : 'SPACE CLIMB · C DESCEND · LAND TO STEP OUT';
       else if (nearCar) near = 'E TO BOARD THE HOVER-CAR';
       else if (riding) near = 'E TO GET OFF';
@@ -1297,7 +1331,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (near !== lastHint) { lastHint = near; setHint(near); }
       if (wantAct) {
         wantAct = false;
-        if (ride) {
+        if (!ride && stn < 0 && home && !inCar && !riding && Math.hypot(home.x - pos.x, home.z - pos.z) < 8) {
+          hp = 100; showVitals(); say('You rest at home. Fully healed.');
+        } else if (ride) {
           if (ride.at >= 0) {
             const st = maglev!.stations[ride.at];
             onTrain = -1;
@@ -1309,7 +1345,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
           } else say(`Next stop: ${ride.next}. Get off when the train stops.`);
         } else if (stn >= 0) {
           const k = maglev!.trainAt(stn);
-          if (k >= 0) { onTrain = k; say(`Eko Maglev from ${maglev!.stations[stn].name}. Next stop: ${maglev!.ride(k).next}.`); }
+          if (k >= 0 && !canAfford(200)) say('The maglev is ₦200. Earn some naira first.');
+          else if (k >= 0) { onTrain = k; payFor('maglev'); say(`Eko Maglev from ${maglev!.stations[stn].name} (₦200). Next stop: ${maglev!.ride(k).next}.`); }
           else say(`The next train is ${maglev!.eta(stn)}s away. Wait at the lift.`);
         } else if (inCar) {
           if (car.canLeave(world)) {
@@ -1336,8 +1373,11 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
           riding = null;
           me.root.visible = true;
           say('You hop off. "Owa o!"');
+        } else if (closestDanfo && !canAfford(100)) {
+          say('"Owo da? It\'s ₦100, my friend."');
         } else if (closestDanfo) {
           riding = closestDanfo;
+          payFor('danfo');
           if (riding === summoned) summoned = null;
           happened(`rode a danfo${lastStreet ? ` on ${lastStreet}` : ''}`);
           say(pick(['"Ojuelegba! Ojuelegba! Enter with your change o!"', '"Oya, enter! Two hundred naira!"', '"Shift for the man, shift!"', '"Yaba! Yaba! Straight!"', '"Stadium! Stadium!"']));
@@ -1386,6 +1426,11 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
             happened(`finished the mission "${task.title}"`);
             authority.setBeacon(null);
             address('event', '', { event: 'mission_complete', missionTitle: task.title });
+            if (task.id?.startsWith('st-')) api.cityMissionPaid(task.id).then((r) => {
+              if ('error' in r) return;
+              live.current.setWallet?.(r);
+              if (r.paid) say(`Mission paid: +${naira(r.paid)}.`);
+            }).catch(() => {});
           }
         }
         const nr = city.nearestRoad(pos.x, pos.z, (r) => !!r.name);
@@ -1596,6 +1641,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       disposed = true;
       for (const l of labels) l.div.remove();
       joy.remove();
+      clearInterval(walletTimer);
+      scene.remove(homeMark);
       maglev?.dispose();
       for (const p of pins.values()) p.div.remove();
       places.dispose();
@@ -1705,6 +1752,12 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         </View>
       ) : null}
 
+      {homesOpen ? (
+        <HomesPanel wallet={wallet} compact={compact} onClose={() => setHomesOpen(false)}
+          onWallet={(w) => live.current.setWallet?.(w)}
+          onGoHome={(h) => { setHomesOpen(false); setBird(false); ctl.current?.goHome(h); }} />
+      ) : null}
+
       {/* ---- top centre: compass ---- */}
       {!bird && !intro ? <View style={styles.topCentre} pointerEvents="none"><Compass feed={feed} /></View> : null}
 
@@ -1716,7 +1769,13 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
           <Pressable onPress={() => setBird((b) => !b)} style={[styles.iconBtn, bird && styles.iconOn]} accessibilityLabel="Map (V)"><Mono style={[styles.iconText, bird && { color: colors.onSignal }]}>{bird ? 'STREET · V' : 'MAP · V'}</Mono></Pressable>
           <Pressable onPress={() => setMenu(true)} style={styles.iconBtn} accessibilityLabel="Menu (Esc)"><Mono style={styles.iconText}>≡ MENU</Mono></Pressable>
         </View>
-        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start' }} pointerEvents="box-none"><CityPulse /><LagosFM /></View>
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start' }} pointerEvents="box-none">
+          <Pressable onPress={() => setHomesOpen(true)} style={styles.walletChip} accessibilityLabel="Wallet and homes">
+            <Mono style={styles.walletText}>{wallet ? naira(wallet.naira) : '₦ —'}</Mono>
+            <Mono style={styles.walletHome}>{wallet?.home ? '⌂' : '+⌂'}</Mono>
+          </Pressable>
+          <CityPulse /><LagosFM />
+        </View>
         {!bird ? <Minimap feed={feed} /> : null}
       </View>
 
@@ -1858,6 +1917,9 @@ const angleDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI)
 const fmtHour = () => { const h = lagosHour(); return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; };
 
 const styles = StyleSheet.create({
+  walletChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#ffc400', backgroundColor: 'rgba(8,12,20,0.75)', paddingHorizontal: 9, paddingVertical: 5 },
+  walletText: { fontSize: 11, letterSpacing: 0.8, color: '#ffc400' },
+  walletHome: { fontSize: 11, color: '#ffffff' },
   chips: { position: 'absolute', top: 14, left: 280, right: 330, flexGrow: 0 },
   chip: { borderWidth: 1, borderColor: '#2a3a4a', backgroundColor: 'rgba(8,10,18,0.85)', paddingHorizontal: 9, paddingVertical: 6 },
   chipOn: { backgroundColor: '#00e5ff', borderColor: '#00e5ff' },
