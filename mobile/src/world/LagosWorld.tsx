@@ -30,6 +30,7 @@ import { LagosFM } from './Radio';
 import { CityPulse } from './CityPulse';
 import { HomesPanel, naira } from './HomesPanel';
 import { PlacePanel } from './PlacePanel';
+import { makeJobs, type JobType, type JobView } from './jobs';
 import type { Place } from './places';
 import { STARTER_MISSIONS } from './missions';
 import { makePlaces, PLACE_FILTERS } from './places';
@@ -152,7 +153,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   const [placeFilter, setPlaceFilter] = useState('all');
   const [wallet, setWallet] = useState<CityWallet | null>(null);
   const [homesOpen, setHomesOpen] = useState(false);
-  const [inside, setInside] = useState<Place | null>(null); // the game opens on the clean map of Lagos: missions and places pinned
+  const [inside, setInside] = useState<Place | null>(null);
+  const [jobView, setJobView] = useState<JobView | null>(null);
+  const [jobsOpen, setJobsOpen] = useState(false); // the game opens on the clean map of Lagos: missions and places pinned
   const [hint, setHint] = useState<string | null>(null);
   const [speech, setSpeech] = useState<string | null>(null);
   const [street, setStreet] = useState<string | null>(null);
@@ -180,7 +183,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   };
   const [canDesign, setCanDesign] = useState(false);
   useEffect(() => { api.cityCanDesign().then(setCanDesign).catch(() => setCanDesign(false)); }, []);
-  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void; heal: (n: number) => void } | null>(null);
+  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void; heal: (n: number) => void; job: (t: JobType | null) => void } | null>(null);
   const [flying, setFlying] = useState(false);
   const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void), wallet: null as CityWallet | null, enter: undefined as undefined | ((p: Place) => void), setWallet: undefined as undefined | ((w: CityWallet) => void) });
   live.current.look = look;
@@ -316,6 +319,18 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     };
     const canAfford = (n: number) => !live.current.wallet || live.current.wallet.naira >= n; // signed out: rides are free
     let placeHere: Place | null = null, nextPlace = 0;
+    const jobs = makeJobs({
+      scene, city, get router() { return busRouter; },
+      places: () => places.list,
+      pos: () => me.root.position,
+      keys: () => keys,
+      stick: () => stick,
+      say: (t) => say(t),
+      waypoint: (x, z, title, brief) => setTask({ id: `job-${title}`, kind: 'reach', title, brief, street: null, x, z, reward: 0 }),
+      clearWaypoint: () => { if (task?.id?.startsWith('job-')) setTask(null); },
+      wallet: (w) => live.current.setWallet?.(w),
+      view: (v) => setJobView(v),
+    });
     let maglev: Maglev | null = null;
     let onTrain = -1; // the train you're riding, or -1
     void city.ready.then(() => {
@@ -1031,11 +1046,12 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       },
       setHome,
       heal: (n: number) => { hp = Math.min(100, hp + n); showVitals(); },
+      job: (t: JobType | null) => { if (t) jobs.start(t); else jobs.cancel(); },
       take: (m: CityMission) => { setTask(m); say(`Mission: ${m.title}. Follow the gold line.`); } };
     api.cityStatus().then(apply).catch(() => {});
 
     // for measuring (draw calls, triangles, tier) from the console or a test
-    (globalThis as { __world?: unknown }).__world = { info: renderer.info, tier: () => tier, pos: me.root.position, city, camera, cam: () => ({ camDist, camDistNow, pitch, yaw, inCar, riding: !!riding }) };
+    (globalThis as { __world?: unknown }).__world = { info: renderer.info, tier: () => tier, pos: me.root.position, city, camera, jobs, stops: () => busRouter.stops.length, cam: () => ({ camDist, camDistNow, pitch, yaw, inCar, riding: !!riding }) };
 
     const skyTop = new THREE.Color(), skyBottom = new THREE.Color();
     const sunDir = new THREE.Vector3();
@@ -1295,6 +1311,16 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         yaw += angleDiff(yaw, car.state.yaw + Math.PI) * Math.min(1, dt * 2.5); // the camera swings in behind the car
       }
 
+      // ---- jobs: deliveries, the danfo you drive, the chase ----
+      jobs.update(dt, now);
+      const drv = jobs.driving();
+      if (drv) {
+        pos.copy(drv.pos).setY(0.2);
+        vel.set(0, 0, 0); vy = 0;
+        me.root.visible = false;
+        yaw += angleDiff(yaw, drv.yaw + Math.PI) * Math.min(1, dt * 2.2);
+      } else if (!inCar && !riding && onTrain < 0 && !me.root.visible) me.root.visible = true;
+
       // ---- the maglev: the trains run whether you ride or not ----
       maglev?.update(dt);
       if (maglev && onTrain >= 0) {
@@ -1325,7 +1351,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (now > nextPlace) { nextPlace = now + 400; placeHere = !inCar && !riding && onTrain < 0 ? places.nearest(pos.x, pos.z, 22) : null; }
       const stn = maglev && onTrain < 0 && !inCar && !riding ? maglev.stationAt(pos.x, pos.z) : -1;
       const ride = maglev && onTrain >= 0 ? maglev.ride(onTrain) : null;
-      if (ride) near = ride.at >= 0 ? `E TO GET OFF AT ${maglev!.stations[ride.at].name.toUpperCase()}` : `EKO MAGLEV · NEXT: ${ride.next.toUpperCase()}`;
+      const jobHint = jobs.hint();
+      if (jobHint) near = jobHint;
+      else if (ride) near = ride.at >= 0 ? `E TO GET OFF AT ${maglev!.stations[ride.at].name.toUpperCase()}` : `EKO MAGLEV · NEXT: ${ride.next.toUpperCase()}`;
       else if (stn >= 0) { const eta = maglev!.eta(stn); near = eta === 0 ? 'E TO BOARD THE MAGLEV' : `MAGLEV · ${maglev!.stations[stn].name.toUpperCase()} · TRAIN IN ${eta}s`; }
       else if (home && !inCar && !riding && Math.hypot(home.x - pos.x, home.z - pos.z) < 8) near = hp < 100 ? 'E TO REST AT HOME' : 'HOME';
       else if (inCar) near = car.canLeave(world) ? 'E TO STEP OUT' : 'SPACE CLIMB · C DESCEND · LAND TO STEP OUT';
@@ -1339,7 +1367,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       if (near !== lastHint) { lastHint = near; setHint(near); }
       if (wantAct) {
         wantAct = false;
-        if (!ride && stn < 0 && home && !inCar && !riding && Math.hypot(home.x - pos.x, home.z - pos.z) < 8) {
+        if (jobs.act()) { /* the danfo: in or out */ }
+        else if (!ride && stn < 0 && home && !inCar && !riding && Math.hypot(home.x - pos.x, home.z - pos.z) < 8) {
           hp = 100; showVitals(); say('You rest at home. Fully healed.');
         } else if (ride) {
           if (ride.at >= 0) {
@@ -1435,7 +1464,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
             task.done = true;
             happened(`finished the mission "${task.title}"`);
             authority.setBeacon(null);
-            address('event', '', { event: 'mission_complete', missionTitle: task.title });
+            if (!task.id?.startsWith('job-')) address('event', '', { event: 'mission_complete', missionTitle: task.title });
             if (task.id?.startsWith('st-')) api.cityMissionPaid(task.id).then((r) => {
               if ('error' in r) return;
               live.current.setWallet?.(r);
@@ -1652,6 +1681,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       for (const l of labels) l.div.remove();
       joy.remove();
       clearInterval(walletTimer);
+      jobs.dispose();
       scene.remove(homeMark);
       maglev?.dispose();
       for (const p of pins.values()) p.div.remove();
@@ -1762,6 +1792,28 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         </View>
       ) : null}
 
+      {jobsOpen ? (
+        <View style={styles.jobs}>
+          <Mono style={[styles.commsEyebrow, { color: '#1aff9c' }]}>⚑ JOBS · EARN NAIRA</Mono>
+          {([
+            ['delivery', '▣ DELIVERY', 'Collect a parcel nearby, deliver it across town before time runs out. ₦600 + ₦1/m, tip for speed.'],
+            ['danfo', '🚐 DANFO RUN', 'Drive a danfo yourself, stop at four real bus stops, carry passengers. ₦250 each.'],
+            ['chase', '➤ CHASE', 'A phone snatcher on an okada -- catch them inside 90 s. ₦3,000 and standing.'],
+          ] as const).map(([t, label, text]) => (
+            <Pressable key={t} onPress={() => { setJobsOpen(false); setBird(false); ctl.current?.job(t); }} style={styles.jobItem}>
+              <Mono style={styles.jobLabel}>{label}</Mono>
+              <Mono style={styles.jobText}>{text}</Mono>
+            </Pressable>
+          ))}
+          {jobView ? <Pressable onPress={() => { setJobsOpen(false); ctl.current?.job(null); }} style={[styles.btn, { alignSelf: 'flex-start' }]}><Mono style={styles.btnText}>DROP CURRENT JOB</Mono></Pressable> : null}
+        </View>
+      ) : null}
+      {jobView && !bird ? (
+        <View style={styles.jobCard} pointerEvents="none">
+          <Mono style={styles.jobCardTitle}>⚑ {jobView.title}{jobView.timeLeft != null ? ` · ${Math.floor(jobView.timeLeft / 60)}:${String(jobView.timeLeft % 60).padStart(2, '0')}` : ''}{jobView.passengers != null ? ` · ${jobView.passengers} ON BOARD` : ''}</Mono>
+          <Mono style={styles.jobCardLine}>{jobView.line}</Mono>
+        </View>
+      ) : null}
       {inside ? (
         <PlacePanel kind={inside.k} name={inside.n ?? inside.k} wallet={wallet} compact={compact} onClose={() => setInside(null)}
           onResult={(w, heal) => { live.current.setWallet?.(w); if (heal) ctl.current?.heal(heal); }} />
@@ -1778,6 +1830,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       {/* ---- top right: menu, minimap, mission ---- */}
       <View style={[styles.topRight, shrink && { transform: [{ scale: 0.6 }], transformOrigin: 'top right' }, intro && { opacity: 0 }]} pointerEvents={intro ? 'none' : 'box-none'}>
         <View style={styles.topButtons}>
+          <Pressable onPress={() => setJobsOpen((o) => !o)} style={[styles.iconBtn, { borderColor: '#1aff9c' }]} accessibilityLabel="Jobs"><Mono style={[styles.iconText, { color: '#1aff9c' }]}>⚑ JOBS</Mono></Pressable>
           <Pressable onPress={openBoard} style={[styles.iconBtn, { borderColor: '#ffc400' }]} accessibilityLabel="Missions"><Mono style={[styles.iconText, { color: '#ffc400' }]}>◆ MISSIONS</Mono></Pressable>
           <Pressable onPress={() => setAsk('speak')} style={styles.iconBtn} accessibilityLabel="Speak to WYRD (T)"><Mono style={styles.iconText}>WYRD · T</Mono></Pressable>
           <Pressable onPress={() => setBird((b) => !b)} style={[styles.iconBtn, bird && styles.iconOn]} accessibilityLabel="Map (V)"><Mono style={[styles.iconText, bird && { color: colors.onSignal }]}>{bird ? 'STREET · V' : 'MAP · V'}</Mono></Pressable>
@@ -1931,6 +1984,13 @@ const angleDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI)
 const fmtHour = () => { const h = lagosHour(); return `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`; };
 
 const styles = StyleSheet.create({
+  jobs: { position: 'absolute', top: 60, right: 14, width: 300, backgroundColor: 'rgba(8,10,18,0.95)', borderWidth: 1, borderColor: '#1aff9c', padding: 12, gap: 8 },
+  jobItem: { borderWidth: 1, borderColor: '#1e3a2a', padding: 9, gap: 3 },
+  jobLabel: { fontSize: 12, color: '#1aff9c' },
+  jobText: { fontSize: 10.5, lineHeight: 15, color: '#d8dce6' },
+  jobCard: { position: 'absolute', top: 44, alignSelf: 'center', backgroundColor: 'rgba(8,10,18,0.88)', borderWidth: 1, borderColor: '#1aff9c', paddingHorizontal: 14, paddingVertical: 6, alignItems: 'center', gap: 2 },
+  jobCardTitle: { fontSize: 11, letterSpacing: 1.6, color: '#1aff9c' },
+  jobCardLine: { fontSize: 11, color: '#ffffff' },
   walletChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#ffc400', backgroundColor: 'rgba(8,12,20,0.75)', paddingHorizontal: 9, paddingVertical: 5 },
   walletText: { fontSize: 11, letterSpacing: 0.8, color: '#ffc400' },
   walletHome: { fontSize: 11, color: '#ffffff' },
