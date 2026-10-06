@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { wyrdStream } from '../../api/stream';
 import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { BrainCanvas } from '../../components/BrainCanvas';
@@ -118,6 +119,25 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const panelOpacity = zoom.interpolate({ inputRange: [0.4, 1], outputRange: [0, 1], extrapolate: 'clamp' });
   const panelScale = zoom.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
 
+  // the ideas you and WYRD are talking about: words from the conversation that are neurons in its
+  // brain light up there, and fade after two minutes
+  const [lit, setLit] = useState<{ id: string; at: number }[]>([]);
+  useEffect(() => {
+    const names = new Set((brainMap?.neurons ?? []).map((n) => n.id));
+    if (!names.size) return;
+    const touch = (text: string) => {
+      const words = (text.toLowerCase().match(/[a-z][a-z'-]{2,}/g) ?? []);
+      const hits = Array.from(new Set(words.filter((w) => names.has(w))));
+      if (!hits.length) return;
+      const now = Date.now();
+      setLit((cur) => [...cur.filter((x) => !hits.includes(x.id)), ...hits.map((id) => ({ id, at: now }))].slice(-8));
+    };
+    const off = wyrdStream.subscribe('chat', (t: unknown) => { const c = t as { userText?: string; botText?: string }; touch(`${c.userText ?? ''} ${c.botText ?? ''}`); });
+    const fade = setInterval(() => setLit((cur) => cur.filter((x) => Date.now() - x.at < 120000)), 10000);
+    return () => { off(); clearInterval(fade); };
+  }, [brainMap]);
+  const litIds = useMemo(() => lit.map((x) => x.id), [lit]);
+
   // the brain: on a phone it's the living backdrop of the whole home screen, as in the first version
   const brain = (
     <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: brainScale }] }]} pointerEvents="none">
@@ -125,14 +145,14 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
         activitySignal={brainActivity}
         energy={(expanded ? 2.2 : 1) * (0.6 + (mind?.curiosity ?? 0.4))}
         map={brainMap}
-        radius={0.56}
+        radius={desktop ? 0.56 : 0.4}
+        lit={litIds}
         onThought={(path, live) => setThought({ path, live })}
       />
     </Animated.View>
   );
   return (
     <View style={[{ flex: 1 }, desktop && styles.desktopRow]}>
-      {!desktop ? brain : null}
       <View style={styles.heroWrap}>
         {/* The brain itself is the open/close target. The chips, cards and ENTER 3D below are
             siblings layered on top, not children -- nested pressables let this outer target
@@ -143,19 +163,14 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Close the brain view' : 'Open the brain to see its vitals'}
         >
-          {desktop ? brain : null}
+          {brain /* centred on the mood, on every screen */}
 
           <LearningStream words={learningWords} active={expanded} />
 
           <Animated.View style={[styles.hero, { opacity: heroOpacity }]} pointerEvents="none">
             <Mono style={[styles.eyebrow, styles.halo]}>MOOD</Mono>
             <Display style={[styles.moodValue, styles.halo]}>{mood}</Display>
-            <Mono style={[styles.focusLine, styles.halo]}>focus · {focus}</Mono>
-            {thought ? (
-              <Mono style={[styles.thought, styles.halo, thought.live && styles.thoughtLive]} numberOfLines={1}>
-                {thought.live ? 'thinking · ' : 'recalling · '}{thought.path.join(' → ')}
-              </Mono>
-            ) : null}
+            {litIds.length ? <Mono style={[styles.onMind, styles.halo]} numberOfLines={1}>on your mind · {litIds.join(' · ')}</Mono> : null}
           </Animated.View>
         </Pressable>
 
@@ -343,6 +358,7 @@ const styles = StyleSheet.create({
   focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
   thought: { marginTop: 8, fontSize: 10.5, letterSpacing: 0.6, color: colors.greenDim, maxWidth: 320 },
   thoughtLive: { color: colors.signal },
+  onMind: { marginTop: 6, fontSize: 11, letterSpacing: 0.8, color: colors.signal, maxWidth: 360 },
   hint: { position: 'absolute', bottom: 10, fontSize: 8.5, letterSpacing: 3, color: colors.greenBorder },
 
   // compact vitals: small cards around the brain's core

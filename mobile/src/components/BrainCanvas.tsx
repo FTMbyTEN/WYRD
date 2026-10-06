@@ -213,7 +213,9 @@ const IDLE_REPLAY_MS = 2600; // between thoughts, it replays one of its recent r
  * `energy` (1 = resting) speeds up and thickens the signal traffic, e.g. while the brain is
  * opened up on the WYRD tab.
  */
-export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, onThought, radius = 0.42 }: {
+export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, onThought, radius = 0.42, lit }: {
+  /** concepts from the conversation right now: their neurons glow (terracotta halos) */
+  lit?: string[];
   /** how big the brain is drawn, as a share of the view (home: 0.56, as in the first version) */
   radius?: number;
   nodeCount?: number;
@@ -242,6 +244,11 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
   // neurons, so a young brain (few neurons yet) still reads as a full, living brain. It never fires.
   const cloud = useMemo(() => buildBrain(220), []);
   const { points, edges } = useMemo(() => real ?? brainFor(nodeCount), [real, nodeCount]);
+  // the neurons to light, as indexes into [points] (only a real brain has named neurons)
+  const litRef = useRef<number[]>([]);
+  useEffect(() => {
+    litRef.current = real && lit ? lit.map((id) => real.index.get(id)).filter((i): i is number => i != null) : [];
+  }, [real, lit]);
 
   // thoughts to play: new real firings as they arrive; between them, replays of recent ones
   const play = useRef<{ queue: number[][]; cur: { path: number[]; start: number } | null; lastAt: string; idleSince: number; recent: number[][] }>(
@@ -411,6 +418,23 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
           fillPaint.setColor(group === pulses ? signalInk(b) : ink(b));
           fillCircles(canvas, xyr, fillPaint);
         });
+      }
+
+      // the conversation's ideas: a soft terracotta halo and a bright core on each, breathing
+      if (litRef.current.length) {
+        const halo = Skia.Paint(), core = Skia.Paint(), ring = Skia.Paint();
+        ring.setStyle(1); ring.setStrokeWidth(1.4);
+        for (const i of litRef.current) {
+          const p = proj[i];
+          if (!p) continue;
+          const breath = 0.6 + 0.4 * Math.sin(now * 0.004 + i);
+          halo.setColor(Skia.Color(`rgba(196,87,46,${(0.16 * breath).toFixed(3)})`));
+          canvas.drawCircle(p.sx, p.sy, (14 + 6 * breath) * p.d * 2, halo);
+          ring.setColor(Skia.Color(`rgba(226,163,43,${(0.7 * breath).toFixed(3)})`));
+          canvas.drawCircle(p.sx, p.sy, (7 + 3 * breath) * p.d * 2, ring);
+          core.setColor(Skia.Color('rgba(196,87,46,0.95)'));
+          canvas.drawCircle(p.sx, p.sy, 3.2 * p.d * 2, core);
+        }
       }
 
       // Digestion bursts: a real event (ingest/reasoning tick) landed just now — an expanding,

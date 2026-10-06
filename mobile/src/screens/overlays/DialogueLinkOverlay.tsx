@@ -131,15 +131,13 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     setError(null);
     setPending({ text: shown, at: new Date().toISOString() });
     sfx('send');
-    // a reply that takes a while: WYRD says it's thinking (once)
-    const slow = setTimeout(() => { void voice('thinking'); }, 4500);
+    // no spoken filler while WYRD works: the 'thinking' indicator on screen says it
     try {
       if (file && !text) {
         // a file on its own: WYRD's first look at it is the reply
         const up = await api.documentUpload(file.name, file.kind, sampleOf(file.ix), file.words, file.pages);
         openDoc.current = file;
         wyrdStream.publish('chat', { id: up.turnId ?? undefined, userText: `📎 ${up.name}`, botText: up.reply, timestamp: new Date().toISOString(), nonce: null });
-        clearTimeout(slow);
         sfx('receive');
         if (tts && up.reply) { stopVoice(); speakAsWyrd(up.reply); }
         return;
@@ -157,7 +155,6 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
-      clearTimeout(slow);
       sfx('receive');
       if (tts && result.reply) {
         stopVoice();
@@ -166,7 +163,6 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         else speakAsWyrd(result.reply);
       }
     } catch (err) {
-      clearTimeout(slow);
       stopVoice();
       sfx('error');
       void voice('error');

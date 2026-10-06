@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { FENCE_M, MissionMap, toLocal } from '../../components/MissionMap';
-import { Battery, Compass, Dial, Satellites, Tether } from '../../components/DroneInstruments';
+
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api, ApiError } from '../../api/client';
@@ -129,14 +129,22 @@ export function DroneTab() {
     }
   };
 
+  // the instruments as readouts: a big number in its colour, a bar where a limit matters, red when
+  // something is wrong (low battery, near the ceiling or the fence, no GPS fix)
+  const alt = state?.relativeAltM, spd = state?.groundSpeedMs, hdg = state?.headingDeg, bat = state?.batteryPct;
+  const sats = state?.satellites, fix = state?.gpsFix;
+  const compass = (d: number) => ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round((((d % 360) + 360) % 360) / 45) % 8];
   const instruments = (
     <View style={styles.instruments}>
-      <Dial label="ALTITUDE · CEILING 60 m" value={state?.relativeAltM} max={MAX_ALT_M + 10} limit={MAX_ALT_M} unit="METRES" digits={1} />
-      <Dial label="GROUND SPEED" value={state?.groundSpeedMs} max={15} unit="M / S" digits={1} />
-      <Compass heading={state?.headingDeg} />
-      <Battery pct={state?.batteryPct} floor={MIN_BATTERY} takeoff={MIN_BATTERY_TAKEOFF} />
-      <Tether distance={fromHome} fence={FENCE_M} />
-      <Satellites count={state?.satellites} fix={state?.gpsFix} />
+      <Readout label={`ALTITUDE · CEILING ${MAX_ALT_M} m`} value={alt == null ? '—' : alt.toFixed(1)} unit="m" color={colors.indigo}
+        bar={alt == null ? null : alt / MAX_ALT_M} warn={alt != null && alt > MAX_ALT_M * 0.9} />
+      <Readout label="GROUND SPEED" value={spd == null ? '—' : spd.toFixed(1)} unit="m/s" color={colors.signal} bar={spd == null ? null : spd / 15} />
+      <Readout label="HEADING" value={hdg == null ? '—' : `${Math.round(hdg).toString().padStart(3, '0')}°`} unit={hdg == null ? '' : compass(hdg)} color={colors.mint} />
+      <Readout label={`BATTERY · TAKEOFF ≥${MIN_BATTERY_TAKEOFF}%`} value={bat == null ? '—' : String(Math.round(bat))} unit="%" color={colors.palm}
+        bar={bat == null ? null : bat / 100} warn={bat != null && bat < MIN_BATTERY} />
+      <Readout label={`FROM HOME · FENCE ${FENCE_M} m`} value={fromHome == null ? '—' : String(Math.round(fromHome))} unit="m" color={colors.ochre}
+        bar={fromHome == null ? null : fromHome / FENCE_M} warn={fromHome != null && fromHome > FENCE_M * 0.9} />
+      <Readout label="GPS" value={fix == null ? '—' : fix >= 3 ? '3D FIX' : fix === 2 ? '2D FIX' : 'NO FIX'} unit={sats == null ? '' : `${sats} sats`} color={colors.palm} warn={fix != null && fix < 3} />
     </View>
   );
 
@@ -260,6 +268,23 @@ export function DroneTab() {
   );
 }
 
+/** One instrument: what it reads, the number in its colour, a bar toward its limit. */
+function Readout({ label, value, unit, color, bar, warn }: { label: string; value: string; unit: string; color: string; bar?: number | null; warn?: boolean }) {
+  const c = warn ? colors.danger : color;
+  return (
+    <View style={[styles.readout, warn && styles.readoutWarn]}>
+      <Mono style={[styles.readoutLabel, warn && { color: colors.danger }]}>{label}</Mono>
+      <View style={styles.readoutRow}>
+        <Display style={[styles.readoutValue, { color: c }, value.length > 5 && { fontSize: 32, lineHeight: 34 }]} numberOfLines={1}>{value}</Display>
+        {unit ? <Mono style={styles.readoutUnit}>{unit}</Mono> : null}
+      </View>
+      {bar != null ? (
+        <View style={styles.readoutTrack}><View style={[styles.readoutFill, { width: `${Math.max(2, Math.min(100, bar * 100))}%`, backgroundColor: c }]} /></View>
+      ) : <View style={{ height: 6 }} />}
+    </View>
+  );
+}
+
 function LinkBadge({ status, state }: { status: LinkStatus; state: DroneState | null | undefined }) {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -355,7 +380,15 @@ const styles = StyleSheet.create({
 
   deck: { flexDirection: 'row', gap: 18, alignItems: 'stretch' },
   mapFrame: { borderWidth: 1, borderColor: colors.greenBorder, padding: 8, backgroundColor: colors.sand, borderRadius: 24, overflow: 'hidden' },
-  instruments: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  instruments: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  readout: { flexGrow: 1, flexBasis: '46%', minHeight: 132, padding: 18, gap: 6, backgroundColor: '#FFFAF2', borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, justifyContent: 'space-between' },
+  readoutWarn: { borderColor: colors.danger, backgroundColor: 'rgba(184,58,38,0.06)' },
+  readoutLabel: { fontSize: 11, letterSpacing: 1.4, color: colors.greenDim },
+  readoutRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  readoutValue: { fontSize: 50, lineHeight: 50 },
+  readoutUnit: { fontSize: 13, color: colors.greenDim, marginBottom: 6 },
+  readoutTrack: { height: 6, borderRadius: 3, backgroundColor: colors.sand, overflow: 'hidden' },
+  readoutFill: { height: '100%', borderRadius: 3 },
 
   card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 18, gap: 10, backgroundColor: '#FFFAF2', borderRadius: 20 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },

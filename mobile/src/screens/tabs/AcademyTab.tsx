@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { Display, Mono } from '../../components/ui';
 import { colors, fonts } from '../../theme';
 import { api } from '../../api/client';
@@ -123,7 +124,7 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
           return (
             <Pressable key={w.key} onPress={() => setWing(w.key)} style={({ pressed }) => [styles.wingCard, on && styles.wingOn, pressed && !on && { opacity: 0.8 }]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
               <View style={[styles.wingIcon, on && styles.wingIconOn]}>
-                <Mono style={[styles.wingGlyph, on && { color: colors.onSignal }]}>{w.key === 'stacks' ? '▥' : w.key === 'hall' ? '⌂' : '◍'}</Mono>
+                <WingIcon wing={w.key} color={on ? colors.onSignal : colors.indigo} />
               </View>
               <View style={{ flex: 1 }}>
                 <Display style={[styles.wingName, on && { color: colors.onSignal }]}>{w.name}</Display>
@@ -266,6 +267,35 @@ function Stat({ v, k }: { v: number | string; k: string }) {
       <Display style={styles.statV}>{v}</Display>
       <Mono style={styles.statK}>{k}</Mono>
     </View>
+  );
+}
+
+/** The wings, drawn: a shelf of books, a columned hall, a globe. */
+function WingIcon({ wing, color, size = 28 }: { wing: Wing; color: string; size?: number }) {
+  const sw = 1.8;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 28 28">
+      {wing === 'stacks' ? (
+        <>
+          <Rect x={4} y={6} width={4} height={16} rx={1} stroke={color} strokeWidth={sw} fill="none" />
+          <Rect x={10} y={4} width={4} height={18} rx={1} stroke={color} strokeWidth={sw} fill="none" />
+          <Path d="M17 7.5 L20.6 6.4 L24.4 21 L20.8 22 Z" stroke={color} strokeWidth={sw} fill="none" strokeLinejoin="round" />
+          <Path d="M3 24.5 H25" stroke={color} strokeWidth={sw} strokeLinecap="round" />
+        </>
+      ) : wing === 'hall' ? (
+        <>
+          <Path d="M3.5 10 L14 4 L24.5 10 Z" stroke={color} strokeWidth={sw} fill="none" strokeLinejoin="round" />
+          <Path d="M7 12 V21 M11.7 12 V21 M16.3 12 V21 M21 12 V21" stroke={color} strokeWidth={sw} strokeLinecap="round" />
+          <Path d="M4 23.5 H24" stroke={color} strokeWidth={sw} strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <Circle cx={14} cy={14} r={10} stroke={color} strokeWidth={sw} fill="none" />
+          <Ellipse cx={14} cy={14} rx={4.5} ry={10} stroke={color} strokeWidth={sw} fill="none" />
+          <Path d="M4.5 10.5 H23.5 M4.5 17.5 H23.5" stroke={color} strokeWidth={sw} />
+        </>
+      )}
+    </Svg>
   );
 }
 
