@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Display, Mono } from '../../components/ui';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { api } from '../../api/client';
 import { cachedFetch } from '../../api/hooks';
 import type { QuizStats, ReadingItem, ReadingSlice } from '../../api/types';
 import { BookCover } from '../academy/BookCover';
 import { ReadingRoom, cleanTitle, isFinished, progressOf } from '../academy/ReadingRoom';
-import { Skyline, WingDoors, type Wing } from '../academy/Skyline';
+import { WINGS, type Wing } from '../academy/Skyline';
 import { ArchiveWing, LectureHall, StacksWing } from '../academy/Wings';
 import { WELCOMES } from '../academy/shelf';
 import { ContinueHero } from '../academy/ContinueHero';
@@ -96,12 +96,6 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
 
   return (
     <ScrollView ref={scroll} contentContainerStyle={[styles.page, wide && styles.pageWide]}>
-      {/* the campus */}
-      <View>
-        <Skyline wing={wing} onWing={setWing} lit={reading.length} />
-        <WingDoors wing={wing} onWing={setWing} />
-      </View>
-
       <View style={[styles.gate, wide && styles.gateWide]}>
         <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
           <Mono style={styles.eyebrow}>ACADEMY · {greeting().toUpperCase()}</Mono>
@@ -122,15 +116,47 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
         />
       </View>
 
-      {!open && reading[0] && (
-        <ContinueHero
-          item={reading[0]}
-          wide={wide}
-          busy={loading === `item-${reading[0].id}`}
-          onContinue={() => readOn(reading[0])}
-          onQuiz={() => { const it = reading[0]; run(`item-${it.id}`, () => api.libraryCurrent(it.id)).then(() => setQuizNonce(Date.now())); }}
-        />
-      )}
+      {/* the campus: three wings, one to step into */}
+      <View style={[styles.wings, !wide && { flexDirection: 'column' }]}>
+        {WINGS.map((w) => {
+          const on = w.key === wing;
+          return (
+            <Pressable key={w.key} onPress={() => setWing(w.key)} style={({ pressed }) => [styles.wingCard, on && styles.wingOn, pressed && !on && { opacity: 0.8 }]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
+              <View style={[styles.wingIcon, on && styles.wingIconOn]}>
+                <Mono style={[styles.wingGlyph, on && { color: colors.onSignal }]}>{w.key === 'stacks' ? '▥' : w.key === 'hall' ? '⌂' : '◍'}</Mono>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Display style={[styles.wingName, on && { color: colors.onSignal }]}>{w.name}</Display>
+                <Mono style={[styles.wingWhat, on && { color: '#FBE3D6' }]}>{w.what}</Mono>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {!open && reading[0] && (() => {
+        const quiz = () => { const it = reading[0]; run(`item-${it.id}`, () => api.libraryCurrent(it.id)).then(() => setQuizNonce(Date.now())); };
+        const pct = quizStats && quizStats.total ? Math.round((quizStats.correct / quizStats.total) * 100) : null;
+        return (
+          <View style={[styles.readRow, !wide && { flexDirection: 'column' }]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <ContinueHero item={reading[0]} wide={wide} busy={loading === `item-${reading[0].id}`} onContinue={() => readOn(reading[0])} onQuiz={quiz} />
+            </View>
+            {/* today's quiz: on what you're reading */}
+            <View style={[styles.quizCard, wide && { width: 320 }]}>
+              <Mono style={styles.quizEyebrow}>TODAY'S QUIZ</Mono>
+              <View style={styles.quizRow}>
+                <View style={styles.quizRing}><Display style={styles.quizPct}>{pct == null ? '—' : `${pct}%`}</Display></View>
+                <Display style={styles.quizLine} numberOfLines={3}>Can you out-think WYRD on {cleanTitle(reading[0].title).split(/[:,(]/)[0].trim()}?</Display>
+              </View>
+              <Pressable onPress={quiz} style={({ pressed }) => [styles.quizBtn, pressed && { opacity: 0.85 }]}>
+                <Mono style={styles.quizBtnText}>START · 10 QUESTIONS</Mono>
+              </Pressable>
+              {quizStats?.rounds ? <Mono style={styles.quizNote}>{quizStats.rounds} {quizStats.rounds === 1 ? 'round' : 'rounds'} so far</Mono> : null}
+            </View>
+          </View>
+        );
+      })()}
 
       {error && (
         <Pressable onPress={() => setError(null)}><Mono style={styles.error}>{error}  ✕</Mono></Pressable>
@@ -187,8 +213,6 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
                 );
               })}
             </ScrollView>
-            <View style={styles.plank} />
-            <View style={styles.plankShadow} />
           </View>
         )}
       </View>
@@ -274,4 +298,22 @@ const styles = StyleSheet.create({
   busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,250,242,0.85)', alignItems: 'center', justifyContent: 'center' },
 
   footnote: { fontSize: 10, lineHeight: 15, color: colors.greenBorder, textAlign: 'center', marginTop: 8 },
+  wings: { flexDirection: 'row', gap: 16 },
+  wingCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 18, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder },
+  wingOn: { backgroundColor: colors.signal, borderColor: colors.signal },
+  wingIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' },
+  wingIconOn: { backgroundColor: '#D9744E' },
+  wingGlyph: { fontSize: 24, color: colors.indigo },
+  wingName: { fontSize: 26, lineHeight: 28, color: colors.mint },
+  wingWhat: { fontSize: 12, color: colors.greenDim },
+  readRow: { flexDirection: 'row', gap: 18, alignItems: 'stretch' },
+  quizCard: { backgroundColor: colors.palm, borderRadius: 22, padding: 20, gap: 12, justifyContent: 'center' },
+  quizEyebrow: { fontSize: 12, letterSpacing: 1.6, color: colors.ochre },
+  quizRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  quizRing: { width: 70, height: 70, borderRadius: 35, borderWidth: 6, borderColor: '#F7E7C0', alignItems: 'center', justifyContent: 'center' },
+  quizPct: { fontSize: 22, color: colors.cream },
+  quizLine: { flex: 1, fontSize: 24, lineHeight: 26, color: colors.cream },
+  quizBtn: { backgroundColor: colors.cream, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
+  quizBtnText: { fontSize: 13, letterSpacing: 1.6, color: colors.palm, fontFamily: fonts.bodyBold },
+  quizNote: { fontSize: 11, color: '#D9E8DE', textAlign: 'center' },
 });

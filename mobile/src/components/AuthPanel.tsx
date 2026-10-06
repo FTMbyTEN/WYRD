@@ -20,6 +20,7 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [focus, setFocus] = useState<string | null>(null);
 
   const switchMode = (m: Mode) => {
     resetToLogin();
@@ -80,6 +81,7 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
 
   return (
     <View style={styles.card}>
+      <View style={styles.accent} />
       <View style={styles.topRow}>
         <View style={styles.brand}>
           <View style={styles.face}>
@@ -140,9 +142,14 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
               keyboardType="email-address"
               onSubmitEditing={submit}
               returnKeyType={mode === 'signin' ? 'next' : 'go'}
-              style={styles.input}
+              onFocus={() => setFocus('email')}
+              onBlur={() => setFocus(null)}
+              style={[styles.input, focus === 'email' && styles.inputFocus]}
             />
           </Field>
+        )}
+        {needsCode && (
+          <Mono style={styles.inboxHint}>Check your inbox for a 6-digit code. Not there after a minute? Look in Spam or Promotions, and mark it "not spam" so the next one lands properly.</Mono>
         )}
         {needsCode && (
           <Field label="CODE FROM YOUR EMAIL">
@@ -156,7 +163,9 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
               autoComplete="one-time-code"
               keyboardType="number-pad"
               onSubmitEditing={submit}
-              style={[styles.input, styles.codeInput]}
+              onFocus={() => setFocus('code')}
+              onBlur={() => setFocus(null)}
+              style={[styles.input, styles.codeInput, focus === 'code' && styles.inputFocus]}
             />
           </Field>
         )}
@@ -178,7 +187,9 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               onSubmitEditing={submit}
               returnKeyType="go"
-              style={styles.input}
+              onFocus={() => setFocus('password')}
+              onBlur={() => setFocus(null)}
+              style={[styles.input, focus === 'password' && styles.inputFocus]}
             />
           </Field>
         )}
@@ -224,57 +235,61 @@ function Field({ label, right, children }: { label: string; right?: React.ReactN
 
 const styles = StyleSheet.create({
   card: {
-    width: '100%', maxWidth: 380, alignSelf: 'center',
-    backgroundColor: colors.black, borderWidth: 1, borderColor: colors.green,
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 18,
+    width: '100%', maxWidth: 400, alignSelf: 'center', overflow: 'hidden',
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 24,
+    paddingHorizontal: 24, paddingTop: 22, paddingBottom: 22,
+    shadowColor: '#5A3018', shadowOpacity: 0.18, shadowRadius: 28, shadowOffset: { width: 0, height: 14 },
   },
+  accent: { position: 'absolute', top: 0, left: 0, right: 0, height: 5, backgroundColor: colors.signal },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  face: { width: 26, height: 26 },
-  wordmark: { fontSize: 20, letterSpacing: 5, color: colors.green },
-  close: { fontSize: 22, lineHeight: 22, color: colors.greenDim },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  face: { width: 30, height: 30, borderRadius: 15, overflow: 'hidden', backgroundColor: colors.sand },
+  wordmark: { fontSize: 24, letterSpacing: 5, color: colors.indigo },
+  close: { fontSize: 24, lineHeight: 24, color: colors.greenDim },
 
   switcher: {
-    flexDirection: 'row', marginTop: 16, padding: 3,
-    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999,
+    flexDirection: 'row', marginTop: 18, padding: 4,
+    backgroundColor: colors.sand, borderRadius: 999,
   },
-  switchBtn: { flex: 1, paddingVertical: 8, borderRadius: 999, alignItems: 'center' },
-  switchOn: { backgroundColor: colors.signal },
-  switchText: { fontSize: 10, letterSpacing: 1.8, color: colors.greenDim },
-  switchTextOn: { color: colors.black },
+  switchBtn: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: 'center' },
+  switchOn: { backgroundColor: colors.signal, shadowColor: '#5A3018', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  switchText: { fontSize: 11, letterSpacing: 1.8, color: colors.greenDim },
+  switchTextOn: { color: colors.onSignal },
 
-  heading: { marginTop: 18, fontSize: 28, lineHeight: 30, color: colors.green },
-  blurb: { marginTop: 4, fontSize: 11.5, lineHeight: 17, color: colors.greenDim },
+  heading: { marginTop: 20, fontSize: 36, lineHeight: 38, color: colors.mint },
+  blurb: { marginTop: 4, fontSize: 12.5, lineHeight: 19, color: colors.greenDim },
 
-  steps: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
+  steps: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, padding: 10, borderRadius: 16, backgroundColor: colors.bg },
   step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepDot: {
-    width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: colors.greenBorder,
-    alignItems: 'center', justifyContent: 'center',
+    width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: colors.greenBorder,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card,
   },
   stepDotOn: { backgroundColor: colors.signal, borderColor: colors.signal },
-  stepNum: { fontSize: 9.5, color: colors.greenDim },
-  stepNumOn: { color: colors.black },
-  stepLabel: { fontSize: 8.5, letterSpacing: 1.5, color: colors.greenBorder },
+  stepNum: { fontSize: 10, color: colors.greenDim },
+  stepNumOn: { color: colors.onSignal },
+  stepLabel: { fontSize: 9.5, letterSpacing: 1.5, color: colors.greenDim },
   stepLabelOn: { color: colors.signal },
 
-  fields: { marginTop: 16, gap: 12 },
-  fieldHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-  fieldLabel: { fontSize: 8.5, letterSpacing: 2, color: colors.greenDim },
-  show: { fontSize: 8.5, letterSpacing: 1.5, color: colors.green },
+  fields: { marginTop: 18, gap: 14 },
+  fieldHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  fieldLabel: { fontSize: 10, letterSpacing: 2, color: colors.greenDim },
+  show: { fontSize: 10, letterSpacing: 1.5, color: colors.signal },
   input: {
-    borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 11,
-    fontFamily: 'ShareTechMono_400Regular', fontSize: 14, color: colors.green, backgroundColor: colors.black,
+    borderWidth: 1.5, borderColor: colors.greenBorder, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
+    fontFamily: 'ShareTechMono_400Regular', fontSize: 15, color: colors.mint, backgroundColor: colors.bg,
   },
-  codeInput: { fontSize: 20, letterSpacing: 8, textAlign: 'center' },
+  inputFocus: { borderColor: colors.signal, backgroundColor: colors.card },
+  codeInput: { fontSize: 24, letterSpacing: 10, textAlign: 'center' },
+  inboxHint: { fontSize: 11.5, lineHeight: 17, color: colors.indigo, backgroundColor: 'rgba(36,49,107,0.07)', borderRadius: 12, padding: 10 },
   forgot: { alignSelf: 'flex-end', marginTop: -4 },
-  link: { fontSize: 11, color: colors.signal, textDecorationLine: 'underline' },
+  link: { fontSize: 12, color: colors.signal, textDecorationLine: 'underline' },
 
-  error: { marginTop: 12, borderWidth: 1, borderColor: colors.danger, paddingHorizontal: 10, paddingVertical: 8 },
-  errorText: { fontSize: 11, lineHeight: 16, color: colors.danger },
+  error: { marginTop: 14, borderRadius: 12, backgroundColor: 'rgba(184,58,38,0.08)', borderWidth: 1, borderColor: 'rgba(184,58,38,0.35)', paddingHorizontal: 12, paddingVertical: 9 },
+  errorText: { fontSize: 12, lineHeight: 17, color: colors.danger },
 
-  primary: { marginTop: 16, backgroundColor: colors.signal, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', minHeight: 46 },
-  primaryText: { fontSize: 12, letterSpacing: 2.5, color: colors.black },
-  footerLink: { alignSelf: 'center', marginTop: 14 },
-  footnote: { marginTop: 14, fontSize: 10, lineHeight: 15, color: colors.greenDim, textAlign: 'center' },
+  primary: { marginTop: 18, backgroundColor: colors.signal, borderRadius: 999, paddingVertical: 15, alignItems: 'center', justifyContent: 'center', minHeight: 50, shadowColor: '#C4572E', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  primaryText: { fontSize: 14, letterSpacing: 2.5, color: colors.onSignal },
+  footerLink: { alignSelf: 'center', marginTop: 16 },
+  footnote: { marginTop: 16, fontSize: 11, lineHeight: 16, color: colors.greenDim, textAlign: 'center' },
 });

@@ -2,8 +2,6 @@ import React, { Suspense } from 'react';
 import { ActivityIndicator, Platform, StatusBar, StyleSheet, View } from 'react-native';
 import { useFonts, VT323_400Regular } from '@expo-google-fonts/vt323';
 import { ShareTechMono_400Regular } from '@expo-google-fonts/share-tech-mono';
-import { Fraunces_400Regular, Fraunces_400Regular_Italic, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold } from '@expo-google-fonts/dm-sans';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from './src/theme';
 
@@ -63,7 +61,7 @@ const AppRoot =
     : require('./src/AppRoot').default;
 
 export default function App() {
-  const [fontsLoaded] = useFonts({ VT323_400Regular, ShareTechMono_400Regular, Fraunces_400Regular, Fraunces_400Regular_Italic, Fraunces_600SemiBold, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold });
+  const [fontsLoaded] = useFonts({ VT323_400Regular, ShareTechMono_400Regular });
 
   if (!fontsLoaded) return <Loading />;
 

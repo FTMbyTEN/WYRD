@@ -39,13 +39,14 @@ export const colors = {
 } as const;
 
 export const fonts = {
-  display: 'Fraunces_400Regular', // warm serif for display
-  displayBold: 'Fraunces_600SemiBold',
-  displayItalic: 'Fraunces_400Regular_Italic',
-  mono: 'DMSans_400Regular', // body and labels (the name stays: call sites use it)
-  bodyMedium: 'DMSans_500Medium',
-  bodyBold: 'DMSans_600SemiBold',
-  code: 'ShareTechMono_400Regular', // code blocks keep a monospace
+  // the original terminal type, kept with the Warm Lagos colours
+  display: 'VT323_400Regular', // big terminal readouts (VT323)
+  displayBold: 'VT323_400Regular',
+  displayItalic: 'VT323_400Regular',
+  mono: 'ShareTechMono_400Regular', // body and labels (Share Tech Mono)
+  bodyMedium: 'ShareTechMono_400Regular',
+  bodyBold: 'ShareTechMono_400Regular',
+  code: 'ShareTechMono_400Regular',
 } as const;
 
 export const layout = {

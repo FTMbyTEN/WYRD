@@ -1,15 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  BackHandler,
-  Easing,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Animated, BackHandler, Easing, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { VortexCanvas, type VortexHandle } from '../components/VortexCanvas';
 import { DustVortex } from '../components/DustVortex';
 import { AuthPanel } from '../components/AuthPanel';
@@ -34,7 +24,7 @@ const GATE_VOICE: Record<string, VoiceLine> = {
 };
 
 // WYRD is Old English for fate -- "what comes to be"
-const WORDS = ['WYRD', 'WHAT COMES TO BE', 'FATE', 'WELCOME'];
+const WORDS = ['WYRD', 'WHAT COMES TO BE', 'FATE', 'CLICK TO SIGN IN', 'WELCOME'];
 /** A colorless shockwave played once per [triggerKey] increment, behind the WYRD wordmark --
  *  soft, blurred, achromatic haloes (no hue) expanding and thinning out, meant to read like
  *  displaced air/a pressure wave rather than a lit-up neon ring. Several overlapping soft-edged
@@ -242,7 +232,7 @@ const styles = StyleSheet.create({
   // the auth card sits over the vortex, centred, with room on every side on any screen size
   panelWrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 18 },
   closedWrap: { alignItems: 'center', gap: 18 },
-  wordmark: { fontSize: 52, letterSpacing: 9, color: '#24316B', textShadowColor: 'rgba(226,163,43,0.45)', textShadowRadius: 14 }, // Adire indigo, an ochre glow
+  wordmark: { fontSize: 52, letterSpacing: 9, color: '#24316B', textShadowColor: 'rgba(245,140,30,1)', textShadowRadius: 28, textShadowOffset: { width: 0, height: 0 } }, // Adire indigo in a strong orange-gold glow
   authPanel: {
     position: 'absolute', alignSelf: 'center', bottom: 34, width: '86%', maxWidth: 320,
     backgroundColor: 'rgba(255,250,242,0.94)', borderWidth: 1, borderColor: '#E2D2BA', borderRadius: 18,

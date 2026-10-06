@@ -219,9 +219,9 @@ export function DroneTab() {
       {/* station header */}
       <View style={styles.header}>
         <View style={{ flex: 1, minWidth: 220, gap: 4 }}>
-          <Mono style={styles.label}>WYRD · GROUND CONTROL</Mono>
-          <Display style={[styles.callsign, wide && { fontSize: 44 }]}>{state?.droneId ? state.droneId.toUpperCase() : 'WYRD-1'}</Display>
-          <Mono style={styles.muted}>WYRD plans the missions; the autopilot flies them.</Mono>
+          <Mono style={[styles.label, { color: colors.signal }]}>DRONE · GROUND CONTROL</Mono>
+          <Display style={[styles.callsign, wide && { fontSize: 62, lineHeight: 64 }]}>{state?.droneId ? state.droneId.toUpperCase() : 'WYRD-1'}</Display>
+          <Mono style={styles.muted}>WYRD plans the mission; the autopilot flies it. You watch, and can always bring it home.</Mono>
         </View>
         <LinkBadge status={status} state={state} />
       </View>
@@ -233,14 +233,17 @@ export function DroneTab() {
       ) : null}
 
       {wide ? (
-        <View style={styles.deck}>
-          <View style={{ flex: 1.15, minWidth: 0, gap: 14 }}>
-            <View style={styles.mapFrame}><MissionMap state={state} mission={active} /></View>
-            {console_}
+        <View style={{ gap: 18 }}>
+          <View style={styles.deck}>
+            <View style={{ flex: 1.2, minWidth: 0 }}>
+              <View style={styles.mapFrame}><MissionMap state={state} mission={active} /></View>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>{instruments}</View>
           </View>
-          <View style={{ flex: 1, minWidth: 0, gap: 14 }}>
-            {instruments}
-            {checklist}
+          <View style={styles.deck}>
+            <View style={{ flex: 1, minWidth: 0 }}>{checklist}</View>
+            <View style={{ flex: 1.1, minWidth: 0 }}>{console_}</View>
+            <View style={{ flex: 1, minWidth: 0 }}><FlightLog missions={missions} /></View>
           </View>
         </View>
       ) : (
@@ -252,7 +255,7 @@ export function DroneTab() {
         </View>
       )}
 
-      <FlightLog missions={missions} />
+      {!wide ? <FlightLog missions={missions} /> : null}
     </ScrollView>
   );
 }
@@ -336,13 +339,13 @@ function FlightLog({ missions }: { missions: DroneMission[] }) {
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 48, gap: 16 },
   pageWide: { maxWidth: 1180, width: '100%', alignSelf: 'center', paddingHorizontal: 28 },
-  label: { fontSize: 9, letterSpacing: 2, color: colors.greenDim },
+  label: { fontSize: 11, letterSpacing: 1.8, color: colors.greenDim },
   muted: { fontSize: 11, lineHeight: 16, color: colors.greenDim },
 
   header: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: colors.mint, paddingBottom: 14 },
   callsign: { fontSize: 36, lineHeight: 40, color: colors.mint, letterSpacing: 2 },
-  link: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 14, paddingVertical: 10, gap: 3, minWidth: 210, backgroundColor: '#FFFAF2', borderRadius: 16 },
-  linkLive: { backgroundColor: colors.signal },
+  link: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 18, paddingVertical: 12, gap: 3, minWidth: 210, backgroundColor: '#FFFAF2', borderRadius: 999 },
+  linkLive: { backgroundColor: colors.palm, borderColor: colors.palm }, // live: the palm of a good link
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   linkDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: '#A8957F' },
   linkStatus: { fontSize: 13, letterSpacing: 2.4, color: colors.mint },
@@ -350,23 +353,23 @@ const styles = StyleSheet.create({
   alert: { borderWidth: 2, borderColor: colors.danger, padding: 10 },
   alertText: { color: colors.danger, fontSize: 12 },
 
-  deck: { flexDirection: 'row', gap: 18, alignItems: 'flex-start' },
-  mapFrame: { borderWidth: 1, borderColor: colors.greenBorder, padding: 8, backgroundColor: '#FFFAF2', borderRadius: 16 },
+  deck: { flexDirection: 'row', gap: 18, alignItems: 'stretch' },
+  mapFrame: { borderWidth: 1, borderColor: colors.greenBorder, padding: 8, backgroundColor: colors.sand, borderRadius: 24, overflow: 'hidden' },
   instruments: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
-  card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 14, gap: 8, backgroundColor: '#FFFAF2', borderRadius: 16 },
+  card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 18, gap: 10, backgroundColor: '#FFFAF2', borderRadius: 20 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   readyTag: { fontSize: 9, letterSpacing: 1.6, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 16 },
   readyOn: { color: '#FFFAF2', backgroundColor: colors.signal, borderColor: colors.signal },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
-  checkBox: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
-  checkOk: { backgroundColor: colors.mint, borderColor: colors.greenBorder },
+  checkBox: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
+  checkOk: { backgroundColor: colors.palm, borderColor: colors.palm },
   checkBad: { borderColor: colors.danger },
   checkMark: { fontSize: 11, color: colors.greenDim, lineHeight: 14 },
   checkName: { fontSize: 12, color: colors.mint, flex: 1 },
   checkDetail: { fontSize: 10, color: colors.greenDim, textAlign: 'right' },
 
-  console: { backgroundColor: '#2A1F17', borderRadius: 18, padding: 16, gap: 12 },
+  console: { backgroundColor: '#2A1F17', borderRadius: 22, padding: 20, gap: 12 },
   consoleHead: { gap: 3 },
   consoleTitle: { fontSize: 10, letterSpacing: 2.2, color: '#FFFAF2' },
   consoleSub: { fontSize: 10, color: '#8a8a8a' },
