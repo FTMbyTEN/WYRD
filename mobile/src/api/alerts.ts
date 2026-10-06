@@ -67,7 +67,7 @@ export function useAlerts() {
   }, []);
   // COP is the owner's: everyone else never sees its reviews
   const owner = useDroneAccess();
-  return owner ? alerts : alerts.filter((a) => a.tag !== 'COP');
+  return owner ? alerts : alerts.filter((a) => a.tag !== 'COP' && a.tag !== 'DIARY' && a.tag !== 'DREAM');
 }
 
 export function markAllAlertsRead() {

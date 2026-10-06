@@ -155,7 +155,7 @@ export function AppShell() {
             {tab === 'wyrd' && (
               <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} />
             )}
-            {tab === 'journal' && (
+            {tab === 'journal' && droneAccess && (
               <JournalTab
                 onOpenConcept={() => open('concept')}
                 onOpenGrowth={() => open('growth')}

@@ -286,15 +286,15 @@ export const api = {
 
   // ---- journal: diary / dreams / reasoning ----
   diary: (limit = 20) =>
-    callEndpoint<SpDiaryEntry[]>('diary', 'getEntries', { limit }, { authenticated: false }).then((es) => [...es].reverse()),
+    callEndpoint<SpDiaryEntry[]>('diary', 'getEntries', { limit }).then((es) => [...es].reverse()),
   triggerDiary: () =>
-    callEndpoint<SpDiaryEntry>('diary', 'trigger', {}, { authenticated: false }).then((entry) => ({ entry })),
+    callEndpoint<SpDiaryEntry>('diary', 'trigger', {}).then((entry) => ({ entry })),
   dreams: (limit = 20) =>
-    callEndpoint<SpDreamEntry[]>('dream', 'getEntries', { limit }, { authenticated: false }).then((es) =>
+    callEndpoint<SpDreamEntry[]>('dream', 'getEntries', { limit }).then((es) =>
       [...es].reverse().map(adaptDreamEntry),
     ),
   triggerDream: () =>
-    callEndpoint<SpDreamEntry | null>('dream', 'trigger', {}, { authenticated: false }).then((entry) => ({
+    callEndpoint<SpDreamEntry | null>('dream', 'trigger', {}).then((entry) => ({
       entry: entry ? adaptDreamEntry(entry) : null,
     })),
   // Rows replacing server.js's reasoning/*.md trace files; `file` is rebuilt in the same
@@ -313,7 +313,7 @@ export const api = {
     callEndpoint<NeuralNetwork>('reasoning', 'getNetwork', { limit }, { authenticated: false }),
   /** The memories a dream was made of: its stars. */
   dreamStars: (dreamId: number) =>
-    callEndpoint<ConceptExample[]>('dream', 'getStars', { dreamId }, { authenticated: false }),
+    callEndpoint<ConceptExample[]>('dream', 'getStars', { dreamId }),
   triggerReasoning: () =>
     callEndpoint<boolean>('reasoning', 'trigger', {}, { authenticated: false }).then((ran) => ({ ran })),
   reasoningNext: (): Promise<NextTick> => Promise.resolve({ nextTickAt: Date.now() + 30000, cycleMs: 30000 }),

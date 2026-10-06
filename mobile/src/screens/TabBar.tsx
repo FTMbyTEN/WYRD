@@ -28,7 +28,7 @@ export function TabBar({ active, onChange, vertical, drone }: { active: TabKey; 
         : [styles.bar, { paddingBottom: Math.max(10, insets.bottom + 4) }]}
     >
       <View style={vertical ? styles.column : styles.row}>
-        {TABS.filter((t) => t.key !== 'drone' || drone).map(({ key, label, glyph }) => {
+        {TABS.filter((t) => (t.key !== 'drone' && t.key !== 'journal') || drone).map(({ key, label, glyph }) => {
           const on = key === active;
           const ink = on ? colors.onSignal : colors.greenDim; // the active tab: cream on a terracotta pill
           return (
