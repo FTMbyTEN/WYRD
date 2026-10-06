@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { Display, Mono } from '../../components/ui';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import { useDiary, useMind } from '../../api/hooks';
 import type { DiaryEntry } from '../../api/types';
@@ -47,6 +47,8 @@ export function JournalTab({ onOpenConcept, onOpenGrowth, onOpenGlobe }: {
     <ScrollView contentContainerStyle={[styles.page, wide && styles.pageWide]} stickyHeaderIndices={[]}>
       {/* masthead */}
       <View style={styles.masthead}>
+        <Mono style={styles.figEyebrow}>JOURNAL</Mono>
+        <Text style={[styles.figTitle, { fontFamily: fonts.display }]}>What WYRD lived today</Text>
         <View style={styles.mastRule} />
         <View style={styles.mastRow}>
           <Mono style={styles.mastSide}>VOL. {volume} · NO. {diary.length}</Mono>
@@ -135,8 +137,8 @@ function Diary({ entries, wide }: { entries: DiaryEntry[]; wide: boolean }) {
             const on = k === i;
             return (
               <Pressable key={e.timestamp} onPress={() => setI(k)} style={({ pressed }) => [styles.indexRow, on && styles.indexRowOn, pressed && { opacity: 0.7 }]}>
-                <Mono style={[styles.indexDate, on && { color: '#fff' }]}>{dateOf(e).toLocaleDateString(undefined, { day: '2-digit', month: 'short' }).toUpperCase()}</Mono>
-                <Text numberOfLines={1} style={[styles.indexLine, { fontFamily: serif }, on && { color: '#fff' }]}>{e.content.split(/(?<=[.!?])\s/)[0]}</Text>
+                <Mono style={[styles.indexDate, on && { color: '#FFFAF2' }]}>{dateOf(e).toLocaleDateString(undefined, { day: '2-digit', month: 'short' }).toUpperCase()}</Mono>
+                <Text numberOfLines={1} style={[styles.indexLine, { fontFamily: serif }, on && { color: '#FFFAF2' }]}>{e.content.split(/(?<=[.!?])\s/)[0]}</Text>
               </Pressable>
             );
           })}
@@ -149,6 +151,17 @@ function Diary({ entries, wide }: { entries: DiaryEntry[]; wide: boolean }) {
     <View style={[styles.diary, wide && styles.diaryWide]}>
       {wide && <View style={styles.side}>{index}</View>}
       <View style={{ flex: 1, minWidth: 0, gap: 14 }}>
+        <View style={styles.days}>
+          {entries.slice(0, 7).map((e, k) => {
+            const on = k === i, d = dateOf(e);
+            return (
+              <Pressable key={e.date} onPress={() => setI(k)} style={({ pressed }) => [styles.dayChip, on && styles.dayOn, pressed && !on && { opacity: 0.7 }]} accessibilityLabel={`Diary for ${e.date}`}>
+                <Mono style={[styles.dayName, on && { color: colors.ochre }]}>{d.toLocaleDateString(undefined, { weekday: 'short' })}</Mono>
+                <Text style={[styles.dayNum, { fontFamily: fonts.displayBold }, on && { color: colors.cream }]}>{d.getDate()}</Text>
+              </Pressable>
+            );
+          }).reverse()}
+        </View>
         <Animated.View style={{ opacity: turn, transform: [{ translateY: turn.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }}>
           <NotebookPage entry={entry} number={entries.length - i} narrow={!wide} />
         </Animated.View>
@@ -303,8 +316,15 @@ const styles = StyleSheet.create({
   label: { fontSize: 9, letterSpacing: 2, color: colors.greenDim },
 
   masthead: { gap: 6, marginBottom: 18 },
+  figEyebrow: { fontSize: 11, letterSpacing: 1.4, color: colors.signal, fontFamily: fonts.bodyBold },
+  figTitle: { fontSize: 34, lineHeight: 40, color: colors.mint, marginBottom: 8 },
+  days: { flexDirection: 'row', gap: 8 },
+  dayChip: { flex: 1, maxWidth: 92, alignItems: 'center', gap: 2, paddingVertical: 10, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder },
+  dayOn: { backgroundColor: colors.indigo, borderColor: colors.indigo },
+  dayName: { fontSize: 11, color: colors.greenDim, fontFamily: fonts.bodyMedium },
+  dayNum: { fontSize: 22, lineHeight: 26, color: colors.mint },
   mastRule: { height: 3, backgroundColor: colors.mint },
-  mastRuleDouble: { height: 5, borderTopWidth: 1, borderBottomWidth: 2, borderColor: colors.mint },
+  mastRuleDouble: { height: 5, borderTopWidth: 1, borderBottomWidth: 2, borderColor: colors.greenBorder },
   mastRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
   mastSide: { fontSize: 9, letterSpacing: 1.8, color: colors.greenDim, flexShrink: 1 },
   mastTitle: { fontSize: 38, lineHeight: 44, color: colors.mint, textAlign: 'center', fontWeight: '700', letterSpacing: -0.5, marginVertical: 4 },
@@ -315,12 +335,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderBottomWidth: 0, borderColor: colors.greenBorderDim, backgroundColor: '#f1f1ef',
     borderTopLeftRadius: 8, borderTopRightRadius: 8, marginBottom: -1, flexShrink: 1,
   },
-  tabOn: { backgroundColor: '#fff', borderColor: colors.signal, zIndex: 2, paddingVertical: 12 },
+  tabOn: { backgroundColor: '#FFFAF2', borderColor: colors.signal, zIndex: 2, paddingVertical: 12 },
   tabName: { fontSize: 10.5, letterSpacing: 2, color: colors.greenDim },
   tabWhat: { fontSize: 9, color: colors.greenBorder },
   count: { fontSize: 9, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorderDim, paddingHorizontal: 5, borderRadius: 8 },
-  countOn: { color: '#fff', backgroundColor: colors.signal, borderColor: colors.signal },
-  sheet: { borderWidth: 1, borderColor: colors.mint, backgroundColor: '#fff', padding: 16, minHeight: 420 },
+  countOn: { color: '#FFFAF2', backgroundColor: colors.signal, borderColor: colors.signal },
+  sheet: { borderWidth: 1, borderColor: colors.greenBorder, backgroundColor: '#FFFAF2', padding: 16, minHeight: 420, borderRadius: 16 },
   embed: { minHeight: 560 },
 
   diary: { gap: 18 },
@@ -329,12 +349,12 @@ const styles = StyleSheet.create({
 
   notebook: {
     backgroundColor: '#fdfdfb', borderWidth: 1, borderColor: colors.greenBorderDim, paddingLeft: 76, paddingRight: 28, paddingTop: 22, paddingBottom: 26,
-    overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 },
+    overflow: 'hidden', shadowColor: '#2A1F17', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 },
   },
   hole: { position: 'absolute', left: 18, width: 14, height: 14, borderRadius: 7, backgroundColor: '#eeeeec', borderWidth: 1, borderColor: '#d6d6d4' },
   pageHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 90 },
   bigDate: { fontSize: 36, lineHeight: 40, color: colors.mint },
-  stamp: { borderWidth: 2, borderColor: colors.mint, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', transform: [{ rotate: '4deg' }] },
+  stamp: { borderWidth: 2, borderColor: colors.greenBorder, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', transform: [{ rotate: '4deg' }] },
   stampNo: { fontSize: 13, color: colors.mint, letterSpacing: 1 },
   stampTime: { fontSize: 9, color: colors.greenDim, letterSpacing: 1.4 },
   entryText: { fontSize: 18, color: colors.mint, marginTop: 2 },
@@ -345,14 +365,14 @@ const styles = StyleSheet.create({
   sig: { fontSize: 22, fontStyle: 'italic', color: colors.mint },
 
   pager: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  pageBtn: { borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 14, paddingVertical: 9 },
+  pageBtn: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 14, paddingVertical: 9 },
   pageBtnText: { fontSize: 10, letterSpacing: 1.6, color: colors.mint },
 
   cal: { flexDirection: 'row', gap: 3 },
   calCol: { gap: 3 },
-  calDay: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#fff' },
-  calDayOn: { backgroundColor: '#8a8a8a', borderColor: '#8a8a8a' },
-  calDaySel: { backgroundColor: colors.mint, borderColor: colors.mint },
+  calDay: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#FFFAF2', borderRadius: 4 },
+  calDayOn: { backgroundColor: '#E8A88A', borderColor: '#E8A88A' },
+  calDaySel: { backgroundColor: colors.signal, borderColor: colors.signal },
   legend: { fontSize: 9, color: colors.greenDim, marginLeft: -6 },
 
   indexRow: { flexDirection: 'row', gap: 10, paddingVertical: 7, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#efefed', alignItems: 'center' },

@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
   muted: { fontSize: 12, lineHeight: 18, color: colors.greenDim },
   input: {
     minHeight: 84, borderWidth: 1, borderColor: colors.greenBorderDim, padding: 12, fontSize: 14, lineHeight: 20,
-    color: colors.mint, fontFamily: 'ShareTechMono_400Regular', backgroundColor: '#fff', outlineStyle: 'none',
+    color: colors.mint, fontFamily: 'ShareTechMono_400Regular', backgroundColor: '#FFFAF2', outlineStyle: 'none',
   } as object,
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   chip: { borderWidth: 1, borderColor: colors.greenBorderDim, paddingHorizontal: 10, paddingVertical: 6 },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   ghostText: { fontSize: 11, letterSpacing: 2, color: colors.mint },
   example: { fontSize: 11.5, lineHeight: 17, color: colors.signal },
   error: { fontSize: 12, color: colors.danger },
-  card: { borderWidth: 1, borderColor: colors.greenBorderDim, padding: 12, gap: 6, backgroundColor: '#fff' },
+  card: { borderWidth: 1, borderColor: colors.greenBorderDim, padding: 12, gap: 6, backgroundColor: '#FFFAF2', borderRadius: 16 },
   cardUnread: { borderColor: colors.signal },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   meta: { fontSize: 10.5, color: colors.greenDim },

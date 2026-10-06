@@ -115,16 +115,16 @@ function studio() {
   };
   const strip = tex((g) => { // bright down the middle, fading to nothing at both sides and the ends
     const across = g.createLinearGradient(0, 0, 128, 0);
-    across.addColorStop(0, 'rgba(255,255,255,0)'); across.addColorStop(0.5, 'rgba(255,255,255,1)'); across.addColorStop(1, 'rgba(255,255,255,0)');
+    across.addColorStop(0, 'rgba(255,250,242,0)'); across.addColorStop(0.5, 'rgba(255,250,242,1)'); across.addColorStop(1, 'rgba(255,250,242,0)');
     g.fillStyle = across; g.fillRect(0, 0, 128, 128);
     g.globalCompositeOperation = 'destination-in';
     const along = g.createLinearGradient(0, 0, 0, 128);
-    along.addColorStop(0, 'rgba(0,0,0,0)'); along.addColorStop(0.2, 'rgba(0,0,0,1)'); along.addColorStop(0.8, 'rgba(0,0,0,1)'); along.addColorStop(1, 'rgba(0,0,0,0)');
+    along.addColorStop(0, 'rgba(42,31,23,0)'); along.addColorStop(0.2, 'rgba(42,31,23,1)'); along.addColorStop(0.8, 'rgba(42,31,23,1)'); along.addColorStop(1, 'rgba(42,31,23,0)');
     g.fillStyle = along; g.fillRect(0, 0, 128, 128);
   });
   const soft = tex((g) => { // a round softbox, brightest in its middle
     const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.55, 'rgba(255,255,255,0.6)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+    r.addColorStop(0, 'rgba(255,250,242,1)'); r.addColorStop(0.55, 'rgba(255,250,242,0.6)'); r.addColorStop(1, 'rgba(255,250,242,0)');
     g.fillStyle = r; g.fillRect(0, 0, 128, 128);
   });
   const floorFade = tex((g) => { // the white floor, brightest under the sphere, greying away
@@ -522,7 +522,7 @@ export function IntroChrome({ onDone, onEnding }: { onDone: () => void; onEnding
 
   return (
     <View ref={rootRef} style={StyleSheet.absoluteFill}>
-      <View ref={hostRef} style={[StyleSheet.absoluteFill, { backgroundColor: '#fff' }]} />
+      <View ref={hostRef} style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFAF2' }]} />
       <Pressable style={StyleSheet.absoluteFill} onPress={() => startRef.current()} accessibilityLabel="Wake WYRD" />
       <View pointerEvents="none" style={styles.captionWrap}>
         {phase === 'waiting' ? <Mono style={styles.wake}>TOUCH TO WAKE WYRD</Mono> : <Caption text={caption} />}

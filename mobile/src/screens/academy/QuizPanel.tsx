@@ -33,10 +33,10 @@ export function QuizPanel({ itemId, passage, night, onClose, onNext, onStats }: 
   const [done, setDone] = useState(false);
   const [round, setRound] = useState(0);
 
-  const ink = night ? '#eeeeee' : colors.mint;
-  const paper = night ? '#101010' : '#ffffff';
+  const ink = night ? '#F0E4D0' : colors.mint;
+  const paper = night ? '#101010' : '#FFFAF2';
   const line = night ? '#3a3a3a' : colors.greenBorder;
-  const dim = night ? '#999' : colors.greenDim;
+  const dim = night ? '#A8957F' : colors.greenDim;
 
   useEffect(() => {
     let alive = true;

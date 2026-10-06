@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { BrainCanvas } from '../../components/BrainCanvas';
 import { LearningStream } from '../../components/LearningStream';
 import { DialogueLauncher } from '../../components/DialogueLauncher';
 import { Display, Mono } from '../../components/ui';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import {
   useBrainActivitySignal,
@@ -39,6 +39,37 @@ function keywords(text: string, max: number): string[] {
 }
 
 type Detail = 'feed' | 'reasoning' | null;
+
+/** Greetings in Pidgin -- the language that holds everyone together -- for the time of day:
+ *  [morning, afternoon, evening], each a few lines that take turns, with what they mean. */
+const GREETINGS: [string, string][][] = [
+  [['Good morning o!', 'Good morning'], ['How you wake?', 'How did you wake up?'], ['Morning, my person!', 'Morning, my friend']],
+  [['How far?', 'How are things?'], ['How body?', 'How are you?'], ['Afternoon o!', 'Good afternoon']],
+  [['Good evening o!', 'Good evening'], ['How the day go?', 'How was your day?'], ['Evening, my guy!', 'Evening, my friend']],
+];
+const partOfDay = () => { const h = new Date().getHours(); return h < 12 ? 0 : h < 17 ? 1 : 2; };
+
+/** The greeting: Pidgin lines for the time of day, a few seconds each, fading between them. */
+function Greeting() {
+  const [k, setK] = useState(() => Math.floor(Math.random() * 3));
+  const fade = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const t = setInterval(() => {
+      Animated.timing(fade, { toValue: 0, duration: 350, useNativeDriver: Platform.OS !== 'web' }).start(() => {
+        setK((x) => (x + 1) % 3);
+        Animated.timing(fade, { toValue: 1, duration: 450, useNativeDriver: Platform.OS !== 'web' }).start();
+      });
+    }, 6000);
+    return () => clearInterval(t);
+  }, [fade]);
+  const [line, meaning] = GREETINGS[partOfDay()][k];
+  return (
+    <Animated.View style={{ opacity: fade }}>
+      <Display style={styles.greet}>{line}</Display>
+      <Mono style={styles.greetLang}>PIDGIN · {meaning}</Mono>
+    </Animated.View>
+  );
+}
 
 export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; onOpenLink: () => void }) {
   const { mind } = useMind();
@@ -184,6 +215,13 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
       </View>
 
       <View style={[styles.panel, !desktop && styles.panelOver, desktop && styles.panelDesktop]}>
+        {desktop ? (
+          <View style={styles.greetBlock}>
+            <Greeting />
+            <Mono style={styles.greetSub}>WYRD has been thinking while you were away.</Mono>
+          </View>
+        ) : null}
+        <View style={styles.thoughtCard}>
         <View style={styles.thoughtHead}>
           <View style={styles.liveDot} />
           <Mono style={styles.eyebrow}>LAST THOUGHT · {latestNote ? timeAgo(mind?.updatedAt ?? Date.now()) : '—'}</Mono>
@@ -193,7 +231,18 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
             {latestNote ? noteLine(latestNote) : mind?.activeGoal || 'still forming one.'}
           </Mono>
         </View>
+        </View>
         <DialogueLauncher onPress={onOpenLink} focus={mind?.focusTopic} />
+        {desktop ? (
+          <Pressable onPress={() => { location.hash = 'play'; location.reload(); }} style={({ pressed }) => [styles.city, pressed && styles.cityHover]} accessibilityLabel="Play NAIJA 2099">
+            <View style={styles.cityBadge} />
+            <View style={{ flex: 1 }}>
+              <Display style={styles.cityTitle}>NAIJA 2099</Display>
+              <Mono style={styles.citySub}>Live your Lagos story, with WYRD as the Authority.</Mono>
+            </View>
+            <Mono style={styles.cityGo}>Play →</Mono>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -288,7 +337,7 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   // no box: the brain shows through and fires behind the words; a soft white halo keeps them readable
   hero: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 22 },
-  halo: { textShadowColor: 'rgba(255,255,255,0.95)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
+  halo: { textShadowColor: 'rgba(255,250,242,0.95)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
   eyebrow: { fontSize: 9, letterSpacing: 3, color: colors.greenDim },
   moodValue: { fontSize: 54, lineHeight: 56, color: colors.green, marginTop: 2 },
   focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
@@ -355,8 +404,19 @@ const styles = StyleSheet.create({
     width: 360, borderTopWidth: 0, borderLeftWidth: HAIRLINE, borderLeftColor: colors.greenBorder,
     paddingTop: 22, paddingHorizontal: 20, justifyContent: 'flex-start',
   },
+  greetBlock: { gap: 4, marginBottom: 4 },
+  greet: { fontSize: 32, lineHeight: 38, color: colors.mint },
+  greetLang: { fontSize: 10.5, letterSpacing: 1.2, color: colors.signal, fontFamily: fonts.bodyBold, marginTop: 2 },
+  greetSub: { fontSize: 14, lineHeight: 20, color: colors.greenDim },
+  thoughtCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 22, padding: 18, gap: 10 },
+  city: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#F7E1B0', borderRadius: 22, paddingHorizontal: 18, paddingVertical: 16 },
+  cityHover: { backgroundColor: '#F4D99A' },
+  cityBadge: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.signal },
+  cityTitle: { fontSize: 18, color: colors.mint, fontFamily: fonts.displayBold },
+  citySub: { fontSize: 12.5, color: colors.greenDim, marginTop: 2 },
+  cityGo: { fontSize: 13, color: colors.signal, fontFamily: fonts.bodyBold },
   thoughtHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.signal },
-  quote: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: 12, paddingVertical: 2 },
-  quoteText: { fontSize: 13, lineHeight: 20, color: colors.mint },
+  quote: { paddingVertical: 2 },
+  quoteText: { fontSize: 18, lineHeight: 26, color: colors.mint, fontFamily: fonts.display },
 });

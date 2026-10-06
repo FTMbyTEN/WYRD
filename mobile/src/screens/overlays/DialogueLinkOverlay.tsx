@@ -66,7 +66,7 @@ async function photoFromFile(file: File): Promise<{ base64: string; preview: str
     cv.width = Math.max(1, Math.round(img.naturalWidth * k));
     cv.height = Math.max(1, Math.round(img.naturalHeight * k));
     const x = cv.getContext('2d')!;
-    x.fillStyle = '#fff';
+    x.fillStyle = '#FFFAF2';
     x.fillRect(0, 0, cv.width, cv.height); // transparent PNGs on white, not black
     x.drawImage(img, 0, 0, cv.width, cv.height);
     const preview = cv.toDataURL('image/jpeg', 0.82);
@@ -592,7 +592,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
                   <Mono style={styles.codeLang}>{(p.lang ?? 'code').toUpperCase()}</Mono>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 12 }}>
-                  <CodeText code={p.body} style={[styles.codeText, { fontFamily: fonts.mono }]} />
+                  <CodeText code={p.body} style={[styles.codeText, { fontFamily: fonts.code }]} />
                 </ScrollView>
               </View>
             ) : (
@@ -751,8 +751,8 @@ const styles = StyleSheet.create({
   },
   errorText: { flexShrink: 1, fontSize: 11, color: colors.danger },
   composer: {
-    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, backgroundColor: '#ffffff',
-    paddingHorizontal: 8, paddingTop: 6, paddingBottom: 6, boxShadow: '0 6px 24px rgba(0,0,0,0.07)',
+    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, backgroundColor: '#FFFAF2',
+    paddingHorizontal: 8, paddingTop: 6, paddingBottom: 6, boxShadow: '0 6px 24px rgba(42,31,23,0.07)',
   } as object,
   composerFocused: { borderColor: colors.signal },
   input: {
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
   } as object,
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   tool: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  toolHover: { backgroundColor: 'rgba(0,0,0,0.05)' },
+  toolHover: { backgroundColor: 'rgba(42,31,23,0.05)' },
   toolOn: { backgroundColor: colors.signal },
   hint: { flex: 1, textAlign: 'right', fontSize: 9, color: colors.greenBorderDim, marginRight: 8 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center' },
@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
 
   staged: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 2, marginTop: 2, marginBottom: 2,
-    borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 12, padding: 8, backgroundColor: '#fafafa',
+    borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 12, padding: 8, backgroundColor: '#FAF3E8',
   },
   stagedName: { fontSize: 12.5, color: colors.mint },
   stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
   stagedReady: { color: colors.signal },
   spinner: {
     position: 'absolute', right: -5, bottom: -3, width: 14, height: 14, borderRadius: 7,
-    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.signal, backgroundColor: '#fafafa',
+    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.signal, backgroundColor: '#FAF3E8',
   },
   bar: { marginTop: 6, height: 3, borderRadius: 2, backgroundColor: colors.greenBorderDim, overflow: 'hidden' },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, backgroundColor: colors.signal },

@@ -111,6 +111,6 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: colors.signal },
   toggleText: { fontSize: 10, letterSpacing: 1.5, color: colors.green },
   toggleTextOn: { color: colors.black },
-  readout: { position: 'absolute', top: 44, left: 10, backgroundColor: 'rgba(255,255,255,0.85)', borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3 },
+  readout: { position: 'absolute', top: 44, left: 10, backgroundColor: 'rgba(255,250,242,0.85)', borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3 },
   readoutText: { fontSize: 9.5, color: colors.green },
 });

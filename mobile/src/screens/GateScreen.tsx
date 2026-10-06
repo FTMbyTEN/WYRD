@@ -61,7 +61,7 @@ function QuantumBlast({ triggerKey }: { triggerKey: number }) {
       <Animated.View
         style={{
           position: 'absolute', width: size, height: size, borderRadius: size / 2,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(42,31,23,0.5)',
           opacity: p.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, peakOpacity, 0] }),
           transform: [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.2, maxScale] }) }],
         }}

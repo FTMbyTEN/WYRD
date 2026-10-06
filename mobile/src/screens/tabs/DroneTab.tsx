@@ -205,7 +205,7 @@ export function DroneTab() {
       {checks.map(([name, ok, detail]) => (
         <View key={name} style={styles.checkRow}>
           <View style={[styles.checkBox, ok === true && styles.checkOk, ok === false && styles.checkBad]}>
-            <Mono style={[styles.checkMark, ok === true && { color: '#fff' }, ok === false && { color: colors.danger }]}>{ok === true ? '✓' : ok === false ? '✕' : '·'}</Mono>
+            <Mono style={[styles.checkMark, ok === true && { color: '#FFFAF2' }, ok === false && { color: colors.danger }]}>{ok === true ? '✓' : ok === false ? '✕' : '·'}</Mono>
           </View>
           <Mono style={styles.checkName}>{name}</Mono>
           <Mono style={[styles.checkDetail, ok === false && { color: colors.danger }]}>{detail}</Mono>
@@ -272,13 +272,13 @@ function LinkBadge({ status, state }: { status: LinkStatus; state: DroneState | 
   return (
     <View style={[styles.link, live && styles.linkLive]}>
       <View style={styles.linkRow}>
-        <Animated.View style={[styles.linkDot, live ? { backgroundColor: '#fff', opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.25] }) } : status === 'STALE' ? { backgroundColor: '#999' } : null]} />
-        <Mono style={[styles.linkStatus, live && { color: '#fff' }]}>LINK {status}</Mono>
+        <Animated.View style={[styles.linkDot, live ? { backgroundColor: '#FFFAF2', opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.25] }) } : status === 'STALE' ? { backgroundColor: '#A8957F' } : null]} />
+        <Mono style={[styles.linkStatus, live && { color: '#FFFAF2' }]}>LINK {status}</Mono>
       </View>
-      <Mono style={[styles.linkMeta, live && { color: '#bbb' }]}>
+      <Mono style={[styles.linkMeta, live && { color: '#C9B89F' }]}>
         {state && status !== 'OFFLINE' ? `${state.mode ?? 'NO MODE'}${state.armed ? ' · ARMED' : ' · DISARMED'}` : 'bridge not connected'}
       </Mono>
-      {state ? <Mono style={[styles.linkMeta, live && { color: '#bbb' }]}>last report {timeAgo(state.updatedAt)}</Mono> : null}
+      {state ? <Mono style={[styles.linkMeta, live && { color: '#C9B89F' }]}>last report {timeAgo(state.updatedAt)}</Mono> : null}
     </View>
   );
 }
@@ -287,8 +287,8 @@ function Hazard() {
   return (
     <Svg width={16} height={16} viewBox="0 0 20 20">
       <Path d="M10 2 L19 18 L1 18 Z" fill={colors.danger} />
-      <Rect x={9} y={7} width={2} height={6} fill="#fff" />
-      <Rect x={9} y={14.5} width={2} height={2} fill="#fff" />
+      <Rect x={9} y={7} width={2} height={6} fill="#FFFAF2" />
+      <Rect x={9} y={14.5} width={2} height={2} fill="#FFFAF2" />
     </Svg>
   );
 }
@@ -341,70 +341,70 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: colors.mint, paddingBottom: 14 },
   callsign: { fontSize: 36, lineHeight: 40, color: colors.mint, letterSpacing: 2 },
-  link: { borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 14, paddingVertical: 10, gap: 3, minWidth: 210, backgroundColor: '#fff' },
+  link: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 14, paddingVertical: 10, gap: 3, minWidth: 210, backgroundColor: '#FFFAF2', borderRadius: 16 },
   linkLive: { backgroundColor: colors.signal },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  linkDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: '#999' },
+  linkDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: '#A8957F' },
   linkStatus: { fontSize: 13, letterSpacing: 2.4, color: colors.mint },
   linkMeta: { fontSize: 10, color: colors.greenDim },
   alert: { borderWidth: 2, borderColor: colors.danger, padding: 10 },
   alertText: { color: colors.danger, fontSize: 12 },
 
   deck: { flexDirection: 'row', gap: 18, alignItems: 'flex-start' },
-  mapFrame: { borderWidth: 1, borderColor: colors.mint, padding: 8, backgroundColor: '#fff' },
+  mapFrame: { borderWidth: 1, borderColor: colors.greenBorder, padding: 8, backgroundColor: '#FFFAF2', borderRadius: 16 },
   instruments: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
-  card: { borderWidth: 1, borderColor: colors.mint, padding: 14, gap: 8, backgroundColor: '#fff' },
+  card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 14, gap: 8, backgroundColor: '#FFFAF2', borderRadius: 16 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  readyTag: { fontSize: 9, letterSpacing: 1.6, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3 },
-  readyOn: { color: '#fff', backgroundColor: colors.signal, borderColor: colors.signal },
+  readyTag: { fontSize: 9, letterSpacing: 1.6, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 16 },
+  readyOn: { color: '#FFFAF2', backgroundColor: colors.signal, borderColor: colors.signal },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 3 },
-  checkBox: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center' },
-  checkOk: { backgroundColor: colors.mint, borderColor: colors.mint },
+  checkBox: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+  checkOk: { backgroundColor: colors.mint, borderColor: colors.greenBorder },
   checkBad: { borderColor: colors.danger },
   checkMark: { fontSize: 11, color: colors.greenDim, lineHeight: 14 },
   checkName: { fontSize: 12, color: colors.mint, flex: 1 },
   checkDetail: { fontSize: 10, color: colors.greenDim, textAlign: 'right' },
 
-  console: { backgroundColor: '#0f0f0f', padding: 16, gap: 12 },
+  console: { backgroundColor: '#2A1F17', borderRadius: 18, padding: 16, gap: 12 },
   consoleHead: { gap: 3 },
-  consoleTitle: { fontSize: 10, letterSpacing: 2.2, color: '#fff' },
+  consoleTitle: { fontSize: 10, letterSpacing: 2.2, color: '#FFFAF2' },
   consoleSub: { fontSize: 10, color: '#8a8a8a' },
-  prompt: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: '#3a3a3a', padding: 10, alignItems: 'flex-start' },
-  caret: { color: '#fff', fontSize: 13, marginTop: 2 },
-  consoleInput: { flex: 1, minHeight: 58, color: '#fff', fontFamily: 'ShareTechMono_400Regular', fontSize: 14, textAlignVertical: 'top' },
+  prompt: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: '#3a3a3a', padding: 10, alignItems: 'flex-start', borderRadius: 16 },
+  caret: { color: '#FFFAF2', fontSize: 13, marginTop: 2 },
+  consoleInput: { flex: 1, minHeight: 58, color: '#FFFAF2', fontFamily: 'ShareTechMono_400Regular', fontSize: 14, textAlignVertical: 'top' },
   examples: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  example: { borderWidth: 1, borderColor: '#3a3a3a', paddingHorizontal: 8, paddingVertical: 5 },
+  example: { borderWidth: 1, borderColor: '#3a3a3a', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 16 },
   exampleText: { color: '#bdbdbd', fontSize: 10 },
   buttonRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  planBtn: { flex: 1, minWidth: 150, backgroundColor: '#fff', paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
+  planBtn: { flex: 1, minWidth: 150, backgroundColor: '#FFFAF2', paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
   planText: { color: colors.mint, fontSize: 12, letterSpacing: 2 },
   abortBtn: { flex: 1, minWidth: 150, flexDirection: 'row', gap: 8, borderWidth: 2, borderColor: colors.danger, paddingVertical: 11, alignItems: 'center', justifyContent: 'center' },
   abortText: { color: colors.danger, fontSize: 11, letterSpacing: 1.5 },
   abortConfirm: { flex: 1, backgroundColor: colors.danger, paddingVertical: 13, alignItems: 'center' },
-  abortConfirmText: { color: '#fff', fontSize: 11, letterSpacing: 1.6 },
-  cancelBtn: { borderWidth: 1, borderColor: '#555', paddingHorizontal: 14, paddingVertical: 12 },
-  cancelText: { color: '#ccc', fontSize: 11, letterSpacing: 1.4 },
+  abortConfirmText: { color: '#FFFAF2', fontSize: 11, letterSpacing: 1.6 },
+  cancelBtn: { borderWidth: 1, borderColor: '#7A6656', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16 },
+  cancelText: { color: '#D9C7AC', fontSize: 11, letterSpacing: 1.4 },
   btnDisabled: { opacity: 0.3 },
   btnPressed: { opacity: 0.7 },
   consoleHint: { fontSize: 10.5, color: '#8a8a8a' },
-  notice: { fontSize: 12, lineHeight: 17, color: '#fff' },
+  notice: { fontSize: 12, lineHeight: 17, color: '#FFFAF2' },
   noticeBad: { color: '#ff7070' },
-  viewOnly: { borderWidth: 1, borderColor: colors.greenBorder, borderStyle: 'dashed', padding: 14, gap: 4 },
+  viewOnly: { borderWidth: 1, borderColor: colors.greenBorder, borderStyle: 'dashed', padding: 14, gap: 4, borderRadius: 16 },
 
   log: { borderTopWidth: 2, borderTopColor: colors.mint, paddingTop: 12, gap: 12 },
   logRow: { flexDirection: 'row', gap: 12 },
   rail: { width: 14, alignItems: 'center' },
-  node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.greenBorder, backgroundColor: '#fff', marginTop: 2 },
+  node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.greenBorder, backgroundColor: '#FFFAF2', marginTop: 2 },
   nodeLive: { borderColor: colors.signal, backgroundColor: colors.signal },
-  nodeDone: { borderColor: colors.mint },
+  nodeDone: { borderColor: colors.greenBorder },
   nodeBad: { borderColor: colors.danger },
   railLine: { flex: 1, width: 1, backgroundColor: colors.greenBorderDim, marginTop: 2 },
   logTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   logTitle: { flex: 1, fontSize: 13, color: colors.mint },
   logQuote: { fontSize: 11.5, color: colors.greenDim, fontStyle: 'italic' },
   logMeta: { fontSize: 10, color: colors.greenDim },
-  badge: { fontSize: 9, letterSpacing: 1.2, color: colors.mint, borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeLive: { color: '#fff', backgroundColor: colors.signal },
+  badge: { fontSize: 9, letterSpacing: 1.2, color: colors.mint, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 16 },
+  badgeLive: { color: '#FFFAF2', backgroundColor: colors.signal },
   badgeBad: { color: colors.danger, borderColor: colors.danger },
 });

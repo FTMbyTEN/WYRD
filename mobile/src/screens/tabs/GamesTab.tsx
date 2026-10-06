@@ -48,7 +48,7 @@ class WorldBoundary extends React.Component<{ onExit: () => void; children: Reac
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
         <Display style={{ fontSize: 28, color: colors.mint }}>Lagos couldn't load</Display>
         <Mono style={{ fontSize: 12, color: colors.greenDim, textAlign: 'center' }}>Your device or connection didn't manage the 3D world this time. Try again in a moment.</Mono>
-        <Pressable onPress={this.props.onExit} style={{ borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 16, paddingVertical: 10 }}>
+        <Pressable onPress={this.props.onExit} style={{ borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 16, paddingVertical: 10 }}>
           <Mono style={{ fontSize: 11, letterSpacing: 2, color: colors.mint }}>BACK TO GAMES</Mono>
         </Pressable>
       </View>
@@ -506,12 +506,12 @@ const styles = StyleSheet.create({
     ? ({ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, backgroundColor: '#0d0f14' } as unknown as ViewStyle)
     : { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, backgroundColor: '#0d0f14' },
   worldLoading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  worldCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#16171a', padding: 18, borderLeftWidth: 4, borderLeftColor: '#f2c200' },
-  worldEyebrow: { fontSize: 9.5, letterSpacing: 2.4, color: '#f2c200' },
-  worldName: { fontSize: 30, lineHeight: 32, color: '#ffffff' },
-  worldBlurb: { fontSize: 12, lineHeight: 18, color: '#c9cbd1' },
-  worldGo: { fontSize: 12, letterSpacing: 2, color: '#f2c200' },
-  card: { width: '100%', borderWidth: 1, borderColor: colors.greenBorderDim, padding: 14, gap: 6, backgroundColor: '#fff' },
+  worldCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#24316B', padding: 22, borderRadius: 24, borderLeftWidth: 6, borderLeftColor: '#E2A32B' }, // Adire indigo, a sunset edge
+  worldEyebrow: { fontSize: 10.5, letterSpacing: 1.6, color: '#E2A32B' },
+  worldName: { fontSize: 30, lineHeight: 32, color: '#FFFAF2' },
+  worldBlurb: { fontSize: 13, lineHeight: 19, color: '#EEDFC8' },
+  worldGo: { fontSize: 13, letterSpacing: 1, color: '#E2A32B' },
+  card: { width: '100%', borderWidth: 1, borderColor: colors.greenBorderDim, padding: 14, gap: 6, backgroundColor: '#FFFAF2', borderRadius: 16 },
   cardWide: { width: '32%', minWidth: 260, flexGrow: 1 },
   cardSoon: { opacity: 0.55 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
   play: { gap: 18 },
   playWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
   side: { gap: 14, flexShrink: 1 },
-  empty: { borderWidth: 1, borderColor: colors.greenBorderDim, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#fafafa', maxWidth: '100%', padding: 16 },
+  empty: { borderWidth: 1, borderColor: colors.greenBorderDim, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FAF3E8', maxWidth: '100%', padding: 16 },
   emptyTitle: { fontSize: 36, color: colors.mint },
   speech: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderLeftWidth: 2, borderLeftColor: colors.signal, paddingLeft: 12, paddingVertical: 4 },
   speechText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.mint },
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
   moves: { maxHeight: 180, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: colors.codeBg },
   moveText: { fontSize: 12, color: colors.mint },
   btnRow: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, borderWidth: 1, borderColor: colors.mint, paddingVertical: 11, alignItems: 'center' },
+  btn: { flex: 1, borderWidth: 1, borderColor: colors.greenBorder, paddingVertical: 11, alignItems: 'center' },
   btnPrimary: { backgroundColor: colors.signal, borderColor: colors.signal },
   btnText: { fontSize: 11, letterSpacing: 1.8, color: colors.mint },
   btnTextPrimary: { color: colors.onSignal },

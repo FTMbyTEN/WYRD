@@ -98,7 +98,7 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
   });
 
   const rtl = RTL.test(slice.text.slice(0, 400));
-  const paper = night ? '#121212' : '#ffffff';
+  const paper = night ? '#2A1F17' : '#FFFAF2';
   const desk = night ? '#070707' : '#f3f3f1';
   const ink = night ? '#e9e9e9' : colors.mint;
   const dim = night ? '#8f8f8f' : colors.greenDim;
@@ -197,7 +197,7 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
   let body: React.ReactNode;
   if (wide) {
     body = (
-      <View style={[styles.room, styles.roomWide, { backgroundColor: desk, borderColor: night ? '#222' : colors.mint }]}>
+      <View style={[styles.room, styles.roomWide, { backgroundColor: desk, borderColor: night ? '#2F241B' : colors.mint }]}>
         <View style={{ flex: 1, minWidth: 0, gap: 14 }}>
           {page}
           {quizBox}
@@ -229,7 +229,7 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
     );
   } else {
     body = (
-      <View style={[styles.room, { backgroundColor: desk, borderColor: night ? '#222' : colors.mint }, focus && styles.roomFocus]}>
+      <View style={[styles.room, { backgroundColor: desk, borderColor: night ? '#2F241B' : colors.mint }, focus && styles.roomFocus]}>
         {!focus && (
           <View style={styles.head}>
             <ProgressRing value={p} size={52} stroke={4} color={ink} track={rule} />
@@ -269,16 +269,16 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
 
 function Tool({ label, onPress, night, hint }: { label: string; onPress: () => void; night: boolean; hint: string }) {
   return (
-    <Pressable onPress={onPress} accessibilityLabel={hint} style={({ pressed }) => [styles.tool, { borderColor: night ? '#444' : colors.greenBorder, backgroundColor: night ? '#121212' : '#fff' }, pressed && { opacity: 0.6 }]}>
-      <Mono style={[styles.toolText, { color: night ? '#eee' : colors.mint }]}>{label}</Mono>
+    <Pressable onPress={onPress} accessibilityLabel={hint} style={({ pressed }) => [styles.tool, { borderColor: night ? '#5A4636' : colors.greenBorder, backgroundColor: night ? '#2A1F17' : '#FFFAF2' }, pressed && { opacity: 0.6 }]}>
+      <Mono style={[styles.toolText, { color: night ? '#F0E4D0' : colors.mint }]}>{label}</Mono>
     </Pressable>
   );
 }
 
 function Ghost({ label, onPress, night, danger, strong }: { label: string; onPress: () => void; night: boolean; danger?: boolean; strong?: boolean }) {
-  const c = danger ? colors.danger : night ? '#ddd' : colors.mint;
+  const c = danger ? colors.danger : night ? '#E5D6BE' : colors.mint;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.ghost, { borderColor: danger ? colors.danger : strong ? c : night ? '#444' : colors.greenBorder, backgroundColor: night ? '#121212' : '#fff' }, strong && { borderWidth: 2 }, pressed && { opacity: 0.6 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.ghost, { borderColor: danger ? colors.danger : strong ? c : night ? '#5A4636' : colors.greenBorder, backgroundColor: night ? '#2A1F17' : '#FFFAF2' }, strong && { borderWidth: 2 }, pressed && { opacity: 0.6 }]}>
       <Mono style={[styles.ghostText, { color: c }]}>{label}</Mono>
     </Pressable>
   );
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
 
   sheet: {
     borderWidth: 1, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 14,
-    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+    shadowColor: '#2A1F17', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
   },
   sheetWide: { paddingTop: 16 },
   sheetFocus: { flex: 1 },

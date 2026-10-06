@@ -122,7 +122,7 @@ function AlertCard({ alert, last }: { alert: AlertItem; last: boolean }) {
   return (
     <View style={styles.row}>
       <View style={styles.rail}>
-        <View style={[styles.node, cop && styles.nodeCop]}><kind.Icon c={cop ? '#fff' : colors.mint} /></View>
+        <View style={[styles.node, cop && styles.nodeCop]}><kind.Icon c={cop ? '#FFFAF2' : colors.mint} /></View>
         {!last && <View style={styles.railLine} />}
       </View>
       <View style={[styles.card, cop && styles.cardCop]}>
@@ -139,7 +139,7 @@ function AlertCard({ alert, last }: { alert: AlertItem; last: boolean }) {
 function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && { opacity: 0.7 }]}>
-      <Mono style={[styles.chipText, on && { color: '#fff' }]}>{label}</Mono>
+      <Mono style={[styles.chipText, on && { color: '#FFFAF2' }]}>{label}</Mono>
     </Pressable>
   );
 }
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   tallyName: { fontSize: 8, letterSpacing: 1.4, color: colors.greenDim },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: '#fff' },
+  chip: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: '#FFFAF2' },
   chipOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   chipText: { fontSize: 9.5, letterSpacing: 1.4, color: colors.mint },
 
@@ -181,10 +181,10 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', gap: 12 },
   rail: { width: 32, alignItems: 'center' },
-  node: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.mint, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  node: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: colors.mint, backgroundColor: '#FFFAF2', alignItems: 'center', justifyContent: 'center' },
   nodeCop: { backgroundColor: colors.mint },
   railLine: { flex: 1, width: 1, backgroundColor: colors.greenBorderDim, marginTop: 4, minHeight: 10 },
-  card: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#fff', padding: 12, gap: 6, marginBottom: 2 },
+  card: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#FFFAF2', padding: 12, gap: 6, marginBottom: 2, borderRadius: 16 },
   cardCop: { borderColor: colors.mint, borderWidth: 1.5 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   kind: { fontSize: 8.5, letterSpacing: 1.4, color: colors.greenDim, flexShrink: 1 },

@@ -25,7 +25,7 @@ export function OverlayShell({ visible, title, onClose, children, footer, black 
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="fade" transparent={!black} onRequestClose={onClose}>
-      <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom, backgroundColor: black ? '#ffffff' : 'rgba(255,255,255,0.94)' }]}>
+      <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom, backgroundColor: black ? '#FFFAF2' : 'rgba(255,250,242,0.94)' }]}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
             {PANEL_GLYPH[title] ? <Glyph name={PANEL_GLYPH[title]} size={34} color={colors.signal} active /> : null}

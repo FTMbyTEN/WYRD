@@ -245,7 +245,7 @@ export function ArchiveWing({ loading, open }: WingProps) {
       <View style={styles.chips}>
         {LANGS.map((l) => (
           <Pressable key={l.code} onPress={() => { setLang(l.code); setHits(null); }} style={[styles.script, lang === l.code && styles.scriptOn]}>
-            <Mono style={[styles.scriptText, lang === l.code && { color: '#fff' }]}>{l.name}</Mono>
+            <Mono style={[styles.scriptText, lang === l.code && { color: '#FFFAF2' }]}>{l.name}</Mono>
           </Pressable>
         ))}
       </View>
@@ -306,7 +306,7 @@ function SearchBar({ value, onChange, onSubmit, busy, placeholder, rtl }: {
       />
       {onSubmit && (
         <Pressable onPress={onSubmit} style={({ pressed }) => [styles.find, pressed && { opacity: 0.7 }]}>
-          {busy ? <ActivityIndicator size="small" color="#fff" /> : <Mono style={styles.findText}>FIND</Mono>}
+          {busy ? <ActivityIndicator size="small" color="#FFFAF2" /> : <Mono style={styles.findText}>FIND</Mono>}
         </Pressable>
       )}
     </View>
@@ -329,7 +329,7 @@ function Results({ hits, empty, onClose, children }: { hits: WorkHit[]; empty: s
 function Chip({ label, on, onPress, small }: { label: string; on: boolean; onPress: () => void; small?: boolean }) {
   return (
     <Pressable onPress={onPress} style={[styles.chip, small && styles.chipSmall, on && styles.chipOn]}>
-      <Mono style={[styles.chipText, small && { fontSize: 9 }, on && { color: '#fff' }]}>{label}</Mono>
+      <Mono style={[styles.chipText, small && { fontSize: 9 }, on && { color: '#FFFAF2' }]}>{label}</Mono>
     </Pressable>
   );
 }
@@ -353,29 +353,29 @@ const styles = StyleSheet.create({
   error: { fontSize: 11, color: colors.danger },
   search: { flexDirection: 'row', gap: 8 },
   input: {
-    flex: 1, borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: 13, color: colors.mint, backgroundColor: '#fff', fontFamily: 'ShareTechMono_400Regular',
+    flex: 1, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 13, color: colors.mint, backgroundColor: '#FFFAF2', fontFamily: 'ShareTechMono_400Regular',
   },
   find: { backgroundColor: colors.mint, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', minWidth: 72 },
-  findText: { color: '#fff', fontSize: 11, letterSpacing: 1.8 },
-  results: { borderWidth: 1, borderColor: colors.mint, padding: 10, gap: 6, backgroundColor: '#fff' },
+  findText: { color: '#FFFAF2', fontSize: 11, letterSpacing: 1.8 },
+  results: { borderWidth: 1, borderColor: colors.greenBorder, padding: 10, gap: 6, backgroundColor: '#FFFAF2', borderRadius: 16 },
   hitRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim },
   hitTitle: { fontSize: 13, color: colors.mint },
   go: { fontSize: 10, letterSpacing: 1.4, color: colors.mint },
   shelfLabel: { fontSize: 9, letterSpacing: 2, color: colors.greenDim, marginTop: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
-  chip: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#fff' },
+  chip: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#FFFAF2', borderRadius: 16 },
   chipSmall: { paddingHorizontal: 8, paddingVertical: 4, borderColor: colors.greenBorderDim },
   chipOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   chipText: { fontSize: 10, letterSpacing: 1.4, color: colors.mint },
-  script: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#fff' },
+  script: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#FFFAF2', borderRadius: 16 },
   scriptOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   scriptText: { fontSize: 14, color: colors.mint },
   tryChip: { borderBottomWidth: 1, borderBottomColor: colors.mint, paddingVertical: 2 },
   tryText: { fontSize: 12, color: colors.mint },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   card: { gap: 6 },
-  cardWide: { flexDirection: 'row', gap: 14, padding: 10, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#fff' },
+  cardWide: { flexDirection: 'row', gap: 14, padding: 10, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#FFFAF2', borderRadius: 16 },
   cardTitle: { fontSize: 14, color: colors.mint },
   smallTitle: { fontSize: 10.5, lineHeight: 14, color: colors.mint },
   origin: { fontSize: 8.5, letterSpacing: 1.6, color: colors.greenDim },
@@ -384,6 +384,6 @@ const styles = StyleSheet.create({
   courseHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
   course: { fontSize: 10, letterSpacing: 2.2, color: colors.mint },
   rule: { flex: 1, height: 1, backgroundColor: colors.greenBorderDim },
-  busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.88)', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,250,242,0.88)', alignItems: 'center', justifyContent: 'center', gap: 6 },
   busyText: { fontSize: 8, letterSpacing: 1.4, color: colors.mint },
 });

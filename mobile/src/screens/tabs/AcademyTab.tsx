@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   deskMeta: { fontSize: 9, letterSpacing: 1.4, color: colors.mint, marginBottom: 4 },
   plank: { height: 7, backgroundColor: colors.mint },
   plankShadow: { height: 5, marginHorizontal: 8, backgroundColor: colors.greenBorderDim },
-  busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' },
+  busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,250,242,0.85)', alignItems: 'center', justifyContent: 'center' },
 
   footnote: { fontSize: 10, lineHeight: 15, color: colors.greenBorder, textAlign: 'center', marginTop: 8 },
 });

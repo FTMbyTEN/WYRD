@@ -24,7 +24,7 @@ export function Panel({ style, ...props }: ViewProps) {
     <View
       {...props}
       style={[
-        { backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 4 },
+        { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 18 }, // a Warm Lagos card
         style,
       ]}
     />

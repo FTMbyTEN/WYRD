@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40, gap: 12, maxWidth: 980, width: '100%', alignSelf: 'center' },
   status: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.green, padding: 12 },
   pulseWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
-  pulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.signal, boxShadow: '0 0 0 4px rgba(0,0,0,0.08)' } as object,
+  pulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.signal, boxShadow: '0 0 0 4px rgba(42,31,23,0.08)' } as object,
   statusTitle: { fontSize: 12, letterSpacing: 2.5, color: colors.green },
   statusSub: { fontSize: 11, lineHeight: 16, color: colors.greenDim, marginTop: 2 },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

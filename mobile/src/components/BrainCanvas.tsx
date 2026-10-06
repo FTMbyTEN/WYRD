@@ -274,7 +274,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
     (canvas, W, H, now) => {
       const t = now * 0.00022;
       const R = Math.min(W, H) * radiusRef.current; // the home screen asks for a big brain, as in the first version
-      canvas.clear(Skia.Color('rgba(255,255,255,0)'));
+      canvas.clear(Skia.Color('rgba(255,250,242,0)'));
       const clock = signalClock.current;
       clock.t += (clock.last ? Math.min(64, now - clock.last) : 0) * energyRef.current;
       clock.last = now;

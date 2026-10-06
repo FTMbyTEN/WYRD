@@ -28,14 +28,14 @@ export function AppPreviewOverlay({ visible, onClose, html }: Props) {
         </Mono>
       }
     >
-      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <View style={{ flex: 1, backgroundColor: '#FFFAF2' }}>
         {html ? (
           <WebView
             originWhitelist={['*']}
             source={{ html }}
             javaScriptEnabled
             setSupportMultipleWindows={false}
-            style={{ backgroundColor: '#ffffff' }}
+            style={{ backgroundColor: '#FFFAF2' }}
           />
         ) : (
           <Mono style={{ textAlign: 'center', marginTop: 40, color: colors.greenBorderDim }}>nothing built yet this session</Mono>

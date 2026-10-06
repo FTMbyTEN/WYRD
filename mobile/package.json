@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/share-tech-mono": "^0.4.1",
     "@expo-google-fonts/vt323": "^0.4.1",
     "@expo/metro-runtime": "^57.0.15",

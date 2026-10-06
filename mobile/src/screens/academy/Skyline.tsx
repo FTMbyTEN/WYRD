@@ -12,7 +12,7 @@ export const WINGS: { key: Wing; name: string; what: string }[] = [
   { key: 'archive', name: 'THE ARCHIVE', what: 'Texts in 15 languages' },
 ];
 
-const INK = '#111111';
+const INK = '#2A1F17';
 const GREY = '#9a9a9a';
 
 /** The Academy campus at the real local time of day: three buildings you step into -- the
@@ -67,8 +67,8 @@ const STARS: [number, number, number][] = (() => {
 
 /** Behind the buildings: the sky, its stars twinkling at night, the sun or moon, the birds. */
 function Sky({ t, night, hour }: { t: number; night: boolean; hour: number }) {
-  const ink = night ? '#eeeeee' : INK;
-  const paper = night ? '#0d0d0d' : '#ffffff';
+  const ink = night ? '#F0E4D0' : INK;
+  const paper = night ? '#2A1F17' : '#FFFAF2';
   // the sun (or moon) rises at the left and sets at the right
   const arc = night ? ((hour + 24 - 19) % 24) / 11 : (hour - 6) / 13;
   const bodyX = 40 + arc * 820;
@@ -83,12 +83,12 @@ function Sky({ t, night, hour }: { t: number; night: boolean; hour: number }) {
     <>
       <Rect x={0} y={0} width={900} height={250} fill={paper} />
       {night && STARS.map(([x, y, b], i) => (
-        <Circle key={i} cx={x} cy={y} r={b > 0.9 ? 1.4 : 0.7} fill="#ffffff" opacity={0.35 + 0.65 * Math.abs(Math.sin((t + i * 13) / 18))} />
+        <Circle key={i} cx={x} cy={y} r={b > 0.9 ? 1.4 : 0.7} fill="#FFFAF2" opacity={0.35 + 0.65 * Math.abs(Math.sin((t + i * 13) / 18))} />
       ))}
       {night ? (
         <G>
-          <Circle cx={bodyX} cy={bodyY} r={13} fill="#f4f4f4" />
-          <Circle cx={bodyX + 6} cy={bodyY - 4} r={11} fill="#0d0d0d" />
+          <Circle cx={bodyX} cy={bodyY} r={13} fill="#F5EBDC" />
+          <Circle cx={bodyX + 6} cy={bodyY - 4} r={11} fill="#2A1F17" />
         </G>
       ) : (
         <G>
@@ -106,9 +106,9 @@ function Sky({ t, night, hour }: { t: number; night: boolean; hour: number }) {
 
 /** The campus itself: still, so it is drawn only when what it shows changes. */
 const Buildings = React.memo(function Buildings({ night, wing, lit }: { night: boolean; wing: Wing; lit: number }) {
-  const ink = night ? '#eeeeee' : INK;
-  const paper = night ? '#0d0d0d' : '#ffffff';
-  const glow = night ? '#ffffff' : INK; // a lit window: bright at night, inked in by day
+  const ink = night ? '#F0E4D0' : INK;
+  const paper = night ? '#2A1F17' : '#FFFAF2';
+  const glow = night ? '#FFFAF2' : INK; // a lit window: bright at night, inked in by day
   const window = (key: string, x: number, y: number, w: number, h: number, on: boolean, arch = false) => (
     arch
       ? <Path key={key} d={`M${x} ${y + h} V${y + w / 2} A${w / 2} ${w / 2} 0 0 1 ${x + w} ${y + w / 2} V${y + h} Z`} stroke={ink} strokeWidth={0.9} fill={on ? glow : paper} />
@@ -121,7 +121,7 @@ const Buildings = React.memo(function Buildings({ night, wing, lit }: { night: b
     <G opacity={night ? 0.96 : 1}>
       {/* ground */}
       <Rect x={0} y={228} width={900} height={22} fill={paper} />
-      <Line x1={0} y1={228} x2={900} y2={228} stroke={night ? '#eee' : INK} strokeWidth={1.4} />
+      <Line x1={0} y1={228} x2={900} y2={228} stroke={night ? '#F0E4D0' : INK} strokeWidth={1.4} />
       {[...Array(30)].map((_, i) => <Line key={i} x1={i * 31 + 8} y1={236} x2={i * 31 + 20} y2={236} stroke={GREY} strokeWidth={0.7} />)}
 
       {/* THE STACKS: a tall library with arched windows */}
@@ -173,7 +173,7 @@ const Buildings = React.memo(function Buildings({ night, wing, lit }: { night: b
       {[[30, 1], [330, 0.8], [585, 0.9], [810, 1.1], [860, 0.8]].map(([x, s]) => (
         <G key={x}>
           <Line x1={x} y1={228} x2={x} y2={228 - 22 * s} stroke={ink} strokeWidth={1} />
-          <Circle cx={x} cy={228 - 30 * s} r={12 * s} stroke={ink} strokeWidth={1} fill={night ? '#0d0d0d' : '#fff'} />
+          <Circle cx={x} cy={228 - 30 * s} r={12 * s} stroke={ink} strokeWidth={1} fill={night ? '#2A1F17' : '#FFFAF2'} />
           <Circle cx={x - 5 * s} cy={228 - 34 * s} r={6 * s} stroke={GREY} strokeWidth={0.6} fill="none" />
         </G>
       ))}
@@ -183,7 +183,7 @@ const Buildings = React.memo(function Buildings({ night, wing, lit }: { night: b
 
 /** In front of the buildings: the globe's turning meridians and the flag over the open wing. */
 function Front({ t, night, wing }: { t: number; night: boolean; wing: Wing }) {
-  const ink = night ? '#eeeeee' : INK;
+  const ink = night ? '#F0E4D0' : INK;
   const spin = (t % 90) / 90; // the archive's globe turns once every ~7 seconds
   const wave = Math.sin(t / 5) * 2;
   const flag = { stacks: [185, 52], hall: [450, 24], archive: [746, 160] }[wing];
@@ -212,8 +212,8 @@ export function WingDoors({ wing, onWing }: { wing: Wing; onWing: (w: Wing) => v
         const on = w.key === wing;
         return (
           <Pressable key={w.key} onPress={() => onWing(w.key)} style={({ pressed }) => [styles.door, on && styles.doorOn, pressed && { opacity: 0.8 }]} accessibilityRole="tab" accessibilityState={{ selected: on }}>
-            <Mono style={[styles.doorName, on && { color: '#fff' }]}>{w.name}</Mono>
-            <Mono style={[styles.doorWhat, on && { color: '#ddd' }]}>{w.what}</Mono>
+            <Mono style={[styles.doorName, on && { color: '#FFFAF2' }]}>{w.name}</Mono>
+            <Mono style={[styles.doorWhat, on && { color: '#E5D6BE' }]}>{w.what}</Mono>
           </Pressable>
         );
       })}
@@ -222,9 +222,9 @@ export function WingDoors({ wing, onWing }: { wing: Wing; onWing: (w: Wing) => v
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: '100%', aspectRatio: 900 / 250, borderWidth: 1, borderColor: colors.mint, overflow: 'hidden' },
-  doors: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.mint },
-  door: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', gap: 2, borderRightWidth: 1, borderRightColor: colors.greenBorderDim, backgroundColor: '#fff' },
+  wrap: { width: '100%', aspectRatio: 900 / 250, borderWidth: 1, borderColor: colors.greenBorder, overflow: 'hidden' },
+  doors: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.greenBorder },
+  door: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', gap: 2, borderRightWidth: 1, borderRightColor: colors.greenBorderDim, backgroundColor: '#FFFAF2' },
   doorOn: { backgroundColor: colors.signal },
   doorName: { fontSize: 11, letterSpacing: 2, color: colors.mint },
   doorWhat: { fontSize: 9, color: colors.greenDim, textAlign: 'center' },

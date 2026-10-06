@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './client';
 import { wyrdStream } from './stream';
+import { useDroneAccess } from './hooks';
 import type { StreamEvent } from './types';
 
 export interface AlertItem {
@@ -64,7 +65,9 @@ export function useAlerts() {
     subscribers.add(cb);
     return () => { subscribers.delete(cb); };
   }, []);
-  return alerts;
+  // COP is the owner's: everyone else never sees its reviews
+  const owner = useDroneAccess();
+  return owner ? alerts : alerts.filter((a) => a.tag !== 'COP');
 }
 
 export function markAllAlertsRead() {

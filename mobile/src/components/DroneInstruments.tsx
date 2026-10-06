@@ -57,7 +57,7 @@ export function Dial({ label, value, max, unit, digits = 0, limit, size = 150 }:
           const rr = polar(c, c, 5, angle(v) + 90);
           return <Polygon points={`${tip.x},${tip.y} ${l.x},${l.y} ${rr.x},${rr.y}`} fill={over ? WARN : INK} />;
         })()}
-        <Circle cx={c} cy={c} r={6} fill="#fff" stroke={INK} strokeWidth={1.5} />
+        <Circle cx={c} cy={c} r={6} fill="#FFFAF2" stroke={INK} strokeWidth={1.5} />
         <SvgText x={c} y={c + 30} fontSize={22} fill={over ? WARN : INK} textAnchor="middle" fontFamily={FONT}>
           {v == null ? '—' : v.toFixed(digits)}
         </SvgText>
@@ -76,7 +76,7 @@ export function Compass({ heading, size = 150 }: { heading: number | null | unde
   return (
     <View style={styles.inst}>
       <Svg width={size} height={size * 0.86} viewBox={`0 ${size * 0.07} ${size} ${size * 0.86}`}>
-        <Circle cx={c} cy={c} r={r} stroke={INK} strokeWidth={1.5} fill="#fff" />
+        <Circle cx={c} cy={c} r={r} stroke={INK} strokeWidth={1.5} fill="#FFFAF2" />
         <G transform={`rotate(${-h} ${c} ${c})`}>
           {[...Array(36)].map((_, i) => {
             const a = i * 10;
@@ -159,7 +159,7 @@ export function Tether({ distance, fence }: { distance: number | null | undefine
 }
 
 const styles = StyleSheet.create({
-  inst: { alignItems: 'center', gap: 4, padding: 10, borderWidth: 1, borderColor: '#e2e2e2', backgroundColor: '#fff', minWidth: 150, flexGrow: 1, flexBasis: 150 },
+  inst: { alignItems: 'center', gap: 4, padding: 10, borderWidth: 1, borderColor: '#e2e2e2', backgroundColor: '#FFFAF2', minWidth: 150, flexGrow: 1, flexBasis: 150 },
   instLabel: { fontSize: 8.5, letterSpacing: 1.4, color: colors.greenDim, textAlign: 'center' },
   bigValue: { fontSize: 20, color: INK, fontFamily: FONT },
   battery: { flexDirection: 'row', alignItems: 'center', height: 70, marginTop: 20 },

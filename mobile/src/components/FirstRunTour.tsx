@@ -78,8 +78,8 @@ export function FirstRunTour({ onTab }: { onTab: (tab: string) => void }) {
 const styles = StyleSheet.create({
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center', padding: 16, paddingBottom: 96 },
   card: {
-    width: '100%', maxWidth: 440, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.signal, padding: 16, gap: 10,
-    shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
+    width: '100%', maxWidth: 440, backgroundColor: '#FFFAF2', borderWidth: 1, borderColor: colors.signal, padding: 16, gap: 10,
+    shadowColor: '#2A1F17', shadowOpacity: 0.16, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   count: { fontSize: 9.5, letterSpacing: 2.2, color: colors.greenDim },

@@ -25,7 +25,7 @@ function rng(seed: number) {
 
 const W = 120;
 const H = 168;
-const INK = '#111111';
+const INK = '#2A1F17';
 const GREY = '#8a8a8a';
 
 // One cover's pattern as plain shapes, so it can be drawn as SVG elements (native) or as a single
@@ -108,7 +108,7 @@ function coverArt(seed: number, progress?: number) {
           : `<rect x="${f(s.x)}" y="${f(s.y)}" width="${f(s.s)}" height="${f(s.s)}" transform="rotate(${s.rot} ${f(s.x + s.s / 2)} ${f(s.y + s.s / 2)})" stroke="${s.stroke}" stroke-width="${s.sw}" fill="${s.fill}" fill-opacity="0.08"/>`,
   ).join('');
   const ribbon = progress != null && progress > 0 ? `<path d="M${W - 22} 0 h12 v${f(10 + progress * 60)} l-6 -6 l-6 6 z" fill="${INK}"/>` : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${W}" height="${H}" fill="#fff"/>${body}<rect width="5" height="${H}" fill="${INK}" opacity="0.85"/>${ribbon}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${W}" height="${H}" fill="#FFFAF2"/>${body}<rect width="5" height="${H}" fill="${INK}" opacity="0.85"/>${ribbon}</svg>`;
   const uri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   artCache.set(key, uri);
   return uri;
@@ -134,7 +134,7 @@ function BookCoverImpl({ title, author, width = 120, progress, badge }: {
         <Image source={{ uri: coverArt(seed, progress) }} style={StyleSheet.absoluteFill} resizeMode="stretch" />
       ) : (
         <Svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={StyleSheet.absoluteFill}>
-          <Rect x={0} y={0} width={W} height={H} fill="#ffffff" />
+          <Rect x={0} y={0} width={W} height={H} fill="#FFFAF2" />
           {pattern}
           {/* spine shadow */}
           <Rect x={0} y={0} width={5} height={H} fill={INK} opacity={0.85} />
@@ -154,15 +154,15 @@ function BookCoverImpl({ title, author, width = 120, progress, badge }: {
 
 const styles = StyleSheet.create({
   cover: {
-    borderWidth: 1, borderColor: colors.mint, backgroundColor: '#fff', overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 3, height: 4 },
+    borderWidth: 1, borderColor: colors.greenBorder, backgroundColor: '#FFFAF2', overflow: 'hidden',
+    shadowColor: '#2A1F17', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 3, height: 4 },
   },
   plate: {
-    position: 'absolute', left: 10, right: 6, bottom: 6, backgroundColor: '#fff',
-    borderWidth: 1, borderColor: colors.mint, paddingHorizontal: 6, paddingVertical: 5, gap: 2,
+    position: 'absolute', left: 10, right: 6, bottom: 6, backgroundColor: '#FFFAF2',
+    borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 5, gap: 2,
   },
   title: { color: colors.mint, letterSpacing: 0.4, lineHeight: undefined },
   author: { color: colors.greenDim, letterSpacing: 0.6 },
   badge: { position: 'absolute', top: 6, left: 10, backgroundColor: colors.mint, paddingHorizontal: 5, paddingVertical: 2 },
-  badgeText: { color: '#fff', fontSize: 8, letterSpacing: 1.2 },
+  badgeText: { color: '#FFFAF2', fontSize: 8, letterSpacing: 1.2 },
 });

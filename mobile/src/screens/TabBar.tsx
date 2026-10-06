@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mono } from '../components/ui';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { Glyph } from '../components/glyph/Glyph';
 import type { GlyphName } from '../components/glyph/glyphs';
 
@@ -30,7 +30,7 @@ export function TabBar({ active, onChange, vertical, drone }: { active: TabKey; 
       <View style={vertical ? styles.column : styles.row}>
         {TABS.filter((t) => t.key !== 'drone' || drone).map(({ key, label, glyph }) => {
           const on = key === active;
-          const ink = on ? colors.signal : colors.greenDim;
+          const ink = on ? colors.onSignal : colors.greenDim; // the active tab: cream on a terracotta pill
           return (
             <Pressable
               key={key}
@@ -41,7 +41,7 @@ export function TabBar({ active, onChange, vertical, drone }: { active: TabKey; 
               accessibilityLabel={label}
             >
               <Glyph name={glyph} size={vertical ? 30 : 32} color={ink} active={on} />
-              <Mono style={[vertical ? styles.railLabel : styles.label, { color: ink }]}>{label}</Mono>
+              <Mono style={[vertical ? styles.railLabel : styles.label, { color: ink }]}>{label === 'WYRD' ? label : label.charAt(0) + label.slice(1).toLowerCase()}</Mono>
             </Pressable>
           );
         })}
@@ -57,15 +57,15 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', gap: 6 },
   btn: { flex: 1, alignItems: 'center', gap: 1, paddingVertical: 3, borderRadius: 14 },
-  btnOn: { backgroundColor: colors.signalSoft },
-  btnPressed: { backgroundColor: 'rgba(0,0,0,0.06)' },
-  label: { fontSize: 8.5, letterSpacing: 1.5 },
+  btnOn: { backgroundColor: colors.signal },
+  btnPressed: { backgroundColor: colors.signalSoft },
+  label: { fontSize: 9.5, letterSpacing: 0.4, fontFamily: fonts.bodyBold },
 
   rail: {
     width: 176, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.greenBorder,
     backgroundColor: colors.black, paddingHorizontal: 12,
   },
   column: { gap: 6 },
-  railBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 14, borderRadius: 12 },
-  railLabel: { fontSize: 11, letterSpacing: 2 },
+  railBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
+  railLabel: { fontSize: 13, letterSpacing: 0.4, fontFamily: fonts.bodyBold, textTransform: 'capitalize' },
 });

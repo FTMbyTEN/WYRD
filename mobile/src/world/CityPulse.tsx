@@ -38,13 +38,13 @@ export function CityPulse() {
             <>
               <View style={styles.grid}>
                 <Stat n={s.online} label="ONLINE" color="#1aff9c" />
-                <Stat n={s.joined} label="JOINED" color="#00e5ff" />
-                <Stat n={s.joinedToday} label="NEW TODAY" color="#ff2bd6" />
+                {s.joined != null ? <Stat n={s.joined} label="JOINED" color="#00e5ff" /> : null}
+                {s.joinedToday != null ? <Stat n={s.joinedToday} label="NEW TODAY" color="#ff2bd6" /> : null}
                 <Stat n={s.missionsDone} label="MISSIONS" color="#ffc400" />
                 <Stat n={s.talksToday} label="TALKS W/ WYRD" color="#8ea0ff" />
-                <Stat n={s.citizens} label="CITIZENS" color="#ffffff" />
+                {s.citizens != null ? <Stat n={s.citizens} label="CITIZENS" color="#ffffff" /> : null}
               </View>
-              <Mono style={styles.small}>TEN {s.bodies.ten} · AMA {s.bodies.ama}</Mono>
+              {s.bodies ? <Mono style={styles.small}>TEN {s.bodies.ten} · AMA {s.bodies.ama} · owner only</Mono> : null}
               {s.leaders.length ? <Mono style={styles.eyebrow}>LEADING CITIZENS</Mono> : null}
               {s.leaders.map((l, i) => (
                 <View key={i} style={styles.row}>

@@ -32,7 +32,7 @@ function hash(s: string) {
 }
 
 /** A barcode drawn from [seed]: the same student always gets the same one. */
-export function Barcode({ seed, width = 150, height = 34, color = '#fff' }: { seed: string; width?: number; height?: number; color?: string }) {
+export function Barcode({ seed, width = 150, height = 34, color = '#FFFAF2' }: { seed: string; width?: number; height?: number; color?: string }) {
   let h = hash(seed) || 1;
   const bars: [number, number][] = [];
   let x = 0;
@@ -57,9 +57,9 @@ export function LibraryCard({ name, id, stats }: { name: string; id: string; sta
       <View style={card.top}>
         <View style={card.seal}>
           <Svg width={26} height={26} viewBox="0 0 20 20">
-            <Path d="M2 7.5 L10 3 L18 7.5 Z" stroke="#fff" strokeWidth={1.4} fill="none" />
-            <Line x1="3" y1="17" x2="17" y2="17" stroke="#fff" strokeWidth={1.4} />
-            {[4.5, 8.2, 11.8, 15.5].map((x) => <Line key={x} x1={x} y1="9.5" x2={x} y2="15" stroke="#fff" strokeWidth={1.4} />)}
+            <Path d="M2 7.5 L10 3 L18 7.5 Z" stroke="#FFFAF2" strokeWidth={1.4} fill="none" />
+            <Line x1="3" y1="17" x2="17" y2="17" stroke="#FFFAF2" strokeWidth={1.4} />
+            {[4.5, 8.2, 11.8, 15.5].map((x) => <Line key={x} x1={x} y1="9.5" x2={x} y2="15" stroke="#FFFAF2" strokeWidth={1.4} />)}
           </Svg>
         </View>
         <View style={{ flex: 1 }}>
@@ -86,17 +86,17 @@ export function LibraryCard({ name, id, stats }: { name: string; id: string; sta
 
 const card = StyleSheet.create({
   wrap: {
-    backgroundColor: '#0f0f0f', padding: 16, gap: 10, minWidth: 300, maxWidth: 420, width: '100%',
-    shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 8 },
+    backgroundColor: '#24316B', borderRadius: 18, padding: 16, gap: 10, minWidth: 300, maxWidth: 420, width: '100%',
+    shadowColor: '#2A1F17', shadowOpacity: 0.28, shadowRadius: 14, shadowOffset: { width: 0, height: 8 },
   },
   top: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  seal: { width: 38, height: 38, borderWidth: 1, borderColor: '#555', alignItems: 'center', justifyContent: 'center' },
-  brand: { color: '#fff', fontSize: 12, letterSpacing: 3 },
+  seal: { width: 38, height: 38, borderWidth: 1, borderColor: '#7A6656', alignItems: 'center', justifyContent: 'center' },
+  brand: { color: '#FFFAF2', fontSize: 12, letterSpacing: 3 },
   kind: { color: '#8a8a8a', fontSize: 8, letterSpacing: 1.6 },
-  name: { color: '#fff', fontSize: 30, lineHeight: 34 },
+  name: { color: '#FFFAF2', fontSize: 30, lineHeight: 34 },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, borderTopWidth: 1, borderTopColor: '#2c2c2c', paddingTop: 10 },
   stat: { minWidth: 56 },
-  v: { color: '#fff', fontSize: 24 },
+  v: { color: '#FFFAF2', fontSize: 24 },
   k: { color: '#8a8a8a', fontSize: 8, letterSpacing: 1.4 },
   bottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 2 },
   no: { color: '#8a8a8a', fontSize: 9, letterSpacing: 1.6 },

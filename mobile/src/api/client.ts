@@ -321,7 +321,7 @@ export const api = {
   // ---- COP oversight ----
   selfConfig: () => callEndpoint<SpSelfConfig>('selfConfig', 'getConfig', {}, { authenticated: false }).then(adaptSelfConfig),
   copLog: (limit = 20) =>
-    callEndpoint<SpCopLogEntry[]>('selfConfig', 'getCopLog', { limit }, { authenticated: false }).then((es) =>
+    callEndpoint<SpCopLogEntry[]>('selfConfig', 'getCopLog', { limit }).then((es) =>
       es.map(adaptCopLogEntry),
     ),
   triggerSelfModify: () =>
