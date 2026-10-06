@@ -37,8 +37,18 @@ function Loading() {
 // way to defer module evaluation itself, which is why AppRoot lives in its own file.
 // Web: start loading CanvasKit (the ~3 MB graphics engine) and the app code the moment this
 // module runs, in parallel with the fonts -- not after them, as a lazy component would.
+// The direct game link (#play): only the game loads -- no CanvasKit (~8 MB), no rest of the app.
+const gameOnly = Platform.OS === 'web' && typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash);
+const GameOnly = React.lazy(() => import('./src/world/LagosWorld').then((m) => ({
+  default: () => (
+    <View style={{ flex: 1, backgroundColor: '#0d0f14' }}>
+      <m.LagosWorld onExit={() => { location.hash = ''; location.reload(); }} />
+    </View>
+  ),
+})));
+
 const skiaReady: Promise<unknown> | null =
-  Platform.OS === 'web'
+  Platform.OS === 'web' && !gameOnly
     ? import('@shopify/react-native-skia/lib/module/web').then(({ LoadSkiaWeb }) => LoadSkiaWeb())
     : null;
 
@@ -59,7 +69,7 @@ export default function App() {
     <SafeAreaProvider style={{ flex: 1, backgroundColor: '#ffffff' }}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <Suspense fallback={<Loading />}>
-        <AppRoot />
+        {gameOnly ? <GameOnly /> : <AppRoot />}
       </Suspense>
     </SafeAreaProvider>
   );

@@ -13,7 +13,7 @@ type Mote = { x: number; y: number; r: number; o: number };
 function Layer({ motes, w, h }: { motes: Mote[]; w: number; h: number }) {
   return (
     <Svg width={w} height={h}>
-      {motes.map((m, i) => <Circle key={i} cx={m.x * w} cy={m.y * h} r={m.r} fill="#000" opacity={m.o} />)}
+      {motes.map((m, i) => <Circle key={i} cx={m.x * w} cy={m.y * h} r={m.r} fill={i % 4 === 0 ? '#C4572E' : i % 7 === 0 ? '#E2A32B' : '#24316B'} opacity={m.o} />)}
     </Svg>
   );
 }

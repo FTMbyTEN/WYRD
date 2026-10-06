@@ -103,7 +103,30 @@ const keepLook = (l: CharacterLook) => { try { localStorage.setItem(LOOK_KEY, JS
  * Their character is saved on the server (the same on every device); a copy is kept on this device
  * so the game still works offline or before sign-in.
  */
+/** NAIJA 2099 is a PC game: on a phone or tablet it says so instead of loading the city. */
 export function LagosWorld({ onExit }: { onExit: () => void }) {
+  if (PHONE) {
+    return (
+      <View style={pcOnly.wrap}>
+        <Mono style={pcOnly.eyebrow}>NAIJA 2099</Mono>
+        <Display style={pcOnly.title}>Best on a computer</Display>
+        <Mono style={pcOnly.text}>NAIJA 2099 is built for PC -- a keyboard, a mouse and a big screen. Open wryd00.serverpod.space/#play on your computer to enter Lagos.</Mono>
+        <Pressable onPress={onExit} style={pcOnly.btn}><Mono style={pcOnly.btnText}>BACK</Mono></Pressable>
+      </View>
+    );
+  }
+  return <LagosWorldPc onExit={onExit} />;
+}
+const pcOnly = StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: '#F7EFE2', alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
+  eyebrow: { fontSize: 11, letterSpacing: 3, color: '#C4572E' },
+  title: { fontSize: 30, color: '#24316B', textAlign: 'center' },
+  text: { fontSize: 13, lineHeight: 20, color: '#7A6656', textAlign: 'center', maxWidth: 360 },
+  btn: { marginTop: 8, borderWidth: 1, borderColor: '#C4572E', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
+  btnText: { fontSize: 11, letterSpacing: 2, color: '#C4572E' },
+});
+
+function LagosWorldPc({ onExit }: { onExit: () => void }) {
   const [look, setLook] = useState<CharacterLook | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -331,6 +354,10 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     const canAfford = (n: number) => !live.current.wallet || live.current.wallet.naira >= n; // signed out: rides are free
     let placeHere: Place | null = null, nextPlace = 0;
     // the city's sound; what's around you is measured a few times a second
+    // a performance readout for testing on a real phone: open the game with #play&fps
+    const fpsDiv = /fps/i.test(location.hash) ? document.createElement('div') : null;
+    if (fpsDiv) { fpsDiv.style.cssText = 'position:absolute;left:50%;bottom:4px;transform:translateX(-50%);z-index:9;padding:2px 8px;background:rgba(0,0,0,0.7);color:#1aff9c;font:11px monospace;pointer-events:none'; el.appendChild(fpsDiv); }
+    let fpsFrames = 0, fpsAt = 0;
     const sound = makeCityAudio();
     let heardAt = 0, heardTraffic = 0, heardCrowd = 0, heardConductor: string | null = null;
     const jobs = makeJobs({
@@ -477,7 +504,8 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       vehicles.push({ mesh: built.group, wheels: built.wheels, road: null, s: 0, dir: 1, speed: cruise, cruise, len: built.length, width: built.width, okada: okada || keke, honkAt: 0, pos: new THREE.Vector3(), fwd: new THREE.Vector3(1, 0, 0), heading: 0 });
     }
     // the modelled danfo (generated from concept art) replaces the built one once it has loaded
-    loadCharacter('world/vehicles/danfo.glb').then((gltf) => {
+    // phones keep the built danfo (no 1.5 MB download; the detail barely shows on a small screen)
+    if (!PHONE) loadCharacter('world/vehicles/danfo.glb').then((gltf) => {
       if (disposed) return;
       const box = new THREE.Box3().setFromObject(gltf.scene), size = box.getSize(new THREE.Vector3());
       const k = 4.7 / Math.max(size.x, size.z); // ~4.7 m long
@@ -1672,6 +1700,14 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
 
       // district labels, placed over the map
       places.update(now, pos, camera, bird, birdH, night);
+      if (fpsDiv) {
+        fpsFrames++;
+        if (now - fpsAt > 1000) {
+          const i = renderer.info.render;
+          fpsDiv.textContent = `${Math.round((fpsFrames * 1000) / (now - fpsAt))} FPS · ${i.calls} draws · ${Math.round(i.triangles / 1000)}k tris · ${tier.toUpperCase()} · ${city.tiles.size} tiles`;
+          fpsFrames = 0; fpsAt = now;
+        }
+      }
       if (now > heardAt) {
         heardAt = now + 300;
         let cars = 0; heardConductor = null;
@@ -1701,6 +1737,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         trainDist: maglev ? maglev.nearestTrain(pos.x, pos.y, pos.z) : Infinity,
         conductor: riding ? null : heardConductor,
       });
+      const vw = el.clientWidth, vh = el.clientHeight; // measured once a frame (reading after writes forces layout)
       syncPins();
       for (const { m, div } of pins.values()) {
         const active = task && (task.id ?? task.title) === (m.id ?? m.title);
@@ -1710,14 +1747,15 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         const k = Math.max(Math.abs(proj.x) / 0.9, Math.abs(proj.y) / 0.88, 1);
         const px = proj.x / k, py = proj.y / k;
         div.style.opacity = k > 1 ? '0.7' : '1';
-        div.style.transform = proj.z < 1 ? `translate(${((px + 1) / 2) * el.clientWidth}px, ${((1 - py) / 2) * el.clientHeight}px) translate(-50%,-50%)` : 'translate(-9999px,0)';
+        div.style.transform = proj.z < 1 ? `translate(${((px + 1) / 2) * vw}px, ${((1 - py) / 2) * vh}px) translate(-50%,-50%)` : 'translate(-9999px,0)';
       }
       for (const { d, div } of labels) {
-        if (!bird || !landmarks) { div.style.transform = 'translate(-9999px,0)'; continue; }
+        if (!bird || !landmarks) { if (div.dataset.off !== '1') { div.dataset.off = '1'; div.style.transform = 'translate(-9999px,0)'; } continue; }
+        div.dataset.off = '';
         const p = landmarks.toWorld(d.at);
         proj.set(p.x, 30, p.y).project(camera);
         const on = proj.z < 1 && Math.abs(proj.x) < 1.1 && Math.abs(proj.y) < 1.1 && (birdH > 250 || d.name === lastStreet);
-        div.style.transform = on ? `translate(${((proj.x + 1) / 2) * el.clientWidth}px, ${((1 - proj.y) / 2) * el.clientHeight}px) translate(-50%,-50%)` : 'translate(-9999px,0)';
+        div.style.transform = on ? `translate(${((proj.x + 1) / 2) * vw}px, ${((1 - proj.y) / 2) * vh}px) translate(-50%,-50%)` : 'translate(-9999px,0)';
       }
       if (TIERS[tier].bloom && composer) composer.render(); else renderer.render(scene, camera);
     };

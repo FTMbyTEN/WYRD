@@ -188,7 +188,7 @@ export function GateScreen() {
   };
 
   return (
-    <View style={{ flex: 1, width, height, backgroundColor: '#ffffff' }}>
+    <View style={{ flex: 1, width, height, backgroundColor: '#F7EFE2' }}>
       {/* fine dust on the GPU where it can run; the older 2D vortex everywhere else */}
       {canWebGL2
         ? <DustVortex ref={vortexRef} active={!intro || introEnding} style={StyleSheet.absoluteFill} />
@@ -224,7 +224,7 @@ export function GateScreen() {
       </KeyboardAvoidingView>
 
       {intro && (canWebGL2
-        ? <React.Suspense fallback={<View style={[StyleSheet.absoluteFill, { backgroundColor: '#fff' }]} />}><IntroChrome onDone={endIntro} onEnding={() => { setIntroEnding(true); vortexRef.current?.goTo(0); }} /></React.Suspense>
+        ? <React.Suspense fallback={<View style={[StyleSheet.absoluteFill, { backgroundColor: '#F7EFE2' }]} />}><IntroChrome onDone={endIntro} onEnding={() => { setIntroEnding(true); vortexRef.current?.goTo(0); }} /></React.Suspense>
         : <IntroVortex onDone={endIntro} />)}
 
       {Platform.OS === 'web' && (
@@ -237,28 +237,28 @@ export function GateScreen() {
 }
 
 const styles = StyleSheet.create({
-  soundBtn: { position: 'absolute', top: 18, right: 18, width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.7)' },
+  soundBtn: { position: 'absolute', top: 18, right: 18, width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,250,242,0.8)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   // the auth card sits over the vortex, centred, with room on every side on any screen size
   panelWrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', padding: 18 },
   closedWrap: { alignItems: 'center', gap: 18 },
-  wordmark: { fontSize: 52, letterSpacing: 9, textShadowColor: colors.glow, textShadowRadius: 14 },
+  wordmark: { fontSize: 52, letterSpacing: 9, color: '#24316B', textShadowColor: 'rgba(226,163,43,0.45)', textShadowRadius: 14 }, // Adire indigo, an ochre glow
   authPanel: {
     position: 'absolute', alignSelf: 'center', bottom: 34, width: '86%', maxWidth: 320,
-    backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: colors.greenDim, borderRadius: 6,
+    backgroundColor: 'rgba(255,250,242,0.94)', borderWidth: 1, borderColor: '#E2D2BA', borderRadius: 18,
     padding: 14,
   },
-  authWordmark: { fontSize: 30, letterSpacing: 6, textAlign: 'center', textShadowColor: colors.glow, textShadowRadius: 10 },
+  authWordmark: { fontSize: 30, letterSpacing: 6, textAlign: 'center', color: '#24316B', textShadowColor: 'rgba(226,163,43,0.4)', textShadowRadius: 10 },
   authSub: { marginTop: 4, textAlign: 'center', fontSize: 8, letterSpacing: 0.5, color: colors.greenDim },
   tabRow: { flexDirection: 'row', gap: 6, marginVertical: 10 },
   tabBtn: { flex: 1, borderWidth: 1, borderRadius: 2, paddingVertical: 6, alignItems: 'center' },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: colors.greenDim, borderRadius: 2,
+    backgroundColor: 'rgba(247,239,226,0.9)', borderWidth: 1, borderColor: '#E2D2BA', borderRadius: 10,
     paddingHorizontal: 10, paddingVertical: 8, marginBottom: 7, color: colors.green, fontFamily: 'ShareTechMono_400Regular', fontSize: 11.5,
   },
   errorText: { color: colors.danger, fontSize: 9.5, marginTop: 6, textAlign: 'center' },
   authBtn: {
-    marginTop: 8, borderWidth: 1, borderColor: colors.green, borderRadius: 2,
+    marginTop: 8, borderWidth: 1, borderColor: '#C4572E', borderRadius: 999,
     paddingVertical: 10, alignItems: 'center',
   },
   hint: { marginTop: 7, textAlign: 'center', fontSize: 8.5, color: colors.greenDim, opacity: 0.7 },

@@ -87,8 +87,21 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   const panelOpacity = zoom.interpolate({ inputRange: [0.4, 1], outputRange: [0, 1], extrapolate: 'clamp' });
   const panelScale = zoom.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
 
+  // the brain: on a phone it's the living backdrop of the whole home screen, as in the first version
+  const brain = (
+    <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: brainScale }] }]} pointerEvents="none">
+      <BrainCanvas
+        activitySignal={brainActivity}
+        energy={(expanded ? 2.2 : 1) * (0.6 + (mind?.curiosity ?? 0.4))}
+        map={brainMap}
+        radius={0.56}
+        onThought={(path, live) => setThought({ path, live })}
+      />
+    </Animated.View>
+  );
   return (
     <View style={[{ flex: 1 }, desktop && styles.desktopRow]}>
+      {!desktop ? brain : null}
       <View style={styles.heroWrap}>
         {/* The brain itself is the open/close target. The chips, cards and ENTER 3D below are
             siblings layered on top, not children -- nested pressables let this outer target
@@ -99,14 +112,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Close the brain view' : 'Open the brain to see its vitals'}
         >
-          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: brainScale }] }]}>
-            <BrainCanvas
-              activitySignal={brainActivity}
-              energy={(expanded ? 2.2 : 1) * (0.6 + (mind?.curiosity ?? 0.4))}
-              map={brainMap}
-              onThought={(path, live) => setThought({ path, live })}
-            />
-          </Animated.View>
+          {desktop ? brain : null}
 
           <LearningStream words={learningWords} active={expanded} />
 
@@ -177,7 +183,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
         </Mono>
       </View>
 
-      <View style={[styles.panel, desktop && styles.panelDesktop]}>
+      <View style={[styles.panel, !desktop && styles.panelOver, desktop && styles.panelDesktop]}>
         <View style={styles.thoughtHead}>
           <View style={styles.liveDot} />
           <Mono style={styles.eyebrow}>LAST THOUGHT · {latestNote ? timeAgo(mind?.updatedAt ?? Date.now()) : '—'}</Mono>
@@ -342,6 +348,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14, gap: 10,
     backgroundColor: colors.black, borderTopWidth: HAIRLINE, borderTopColor: colors.greenBorder,
   },
+  // phones: translucent cream over the brain, so it fires behind the last thought
+  panelOver: { backgroundColor: 'rgba(247,239,226,0.78)' },
   // desktop: the panel becomes a right-hand column
   panelDesktop: {
     width: 360, borderTopWidth: 0, borderLeftWidth: HAIRLINE, borderLeftColor: colors.greenBorder,

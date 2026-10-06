@@ -72,7 +72,7 @@ vec3 surf(vec3 d){
 function chromeMaterial(env: THREE.Texture, uniforms: Record<string, { value: unknown }>) {
   const m = new THREE.MeshPhysicalMaterial({
     // graphite, not void: deep gunmetal that shows its reflections
-    color: 0x2e3137, metalness: 1, roughness: 0.08, envMap: env, envMapIntensity: 1.45,
+    color: 0x6b4330, metalness: 1, roughness: 0.08, envMap: env, envMapIntensity: 1.45,
     clearcoat: 1, clearcoatRoughness: 0.03,
   });
   m.onBeforeCompile = (shader) => {
@@ -129,7 +129,7 @@ function studio() {
   });
   const floorFade = tex((g) => { // the white floor, brightest under the sphere, greying away
     const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    r.addColorStop(0, 'rgb(255,255,255)'); r.addColorStop(0.6, 'rgb(200,200,204)'); r.addColorStop(1, 'rgb(96,98,104)');
+    r.addColorStop(0, 'rgb(255,250,242)'); r.addColorStop(0.6, 'rgb(238,223,200)'); r.addColorStop(1, 'rgb(170,128,96)');
     g.fillStyle = r; g.fillRect(0, 0, 128, 128);
   });
 
@@ -137,22 +137,22 @@ function studio() {
   const room = new THREE.Mesh(new THREE.SphereGeometry(14, 48, 32), new THREE.ShaderMaterial({
     side: THREE.BackSide,
     vertexShader: 'varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader: 'varying vec3 vP; void main(){ float y=vP.y; vec3 top=vec3(0.01), mid=vec3(0.115,0.12,0.13), low=vec3(0.6); vec3 c=y>0.0?mix(mid,top,smoothstep(0.0,0.85,y)):mix(mid,low,smoothstep(0.0,-0.6,y)); gl_FragColor=vec4(c,1.0); }',
+    fragmentShader: 'varying vec3 vP; void main(){ float y=vP.y; vec3 top=vec3(0.04,0.06,0.17), mid=vec3(0.34,0.13,0.07), low=vec3(0.88,0.64,0.32); vec3 c=y>0.0?mix(mid,top,smoothstep(0.0,0.85,y)):mix(mid,low,smoothstep(0.0,-0.6,y)); gl_FragColor=vec4(c,1.0); }',
   }));
   s.add(room);
   const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), new THREE.MeshBasicMaterial({ map: floorFade, color: new THREE.Color(1.2, 1.2, 1.2), side: THREE.DoubleSide }));
   floor.position.y = -3.2; floor.rotation.x = -Math.PI / 2; s.add(floor);
-  const panel = (geo: THREE.BufferGeometry, map: THREE.Texture, x: number, y: number, z: number, v: number) => {
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, color: new THREE.Color(v, v, v), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  const panel = (geo: THREE.BufferGeometry, map: THREE.Texture, x: number, y: number, z: number, v: number, tint: [number, number, number] = [1, 0.9, 0.74]) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, color: new THREE.Color(v * tint[0], v * tint[1], v * tint[2]), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
     m.position.set(x, y, z);
     m.lookAt(0, 0, 0);
     s.add(m);
   };
   panel(new THREE.PlaneGeometry(1.8, 13), strip, -6.5, 0.8, 3.5, 5.5); // key strip, left
-  panel(new THREE.PlaneGeometry(1.2, 13), strip, 6.5, 0.8, 2.5, 2.4);  // fill strip, right (low: a darker side)
-  panel(new THREE.CircleGeometry(2.6, 48), soft, 0, 8.5, 3, 3.2);      // a round softbox overhead
-  panel(new THREE.PlaneGeometry(1.0, 14), strip, -4.8, 0, -8, 3.6);    // rim strips behind: the edge of the sphere
-  panel(new THREE.PlaneGeometry(1.0, 14), strip, 4.8, 0, -8, 3.6);
+  panel(new THREE.PlaneGeometry(1.2, 13), strip, 6.5, 0.8, 2.5, 2.4, [1, 0.62, 0.42]);  // fill strip, right: terracotta (low: a darker side)
+  panel(new THREE.CircleGeometry(2.6, 48), soft, 0, 8.5, 3, 3.2, [1, 0.95, 0.86]);      // a round softbox overhead, cream
+  panel(new THREE.PlaneGeometry(1.0, 14), strip, -4.8, 0, -8, 3.6, [1, 0.78, 0.4]);    // rim strips behind: the edge of the sphere, ochre
+  panel(new THREE.PlaneGeometry(1.0, 14), strip, 4.8, 0, -8, 3.6, [0.55, 0.66, 1]); // and indigo
   return s;
 }
 
@@ -162,9 +162,9 @@ function shadowTexture() {
   c.width = c.height = 256;
   const g = c.getContext('2d')!;
   const grad = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  grad.addColorStop(0, 'rgba(0,0,0,0.42)');
-  grad.addColorStop(0.45, 'rgba(0,0,0,0.16)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  grad.addColorStop(0, 'rgba(70,36,18,0.42)');
+  grad.addColorStop(0.45, 'rgba(70,36,18,0.16)');
+  grad.addColorStop(1, 'rgba(70,36,18,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 256, 256);
   return new THREE.CanvasTexture(c);
@@ -188,7 +188,7 @@ void main(){
 }`;
 const DUST_FRAG = /* glsl */ `
 varying float vA;
-void main(){ vec2 c=gl_PointCoord-0.5; float a=exp(-dot(c,c)*14.0)*vA; gl_FragColor=vec4(vec3(0.05),a); }`;
+void main(){ vec2 c=gl_PointCoord-0.5; float a=exp(-dot(c,c)*14.0)*vA; gl_FragColor=vec4(vec3(0.14,0.19,0.42),a); }`;
 
 const FinishShader = {
   uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uGlitch: { value: 0 }, uFlash: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
@@ -209,7 +209,7 @@ const FinishShader = {
       col=mix(col,col*col*(3.0-2.0*col),0.9);                   // an S-curve: deeper darks, crisper highlights
       col+=(h(vUv*uRes+fract(uTime))-0.5)*0.03;                // film grain
       col*=mix(0.86,1.0,smoothstep(1.25,0.25,length(vUv-0.5)*1.3)); // vignette
-      col=mix(col,vec3(1.0),uFlash);
+      col=mix(col,vec3(0.97,0.94,0.89),uFlash);
       gl_FragColor=vec4(col,1.0);
     }`,
 };
@@ -252,7 +252,7 @@ export function IntroChrome({ onDone, onEnding }: { onDone: () => void; onEnding
     Object.assign(renderer.domElement.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'block' });
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff);
+    scene.background = new THREE.Color(0xf7efe2); // warm cream
     const pmrem = new THREE.PMREMGenerator(renderer);
     const env = pmrem.fromScene(studio(), 0.02).texture; // a touch of blur: reflections that grade, not cut
     const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
@@ -274,7 +274,7 @@ export function IntroChrome({ onDone, onEnding }: { onDone: () => void; onEnding
 
     // droplets: stars, a horizon, orbits, the final shatter
     const D = LITE ? 140 : 260;
-    const dropMat = new THREE.MeshPhysicalMaterial({ color: 0x2e3137, metalness: 1, roughness: 0.06, envMap: env, envMapIntensity: 1.45, clearcoat: 1, clearcoatRoughness: 0.04 });
+    const dropMat = new THREE.MeshPhysicalMaterial({ color: 0x6b4330, metalness: 1, roughness: 0.06, envMap: env, envMapIntensity: 1.45, clearcoat: 1, clearcoatRoughness: 0.04 });
     const drops = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 20, 14), dropMat, D);
     drops.frustumCulled = false;
     scene.add(drops);
@@ -555,8 +555,8 @@ function Caption({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   captionWrap: { position: 'absolute', left: 16, right: 16, bottom: '9%', alignItems: 'center' },
-  caption: { fontSize: 28, letterSpacing: 3, color: '#0b0b0b', textAlign: 'center' },
-  wake: { fontSize: 11, letterSpacing: 4, color: 'rgba(0,0,0,0.5)' },
-  skip: { position: 'absolute', bottom: 22, right: 22, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.2)', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.7)' },
-  skipText: { fontSize: 10, letterSpacing: 2, color: 'rgba(0,0,0,0.55)' },
+  caption: { fontSize: 28, letterSpacing: 3, color: '#24316B', textAlign: 'center' },
+  wake: { fontSize: 11, letterSpacing: 4, color: 'rgba(196,87,46,0.75)' },
+  skip: { position: 'absolute', bottom: 22, right: 22, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(196,87,46,0.35)', borderRadius: 999, backgroundColor: 'rgba(255,250,242,0.8)' },
+  skipText: { fontSize: 10, letterSpacing: 2, color: '#C4572E' },
 });

@@ -323,7 +323,7 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
       const cx = W / 2, cy = H / 2;
       const X = (i: number) => cx + px[i] * R, Y = (i: number) => cy - py[i] * R;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = firstFrame ? '#ffffff' : scene === 'glitch' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.34)';
+      ctx.fillStyle = firstFrame ? '#F7EFE2' : scene === 'glitch' ? 'rgba(247,239,226,0.5)' : 'rgba(247,239,226,0.34)';
       firstFrame = false;
       ctx.fillRect(0, 0, W, H);
 
@@ -331,21 +331,21 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
       // the rising sun's rings, the lattice's seams -- each only where its scene needs it
       ctx.lineWidth = 0.7;
       if (scene === 'signal') {
-        ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+        ctx.strokeStyle = 'rgba(36,49,107,0.22)';
         ctx.beginPath();
         for (let i = 0; i < N; i += 3) (i ? ctx.lineTo(X(i), Y(i)) : ctx.moveTo(X(i), Y(i)));
         ctx.stroke();
       }
       if (scene === 'restore') {
         const scanY = cy - (1.4 - ((t - 1.6) / 2.3) * 2.9) * FS * R;
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.strokeStyle = 'rgba(36,49,107,0.5)';
         ctx.beginPath();
         for (let x = 0; x < W; x += 24) { const j = (rand() - 0.5) * (rand() < 0.15 ? 6 : 1); ctx.moveTo(x, scanY + j); ctx.lineTo(x + 18, scanY + j); }
         ctx.stroke();
       }
       if (speaking || scene === 'restore') {
         const reveal = scene === 'restore' ? Math.min(1, Math.max(0, (t - 3.2) / 0.9)) : 1;
-        ctx.strokeStyle = `rgba(0,0,0,${((0.05 + level * 0.28) * reveal).toFixed(3)})`;
+        ctx.strokeStyle = `rgba(36,49,107,${((0.05 + level * 0.28) * reveal).toFixed(3)})`;
         ctx.beginPath();
         for (let e = 0; e < EDGES.length; e += 2) { const a = EDGES[e], b = EDGES[e + 1]; ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); }
         ctx.stroke();
@@ -353,7 +353,7 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
       if (scene === 'stars') {
         const lit = Math.min(1, Math.max(0, (t - 12.2) / 1.8)); // questions finding each other
         if (lit > 0) {
-          ctx.strokeStyle = `rgba(0,0,0,${(0.16 * lit).toFixed(3)})`;
+          ctx.strokeStyle = `rgba(36,49,107,${(0.16 * lit).toFixed(3)})`;
           ctx.beginPath();
           for (let e = 0; e < CONST.length; e += 2) { const a = CONST[e], b = CONST[e + 1]; ctx.moveTo(X(a), Y(a)); ctx.lineTo(X(b), Y(b)); }
           ctx.stroke();
@@ -363,7 +363,7 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
         const rise = Math.min(1, (t - 14.8) / 3);
         ctx.setLineDash([1.2, 5]);
         for (let r = 1; r <= 4; r++) {
-          ctx.strokeStyle = `rgba(0,0,0,${(0.28 - r * 0.05).toFixed(3)})`;
+          ctx.strokeStyle = `rgba(36,49,107,${(0.28 - r * 0.05).toFixed(3)})`;
           ctx.beginPath();
           ctx.arc(cx, cy + 0.35 * R, R * (0.12 + r * 0.11) * (0.6 + rise * 0.4), Math.PI, 0);
           ctx.stroke();
@@ -371,14 +371,14 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
         ctx.setLineDash([]);
       }
       if (scene === 'pattern') { // the lattice's spiral seams
-        ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+        ctx.strokeStyle = 'rgba(36,49,107,0.07)';
         ctx.beginPath();
         for (let i = 0; i + 21 < N; i++) { ctx.moveTo(X(i), Y(i)); ctx.lineTo(X(i + 21), Y(i + 21)); }
         ctx.stroke();
       }
 
       // light as density: a soft bloom under the brightest points
-      ctx.fillStyle = 'rgba(0,0,0,0.035)';
+      ctx.fillStyle = 'rgba(36,49,107,0.035)';
       ctx.beginPath();
       for (let i = 0; i < N; i++) {
         if (ta[i] < 0.72) continue;
@@ -389,7 +389,7 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
 
       const BUCKETS = 12;
       for (let b = 0; b < BUCKETS; b++) {
-        ctx.fillStyle = `rgba(0,0,0,${((b + 1) / BUCKETS).toFixed(3)})`;
+        ctx.fillStyle = `rgba(36,49,107,${((b + 1) / BUCKETS).toFixed(3)})`;
         ctx.beginPath();
         for (let i = 0; i < N; i++) {
           const a = Math.min(0.999, Math.max(0, ta[i] * (i < FACE_N && speaking ? 1 + level * 0.5 : 1)));
@@ -405,8 +405,8 @@ export function IntroVortex({ onDone }: { onDone: () => void }) {
       // a whisper of vignette
       ctx.fillStyle = vignette ?? (vignette = (() => {
         const g = ctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.35, cx, cy, Math.max(W, H) * 0.75);
-        g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(1, 'rgba(0,0,0,0.035)');
+        g.addColorStop(0, 'rgba(36,49,107,0)');
+        g.addColorStop(1, 'rgba(36,49,107,0.035)');
         return g;
       })());
       ctx.fillRect(0, 0, W, H);
@@ -476,6 +476,6 @@ const styles = StyleSheet.create({
   captionWrap: { position: 'absolute', left: 16, right: 16, bottom: '12%', alignItems: 'center' },
   caption: { fontSize: 26, letterSpacing: 2, color: colors.mint, textAlign: 'center' },
   wake: { fontSize: 11, letterSpacing: 3, color: colors.greenDim },
-  skip: { position: 'absolute', bottom: 22, right: 22, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.8)' },
+  skip: { position: 'absolute', bottom: 22, right: 22, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 999, backgroundColor: 'rgba(247,239,226,0.8)' },
   skipText: { fontSize: 10, letterSpacing: 2, color: colors.greenDim },
 });

@@ -83,7 +83,9 @@ export function makePlaces(scene: THREE.Scene, host: HTMLElement) {
   };
 
   // ---- the map pins ----
-  const pins: { p: Place; div: HTMLDivElement }[] = [];
+  const pins: { p: Place; div: HTMLDivElement; at?: string }[] = [];
+  const hide = (pin: { div: HTMLDivElement; at?: string }) => { if (pin.at !== 'off') { pin.at = 'off'; pin.div.style.transform = 'translate(-9999px,0)'; } };
+  let wasBird = true;
 
   fetch('world/v1/places.json').then((r) => r.json()).then((list: Place[]) => {
     places = list;
@@ -156,19 +158,23 @@ export function makePlaces(scene: THREE.Scene, host: HTMLElement) {
       const w = host.clientWidth, h = host.clientHeight;
       let shown = 0;
       const taken: [number, number][] = []; // labels already placed this frame: no pile-ups
-      for (const { p, div } of pins) {
+      if (!bird && !wasBird) return; // at street level the tags stay hidden: no work at all
+      wasBird = bird;
+      for (const pin of pins) {
+        const { p, div } = pin;
         const want = bird && shown < 70 && (only ? only.has(p.k) && birdH < 4000 : MAP_ALWAYS.has(p.k) ? birdH < 3000 : birdH < 500);
         if (want) {
           proj.set(p.x, 10, p.z).project(camera);
           const sx = ((proj.x + 1) / 2) * w, sy = ((1 - proj.y) / 2) * h;
           if (proj.z < 1 && Math.abs(proj.x) < 1 && Math.abs(proj.y) < 1 && !taken.some(([x, y]) => Math.abs(x - sx) < 120 && Math.abs(y - sy) < 18)) {
             taken.push([sx, sy]);
-            div.style.transform = `translate(${sx}px, ${sy}px) translate(-50%,-50%)`;
+            const at = `translate(${Math.round(sx)}px, ${Math.round(sy)}px) translate(-50%,-50%)`;
+            if (pin.at !== at) { pin.at = at; div.style.transform = at; }
             shown++;
             continue;
           }
         }
-        div.style.transform = 'translate(-9999px,0)';
+        hide(pin);
       }
     },
     dispose() {

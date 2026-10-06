@@ -29,6 +29,13 @@ uniform float uTime;   // seconds
 uniform float uYaw, uPitch, uScale, uPx, uIntensity, uAspect;
 uniform float uScatter; // 0 = the shape, 1 = blown out to a faint haze (the stage cleared for sign-in)
 out float vAlpha;
+out vec3 vCol;
+vec3 warmLagos(float k){
+  if (k < 0.46) return vec3(0.141, 0.192, 0.420);      // Adire indigo
+  if (k < 0.72) return vec3(0.769, 0.341, 0.180);      // terracotta
+  if (k < 0.86) return vec3(0.886, 0.639, 0.169);      // ochre
+  return vec3(0.184, 0.420, 0.298);                    // palm green
+}
 float ease(float t){ return t*t*t*(t*(t*6.0-15.0)+10.0); } // smootherstep: no snap at either end
 void main(){
   // each grain leaves on its own beat: a wave that sweeps across the shape, with a little randomness
@@ -54,6 +61,7 @@ void main(){
   // fine grains; nearer ones a touch bigger and darker
   // capped, so grains blown towards the viewer stay grains rather than blobs
   gl_PointSize = min(uPx * (0.9 + aSeed.w * 0.9) * (6.5 / d), uPx * 2.4);
+  vCol = warmLagos(fract(aSeed.w * 7.31));
   vAlpha = clamp((0.55 + uIntensity * 0.25) * (7.0 / d) - carry * 0.15, 0.12, 0.95) * (1.0 - s * 0.8) * smoothstep(1.2, 4.0, d); // dust passing the lens fades out
 }`;
 
@@ -66,6 +74,13 @@ ${NOISE}
 in vec4 aBg; // xyz home in a wide box behind the shape, w random 0..1
 uniform float uTime, uYaw, uScale, uPx, uAspect, uScatter;
 out float vAlpha;
+out vec3 vCol;
+vec3 warmLagos(float k){
+  if (k < 0.46) return vec3(0.141, 0.192, 0.420);      // Adire indigo
+  if (k < 0.72) return vec3(0.769, 0.341, 0.180);      // terracotta
+  if (k < 0.86) return vec3(0.886, 0.639, 0.169);      // ochre
+  return vec3(0.184, 0.420, 0.298);                    // palm green
+}
 void main(){
   vec3 p = aBg.xyz;
   p += curl(p * 0.35 + vec3(0.0, uTime * 0.035, aBg.w * 3.0)) * 0.45; // the slow current
@@ -80,18 +95,20 @@ void main(){
   gl_Position = vec4(r.x * k / uAspect, r.y * k, 0.0, 1.0);
   gl_PointSize = uPx * (1.0 + aBg.w * 1.0) * clamp(6.0 / d, 0.6, 1.5);
   // faint, and fainter far away; a little brighter while the stage is cleared for sign-in
+  vCol = mix(warmLagos(fract(aBg.w * 5.17)), vec3(0.969, 0.937, 0.886), 0.25); // the far grains, a touch hazier
   vAlpha = (0.22 + aBg.w * 0.3) * clamp(7.0 / d, 0.45, 1.0) * (1.0 + uScatter * 0.4) * smoothstep(1.2, 4.0, d);
 }`;
 
 const FRAG = /* glsl */ `#version 300 es
 precision mediump float;
 in float vAlpha;
+in vec3 vCol;
 out vec4 color;
 void main(){
   vec2 c = gl_PointCoord - 0.5;
   float r = dot(c, c);
   if (r > 0.25) discard;
-  color = vec4(0.04, 0.04, 0.05, vAlpha * smoothstep(0.25, 0.1, r)); // ink grains, soft edged
+  color = vec4(vCol, vAlpha * smoothstep(0.25, 0.1, r)); // Warm Lagos grains, soft edged
 }`;
 
 export const DustVortex = forwardRef<VortexHandle, { active?: boolean; style?: StyleProp<ViewStyle> }>(
@@ -247,7 +264,7 @@ export const DustVortex = forwardRef<VortexHandle, { active?: boolean; style?: S
         intensity += (intensityTarget - intensity) * 0.06;
         const bt = (now - burstAt) / BURST_MS;
         const pulse = bt >= 0 && bt < 1 ? Math.sin(bt * Math.PI) * 0.12 : 0;
-        gl.clearColor(1, 1, 1, 1);
+        gl.clearColor(0.969, 0.937, 0.886, 1); // warm cream
         gl.clear(gl.COLOR_BUFFER_BIT);
         const time = (now - t0) / 1000, yaw = (now - t0) * (0.00026 + intensity * 0.0006);
         const fit = 1.6 * Math.min(cv.width, cv.height) / cv.height;
@@ -287,6 +304,6 @@ export const DustVortex = forwardRef<VortexHandle, { active?: boolean; style?: S
       };
     }, []);
 
-    return <View ref={host} style={[{ flex: 1, backgroundColor: '#ffffff', overflow: 'hidden' }, style]} />;
+    return <View ref={host} style={[{ flex: 1, backgroundColor: '#F7EFE2', overflow: 'hidden' }, style]} />;
   },
 );

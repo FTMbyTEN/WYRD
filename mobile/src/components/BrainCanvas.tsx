@@ -68,14 +68,15 @@ function buildBrain(nodeCount: number): BrainPoint[] {
 
 // Shades of ink, quantized: each made once and reused every frame.
 const SHADES = 32;
-// Signal: the packets travelling the mesh and the digestion bursts are WYRD thinking, so they are cobalt
+// Warm Lagos: the brain is Adire indigo; the packets travelling the mesh (WYRD thinking) are terracotta,
+// and a burst of learning flares ochre
 const signals: ReturnType<typeof Skia.Color>[] = [];
 function signalInk(bucket: number) {
-  return (signals[bucket] ??= Skia.Color(`rgba(42,70,255,${((bucket + 0.5) / SHADES).toFixed(3)})`));
+  return (signals[bucket] ??= Skia.Color(`rgba(196,87,46,${((bucket + 0.5) / SHADES).toFixed(3)})`));
 }
 const inks: ReturnType<typeof Skia.Color>[] = [];
 function ink(bucket: number) {
-  return (inks[bucket] ??= Skia.Color(`rgba(0,0,0,${((bucket + 0.5) / SHADES).toFixed(3)})`));
+  return (inks[bucket] ??= Skia.Color(`rgba(36,49,107,${((bucket + 0.5) / SHADES).toFixed(3)})`));
 }
 const shade = (alpha: number) => Math.max(0, Math.min(SHADES - 1, Math.floor(alpha * SHADES)));
 function shadeBuckets<T>(): T[][] {
@@ -212,7 +213,9 @@ const IDLE_REPLAY_MS = 2600; // between thoughts, it replays one of its recent r
  * `energy` (1 = resting) speeds up and thickens the signal traffic, e.g. while the brain is
  * opened up on the WYRD tab.
  */
-export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, onThought }: {
+export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, onThought, radius = 0.42 }: {
+  /** how big the brain is drawn, as a share of the view (home: 0.56, as in the first version) */
+  radius?: number;
   nodeCount?: number;
   activitySignal?: number;
   energy?: number;
@@ -235,6 +238,9 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
   const shapeKey = map && map.neurons.length >= 8 ? `${map.neurons.map((x) => x.id).join('|')}#${map.synapses.length}` : '';
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const real = useMemo(() => (shapeKey && map ? realBrain(map) : null), [shapeKey]);
+  // the glowing cloud of the first version: a faint brain-shaped point field behind the real
+  // neurons, so a young brain (few neurons yet) still reads as a full, living brain. It never fires.
+  const cloud = useMemo(() => buildBrain(220), []);
   const { points, edges } = useMemo(() => real ?? brainFor(nodeCount), [real, nodeCount]);
 
   // thoughts to play: new real firings as they arrive; between them, replays of recent ones
@@ -262,10 +268,12 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activitySignal]);
 
+  const radiusRef = useRef(radius);
+  radiusRef.current = radius;
   const loop = useSkiaLoop(
     (canvas, W, H, now) => {
       const t = now * 0.00022;
-      const R = Math.min(W, H) * 0.42;
+      const R = Math.min(W, H) * radiusRef.current; // the home screen asks for a big brain, as in the first version
       canvas.clear(Skia.Color('rgba(255,255,255,0)'));
       const clock = signalClock.current;
       clock.t += (clock.last ? Math.min(64, now - clock.last) : 0) * energyRef.current;
@@ -293,7 +301,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
         for (const e of edges as RealEdge[]) {
           const a = proj[e.a], b = proj[e.b];
           const depth = (a.d + b.d) / 2;
-          lines[shade(0.1 + Math.min(1, e.w) * 0.45 + depth * 0.25)].push({ x: a.sx, y: a.sy }, { x: b.sx, y: b.sy });
+          lines[shade(0.05 + Math.min(1, e.w) * 0.28 + depth * 0.15)].push({ x: a.sx, y: a.sy }, { x: b.sx, y: b.sy });
         }
         // the thought being played: the signal crosses each synapse of its real path in turn, the
         // synapses it has crossed stay lit, and each neuron flashes as the signal reaches it
@@ -339,7 +347,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
       for (const e of real ? [] : edges) {
         const a = proj[e.a], b = proj[e.b];
         const depth = (a.d + b.d) / 2;
-        const l = lines[shade(0.22 + depth * 0.4)];
+        const l = lines[shade(0.1 + depth * 0.25)];
         l.push({ x: a.sx, y: a.sy }, { x: b.sx, y: b.sy });
 
         // Firing: each synapse fires in turn (about a third of them at any moment), a cobalt streak
@@ -358,15 +366,22 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
         else flashes[shade(0.6 * fade)].push(b.sx, b.sy, (2.5 + depth * 4) * (1.4 - fade * 0.4));
       }
 
+      // the cloud: faint, small, slowly breathing
+      for (const p of cloud) {
+        const x = p.x * ca - p.z * sa, z = p.x * sa + p.z * ca;
+        const sc = 1 / (2.6 - z * 0.6);
+        const pulse = 0.5 + 0.5 * Math.sin(now * 0.0012 + p.ph);
+        dots[shade(0.22 + sc * 0.9 * pulse)].push(W / 2 + x * R * sc * 1.7, H / 2 - p.y * R * sc * 1.9, p.s * sc * 3.2);
+      }
       // Nodes themselves, gently pulsing -- the "neurons".
       for (const p of proj) {
         const pulse = 0.55 + 0.45 * Math.sin(now * 0.002 + p.ph);
-        dots[shade(0.25 + p.d * 0.9 * pulse)].push(p.sx, p.sy, p.s * p.d * 1.5);
+        dots[shade(0.4 + p.d * 1.1 * pulse)].push(p.sx, p.sy, p.s * p.d * 2.4);
       }
 
       const linePaint = Skia.Paint();
       linePaint.setStyle(1);
-      linePaint.setStrokeWidth(0.8);
+      linePaint.setStrokeWidth(0.6);
       lines.forEach((pts, b) => {
         if (!pts.length) return;
         linePaint.setColor(ink(b));
@@ -408,7 +423,7 @@ export function BrainCanvas({ nodeCount = 150, activitySignal, energy = 1, map, 
         const p = proj[b.nodeIdx];
         if (!p) return;
         burstPaint.setStrokeWidth(1.4 * (1 - age));
-        burstPaint.setColor(Skia.Color(`rgba(42,70,255,${(0.8 * (1 - age)).toFixed(3)})`));
+        burstPaint.setColor(Skia.Color(`rgba(226,163,43,${(0.85 * (1 - age)).toFixed(3)})`));
         canvas.drawCircle(p.sx, p.sy, 3 + age * 22 * p.d, burstPaint);
       });
     },

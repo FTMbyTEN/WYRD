@@ -105,7 +105,7 @@ export function GamesTab() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const [upright, setUpright] = useState(false);
-  const wantsTurn = world && !upright && isPhone() && height > width;
+  const wantsTurn = false && world && !upright && isPhone() && height > width; // NAIJA 2099 is PC-only now: no turning the phone
   if (world) {
     return (
       <OverApp>
@@ -139,7 +139,7 @@ export function GamesTab() {
       </View>
 
       {canWebGL ? (
-        <Pressable onPress={() => { sfx('open'); enterLandscape(); setWorld(true); }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
+        <Pressable onPress={() => { sfx('open'); setWorld(true); }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
           <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
             <Mono style={styles.worldEyebrow}>NEW · OPEN WORLD · PROTOTYPE</Mono>
             <Display style={styles.worldName}>Lagos, run by WYRD</Display>
