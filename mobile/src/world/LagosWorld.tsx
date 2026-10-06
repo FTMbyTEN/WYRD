@@ -31,6 +31,7 @@ import { CityPulse } from './CityPulse';
 import { HomesPanel, naira } from './HomesPanel';
 import { PlacePanel } from './PlacePanel';
 import { makeJobs, type JobType, type JobView } from './jobs';
+import { GuideCard } from './GuideCard';
 import type { Place } from './places';
 import { STARTER_MISSIONS } from './missions';
 import { makePlaces, PLACE_FILTERS } from './places';
@@ -183,9 +184,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   };
   const [canDesign, setCanDesign] = useState(false);
   useEffect(() => { api.cityCanDesign().then(setCanDesign).catch(() => setCanDesign(false)); }, []);
-  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void; heal: (n: number) => void; job: (t: JobType | null) => void } | null>(null);
+  const ctl = useRef<{ skipIntro: () => void; act: () => void; jump: () => void; setLook: (l: CharacterLook) => void; address: (channel: 'speak' | 'petition' | 'drone' | 'event', text: string, extra?: object) => void; reloadDesign: () => void; findMe: () => void; callCar: () => void; take: (m: CityMission) => void; peek: (m: CityMission) => void; goHome: (h: CityHome) => void; setHome: (h: CityHome | null) => void; heal: (n: number) => void; job: (t: JobType | null) => void; say: (t: string) => void; nearestStation: () => { x: number; z: number; name: string } | null; nearestPlace: (kinds: string[]) => Place | null } | null>(null);
   const [flying, setFlying] = useState(false);
-  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void), wallet: null as CityWallet | null, enter: undefined as undefined | ((p: Place) => void), setWallet: undefined as undefined | ((w: CityWallet) => void) });
+  const live = useRef({ mood: mind?.mood, brain, lastFiring: '', bird: false, gfx, typing: false, look, pins: STARTER_MISSIONS as CityMission[], onTake: undefined as undefined | (() => void), onEnterMap: undefined as undefined | (() => void), setPlaceFilter: undefined as undefined | ((k: import('./places').PlaceKind[] | null) => void), wallet: null as CityWallet | null, guide: undefined as undefined | ((step: string) => void), enter: undefined as undefined | ((p: Place) => void), setWallet: undefined as undefined | ((w: CityWallet) => void) });
   live.current.look = look;
   live.current.typing = intro || ask !== null || boardOpen || studioOpen || editing || menu || (training !== null && !training.asked);
   live.current.mood = mind?.mood;
@@ -193,6 +194,15 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
   live.current.bird = bird;
   live.current.enter = (p: Place) => setInside(p);
   live.current.wallet = wallet;
+  live.current.guide = (step: string) => {
+    const w = live.current.wallet;
+    if (!w || (w.guide ?? []).includes(step)) return;
+    api.cityGuideMark(step).then((r) => {
+      if ('error' in r) return;
+      setWallet((cur) => (cur ? { ...cur, naira: r.naira, guide: r.guide } : cur));
+      if (r.paid) ctl.current?.say(`Guide: done! +₦${r.paid.toLocaleString('en-NG')}.`);
+    }).catch(() => {});
+  };
   live.current.setWallet = (w: CityWallet) => { setWallet(w); ctl.current?.setHome(w.home); };
   live.current.onEnterMap = () => setBird(true);
   live.current.onTake = () => setBird(false);
@@ -328,7 +338,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       say: (t) => say(t),
       waypoint: (x, z, title, brief) => setTask({ id: `job-${title}`, kind: 'reach', title, brief, street: null, x, z, reward: 0 }),
       clearWaypoint: () => { if (task?.id?.startsWith('job-')) setTask(null); },
-      wallet: (w) => live.current.setWallet?.(w),
+      wallet: (w) => { live.current.setWallet?.(w); live.current.guide?.('job'); live.current.guide?.('earn'); },
       view: (v) => setJobView(v),
     });
     let maglev: Maglev | null = null;
@@ -1000,7 +1010,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       const spoken = channel !== 'event';
       if (spoken) { holo.listen(); me.raise = 1; handDown = 0; }
       api.cityAddress(channel, text, { ...situation(), ...extra })
-        .then((d) => { apply(d); if (spoken) holo.say(d.say || '…'); })
+        .then((d) => { apply(d); if (spoken) { holo.say(d.say || '…'); if (channel === 'speak') live.current.guide?.('wyrd'); } })
         .catch(async () => {
           if (!spoken) return;
           // the game channel isn't on the server yet (not deployed): WYRD answers through its everyday chat
@@ -1047,6 +1057,17 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       setHome,
       heal: (n: number) => { hp = Math.min(100, hp + n); showVitals(); },
       job: (t: JobType | null) => { if (t) jobs.start(t); else jobs.cancel(); },
+      say: (t: string) => say(t),
+      nearestStation: () => {
+        if (!maglev) return null;
+        const p = me.root.position;
+        const s = maglev.stations.slice().sort((a, b) => a.base.distanceTo(p) - b.base.distanceTo(p))[0];
+        return s ? { x: s.base.x, z: s.base.z, name: s.name } : null;
+      },
+      nearestPlace: (kinds: string[]) => {
+        const p = me.root.position;
+        return places.list.filter((q) => kinds.includes(q.k)).sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0] ?? null;
+      },
       take: (m: CityMission) => { setTask(m); say(`Mission: ${m.title}. Follow the gold line.`); } };
     api.cityStatus().then(apply).catch(() => {});
 
@@ -1378,6 +1399,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
             city.collide(pos, RADIUS);
             me.root.visible = true;
             happened(`rode the Eko Maglev to ${st.name}`);
+            live.current.guide?.('maglev');
             say(`Eko Maglev: ${st.name}. Mind the gap.`);
           } else say(`Next stop: ${ride.next}. Get off when the train stops.`);
         } else if (stn >= 0) {
@@ -1464,11 +1486,11 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
             task.done = true;
             happened(`finished the mission "${task.title}"`);
             authority.setBeacon(null);
-            if (!task.id?.startsWith('job-')) address('event', '', { event: 'mission_complete', missionTitle: task.title });
+            if (!task.id?.startsWith('job-') && !task.id?.startsWith('guide-')) address('event', '', { event: 'mission_complete', missionTitle: task.title });
             if (task.id?.startsWith('st-')) api.cityMissionPaid(task.id).then((r) => {
               if ('error' in r) return;
               live.current.setWallet?.(r);
-              if (r.paid) say(`Mission paid: +${naira(r.paid)}.`);
+              if (r.paid) { say(`Mission paid: +${naira(r.paid)}.`); live.current.guide?.('earn'); }
             }).catch(() => {});
           }
         }
@@ -1792,6 +1814,20 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
         </View>
       ) : null}
 
+      {wallet && !intro && (wallet.guide ?? []).length < 6 ? (
+        <GuideCard done={wallet.guide ?? []} compact={compact}
+          onSkip={() => api.cityGuideSkip().then((r) => setWallet((cur) => (cur ? { ...cur, guide: r.guide } : cur))).catch(() => {})}
+          onShow={(step) => {
+            const go = (x: number, z: number, title: string, brief: string) => { setBird(false); ctl.current?.take({ id: `guide-${step}`, kind: 'reach', title, brief, street: null, x, z, reward: 0 }); };
+            if (step === 'wyrd') { setAsk('speak'); return; }
+            if (step === 'home') { setHomesOpen(true); return; }
+            if (step === 'job') { setJobsOpen(true); return; }
+            if (step === 'maglev') { const s = ctl.current?.nearestStation(); if (s) go(s.x, s.z, `Maglev: ${s.name}`, 'Stand in the pink lift and board the next train.'); return; }
+            const kinds = step === 'eat' ? ['food'] : ['market', 'factory', 'bank'];
+            const p = ctl.current?.nearestPlace(kinds);
+            if (p) go(p.x, p.z, `${step === 'eat' ? 'Eat' : 'Work'}: ${p.n ?? p.k}`, 'Walk in and press E.');
+          }} />
+      ) : null}
       {jobsOpen ? (
         <View style={styles.jobs}>
           <Mono style={[styles.commsEyebrow, { color: '#1aff9c' }]}>⚑ JOBS · EARN NAIRA</Mono>
@@ -1816,11 +1852,15 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       ) : null}
       {inside ? (
         <PlacePanel kind={inside.k} name={inside.n ?? inside.k} wallet={wallet} compact={compact} onClose={() => setInside(null)}
-          onResult={(w, heal) => { live.current.setWallet?.(w); if (heal) ctl.current?.heal(heal); }} />
+          onResult={(w, heal, delta) => {
+            live.current.setWallet?.(w); if (heal) ctl.current?.heal(heal);
+            if (delta > 0) live.current.guide?.('earn');
+            if (inside.k === 'food') live.current.guide?.('eat');
+          }} />
       ) : null}
       {homesOpen ? (
         <HomesPanel wallet={wallet} compact={compact} onClose={() => setHomesOpen(false)}
-          onWallet={(w) => live.current.setWallet?.(w)}
+          onWallet={(w) => { live.current.setWallet?.(w); if (w.home) live.current.guide?.('home'); }}
           onGoHome={(h) => { setHomesOpen(false); setBird(false); ctl.current?.goHome(h); }} />
       ) : null}
 
@@ -1881,7 +1921,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
 
       {/* ---- bottom left: the car's gauges, or the controls (for a while) ---- */}
       <View style={[styles.bottomLeft, intro && { opacity: 0 }]} pointerEvents="none">
-        {flying ? <VehicleGauges feed={feed} /> : showHelp && !bird && !touch && !compact ? (
+        {flying ? <VehicleGauges feed={feed} /> : showHelp && !bird && !touch && !compact && (!wallet || (wallet.guide ?? []).length >= 6) ? (
           <Panel style={styles.controls}>
             <Mono style={styles.idEyebrow}>CONTROLS</Mono>
             {[['WASD', 'walk'], ['SHIFT', 'run'], ['SPACE', 'jump'], ['E', 'act'], ['F', 'hover-car'], ['T', 'speak to WYRD'], ['V', 'map'], ['ESC', 'menu']].map(([k, t]) => (

@@ -14,7 +14,7 @@ export function PlacePanel({ kind, name, wallet, onResult, onClose, compact }: {
   kind: PlaceKind;
   name: string;
   wallet: CityWallet | null;
-  onResult: (w: CityWallet, heal: number) => void;
+  onResult: (w: CityWallet, heal: number, delta: number) => void;
   onClose: () => void;
   compact: boolean;
 }) {
@@ -30,7 +30,7 @@ export function PlacePanel({ kind, name, wallet, onResult, onClose, compact }: {
     api.cityVisit(kind, a.id, name)
       .then((r) => {
         if ('error' in r) { setMsg(r.error); return; }
-        onResult(r, r.heal ?? 0);
+        onResult(r, r.heal ?? 0, r.delta ?? 0);
         const money = r.delta ? ` ${r.delta > 0 ? '+' : '−'}${naira(Math.abs(r.delta))}.` : '';
         setMsg(`${r.text}${money}${r.heal ? ` +${r.heal} health.` : ''}`);
       })

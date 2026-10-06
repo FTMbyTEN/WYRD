@@ -449,4 +449,4 @@ export interface CityHome { slug: string; name: string; district: string; kind: 
 /** Something to do at a place: cost (negative naira) or pay, health given back, standing, cooldown. */
 export interface CityActivity { id: string; label: string; naira: number; heal: number; standing: number; againS: number }
 /** Your naira and your home. */
-export interface CityWallet { naira: number; home: CityHome | null; paid?: number }
+export interface CityWallet { naira: number; home: CityHome | null; paid?: number; guide?: string[] }

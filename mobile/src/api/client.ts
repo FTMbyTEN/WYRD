@@ -434,6 +434,8 @@ export const api = {
   cityVisit: (kind: string, activity: string, place: string) => callEndpoint<string>('city', 'visit', { kind, activity, place }).then((j) => JSON.parse(j) as (CityWallet & { text: string; delta: number; heal: number; standing: number }) | { error: string }),
   cityJobStart: (type: 'delivery' | 'danfo' | 'chase') => callEndpoint<string>('city', 'jobStart', { type }).then((j) => JSON.parse(j) as { id: string; type: string } | { error: string }),
   cityJobFinish: (id: string, dist: number, passengers: number, limitS: number) => callEndpoint<string>('city', 'jobFinish', { id, dist, passengers, limitS }).then((j) => JSON.parse(j) as (CityWallet & { paid: number; note: string }) | { error: string }),
+  cityGuideMark: (step: string) => callEndpoint<string>('city', 'guideMark', { step }).then((j) => JSON.parse(j) as { guide: string[]; paid: number; naira: number } | { error: string }),
+  cityGuideSkip: () => callEndpoint<string>('city', 'guideSkip', {}).then((j) => JSON.parse(j) as { guide: string[]; paid: number; naira: number }),
   cityPay: (reason: 'maglev' | 'danfo') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   cityMissionPaid: (id: string) => callEndpoint<string>('city', 'missionPaid', { id }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   cityStats: () => callEndpoint<string>('city', 'stats', {}).then((j) => JSON.parse(j) as CityStats),
