@@ -139,6 +139,12 @@ export function makeMaglev(scene: THREE.Scene, toWorld: (at: [number, number]) =
       stations.forEach((s, i) => { const d = Math.hypot(s.base.x - x, s.base.z - z); if (d < bd) { bd = d; best = i; } });
       return best;
     },
+    /** Metres from (x, y, z) to the nearest train (for the sound of one passing). */
+    nearestTrain(x: number, y: number, z: number) {
+      let best = Infinity;
+      for (const t of trains) { const o = place(t.s - CAR_LEN); best = Math.min(best, Math.hypot(o.p.x - x, o.p.y - y, o.p.z - z)); }
+      return best;
+    },
     /** A train standing at station i right now, or -1. */
     trainAt(i: number) { return trains.findIndex((t) => t.at === i); },
     /** Seconds until the next train reaches station i. */

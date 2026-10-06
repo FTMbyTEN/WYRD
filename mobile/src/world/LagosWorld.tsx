@@ -32,6 +32,7 @@ import { HomesPanel, naira } from './HomesPanel';
 import { PlacePanel } from './PlacePanel';
 import { makeJobs, type JobType, type JobView } from './jobs';
 import { GuideCard } from './GuideCard';
+import { makeCityAudio } from './cityAudio';
 import type { Place } from './places';
 import { STARTER_MISSIONS } from './missions';
 import { makePlaces, PLACE_FILTERS } from './places';
@@ -329,6 +330,9 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
     };
     const canAfford = (n: number) => !live.current.wallet || live.current.wallet.naira >= n; // signed out: rides are free
     let placeHere: Place | null = null, nextPlace = 0;
+    // the city's sound; what's around you is measured a few times a second
+    const sound = makeCityAudio();
+    let heardAt = 0, heardTraffic = 0, heardCrowd = 0, heardConductor: string | null = null;
     const jobs = makeJobs({
       scene, city, get router() { return busRouter; },
       places: () => places.list,
@@ -1668,6 +1672,35 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
 
       // district labels, placed over the map
       places.update(now, pos, camera, bird, birdH, night);
+      if (now > heardAt) {
+        heardAt = now + 300;
+        let cars = 0; heardConductor = null;
+        for (const v of vehicles) {
+          if (!v.mesh.visible) continue;
+          const d = v.pos.distanceTo(pos);
+          if (d < 70) cars += v.okada ? 0.5 : 1;
+          if (!v.okada && d < 25 && (v.dwell ?? 0) > 0 && v.atStop) heardConductor = v.atStop.name;
+        }
+        heardTraffic = Math.min(1, cars / 6);
+        let busy = 0;
+        for (const q of places.list) {
+          const d = Math.hypot(q.x - pos.x, q.z - pos.z);
+          if (d < 90) busy += q.k === 'market' ? 1 : q.k === 'food' || q.k === 'club' || q.k === 'bar' || q.k === 'mall' ? 0.5 : 0.15;
+        }
+        heardCrowd = Math.min(1, busy / 2 + walkers.filter((w) => w.person.root.visible && w.person.root.position.distanceTo(pos) < 40).length * 0.08);
+      }
+      const drv2 = jobs.driving();
+      sound.update({
+        dt, walking: Math.hypot(vel.x, vel.z),
+        vehicle: inCar ? 'car' : drv2 ? 'danfo' : onTrain >= 0 ? 'train' : riding ? 'danfo' : null,
+        vehicleSpeed: inCar ? car.state.vel.length() : drv2 ? Math.abs(drv2.speed) : riding ? riding.speed : 0,
+        altitude: inCar ? car.state.pos.y : pos.y,
+        traffic: heardTraffic, crowd: heardCrowd,
+        rain: authority.weather === 'storm' ? 1 : authority.weather === 'rain' ? 0.6 : 0,
+        flash: wx.flash, night,
+        trainDist: maglev ? maglev.nearestTrain(pos.x, pos.y, pos.z) : Infinity,
+        conductor: riding ? null : heardConductor,
+      });
       syncPins();
       for (const { m, div } of pins.values()) {
         const active = task && (task.id ?? task.title) === (m.id ?? m.title);
@@ -1704,6 +1737,7 @@ function LagosWorldGame({ onExit, look, onLook }: { onExit: () => void; look: Ch
       joy.remove();
       clearInterval(walletTimer);
       jobs.dispose();
+      sound.dispose();
       scene.remove(homeMark);
       maglev?.dispose();
       for (const p of pins.values()) p.div.remove();
