@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { notify } from '../../util/dialog';
 import { Display, Mono } from '../../components/ui';
 import { colors, fonts } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import { FaceMark } from '../../components/FaceMark';
+import { Avatar } from '../../components/Avatar';
+import { AvatarEditor, chooseImage, listenForDrop } from '../../components/AvatarEditor';
+import { wyrdStream } from '../../api/stream';
 import { api } from '../../api/client';
 import { useAuth } from '../../api/AuthContext';
 import { cachedFetch, useConversations, useDroneAccess, useMind, useProfile } from '../../api/hooks';
@@ -23,6 +26,8 @@ function daysSince(iso: string | undefined) {
 interface Props {
   tts: boolean;
   onToggleTts: () => void;
+  /** 'all': the whole page (phones). 'you': without settings (desktop, where Settings has its own place in the rail). 'settings': only settings. */
+  view?: 'all' | 'you' | 'settings';
   onOpenCop: () => void;
 }
 
@@ -122,7 +127,7 @@ const people = StyleSheet.create({
   when: { fontSize: 11.5, color: colors.greenDim },
 });
 
-export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
+export function YouTab({ tts, onToggleTts, onOpenCop, view = 'all' }: Props) {
   const owner = useDroneAccess(); // the operator accounts are WYRD's owners
   const { width } = useWindowDimensions();
   const wide = width >= 1000;
@@ -140,7 +145,24 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
   const { mind } = useMind();
   const facts = profile?.facts ?? [];
   const days = daysSince(profile?.firstSeen);
-  const name = (email ?? '—').split('@')[0];
+  const name = profile?.username || (email ?? '—').split('@')[0];
+  const [editing, setEditing] = useState<string | null>(null);
+  const saved = (p: unknown) => { wyrdStream.publish('profile', p); };
+  // the picture: click (or drop an image on it) -> place and zoom it in the editor -> save
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [dropping, setDropping] = useState(false);
+  const picRef = useRef<View>(null);
+  useEffect(() => listenForDrop(picRef.current as unknown as HTMLElement | null, setCropSrc, setDropping), []);
+  const changePicture = async () => { const url = await chooseImage(); if (url) setCropSrc(url); };
+  const closeEditor = () => { if (cropSrc) URL.revokeObjectURL(cropSrc); setCropSrc(null); };
+  const savePicture = async (dataUrl: string) => {
+    try { saved(await api.setAvatar(dataUrl)); closeEditor(); } catch { notify('Picture not saved', 'Could not reach WYRD. Try again.'); }
+  };
+  const saveName = async () => {
+    const n = (editing ?? '').trim();
+    if (!n || n === name) return setEditing(null);
+    try { saved(await api.setName(n)); setEditing(null); } catch { notify('Name not saved', 'Use 1 to 40 characters and try again.'); }
+  };
 
   const [reading, setReading] = useState<ReadingItem[]>([]);
   const [quiz, setQuiz] = useState<QuizStats | null>(null);
@@ -209,6 +231,11 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
         )}
       </Section>
 
+    </>
+  );
+
+  const settings = (
+    <>
       <Section title="SETTINGS">
         <Setting icon={<SpeakerIcon />} title="Spoken replies" detail="WYRD reads its chat replies aloud">
           <Switch value={tts} onValueChange={onToggleTts} trackColor={{ false: colors.greenBorderDim, true: colors.signal }} thumbColor="#FFFAF2" />
@@ -245,16 +272,52 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
     </>
   );
 
+  if (view === 'settings') {
+    return (
+      <ScrollView contentContainerStyle={[styles.page, wide && styles.pageWide, { maxWidth: 760 }]}>
+        <Mono style={styles.eyebrow}>SETTINGS</Mono>
+        <View style={{ gap: 22 }}>{settings}</View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={[styles.page, wide && styles.pageWide]}>
       {/* hero */}
       <View style={[styles.hero, wide && styles.heroWide]}>
         <View style={styles.markWrap}>
-          <View style={styles.avatar}><Display style={styles.avatarInitial}>{(name[0] ?? 'Y').toUpperCase()}</Display></View>
+          <View ref={picRef}>
+            <Pressable onPress={changePicture} accessibilityRole="button" accessibilityLabel="Change your picture">
+              {({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => (
+                <View>
+                  <Avatar uri={profile?.avatar} name={name} size={96} ring={dropping ? colors.ochre : colors.signal} />
+                  {hovered || pressed || dropping ? (
+                    <View style={styles.picOverlay}>
+                      <Glyph name="camera" size={22} color="#FFFAF2" />
+                      <Mono style={styles.picOverlayText}>{dropping ? 'Drop it' : profile?.avatar ? 'Change' : 'Add photo'}</Mono>
+                    </View>
+                  ) : (
+                    <View style={styles.camBadge}><Glyph name="camera" size={16} color={colors.onSignal} /></View>
+                  )}
+                </View>
+              )}
+            </Pressable>
+          </View>
+          {profile?.avatar ? (
+            <Pressable onPress={() => { api.setAvatar(null).then(saved).catch(() => {}); }} hitSlop={6}><Mono style={styles.removePic}>Remove</Mono></Pressable>
+          ) : <Mono style={styles.removePic}>or drop an image</Mono>}
+          <AvatarEditor src={cropSrc} onCancel={closeEditor} onSave={savePicture} />
         </View>
         <View style={{ flex: 1, minWidth: 220, gap: 4 }}>
           <Mono style={styles.eyebrow}>YOU, TO WYRD</Mono>
-          <Display numberOfLines={1} style={[styles.name, wide && { fontSize: 54, lineHeight: 58 }]}>{name}</Display>
+          {editing != null ? (
+            <TextInput value={editing} onChangeText={setEditing} onSubmitEditing={saveName} onBlur={saveName} autoFocus maxLength={40}
+              placeholder="what should WYRD call you?" placeholderTextColor={colors.greenBorder} style={[styles.name, styles.nameInput, wide && { fontSize: 54, lineHeight: 58 }]} />
+          ) : (
+            <Pressable onPress={() => setEditing(name)} accessibilityRole="button" accessibilityLabel="Change what WYRD calls you">
+              <Display numberOfLines={1} style={[styles.name, wide && { fontSize: 54, lineHeight: 58 }]}>{name} <Mono style={styles.editHint}>edit</Mono></Display>
+            </Pressable>
+          )}
           <Mono numberOfLines={1} style={styles.email}>{email ?? ''}</Mono>
           <Text style={[styles.since, { fontFamily: serif }]}>
             {profile?.firstSeen
@@ -276,10 +339,10 @@ export function YouTab({ tts, onToggleTts, onOpenCop }: Props) {
       {wide ? (
         <View style={styles.cols}>
           <View style={{ flex: 1.2, gap: 22, minWidth: 0 }}>{left}</View>
-          <View style={{ flex: 1, gap: 22, minWidth: 0 }}>{right}</View>
+          <View style={{ flex: 1, gap: 22, minWidth: 0 }}>{right}{view === 'all' ? settings : null}</View>
         </View>
       ) : (
-        <View style={{ gap: 22 }}>{left}{right}</View>
+        <View style={{ gap: 22 }}>{left}{right}{view === 'all' ? settings : null}</View>
       )}
 
       <Mono style={styles.footnote}>
@@ -451,6 +514,12 @@ const styles = StyleSheet.create({
   heroWide: { gap: 32, paddingVertical: 12 },
   markWrap: { width: 108, height: 108, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: colors.ochre, borderWidth: 4, borderColor: colors.signal, alignItems: 'center', justifyContent: 'center' },
+  camBadge: { position: 'absolute', right: 0, bottom: 0, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.cream },
+  picOverlay: { position: 'absolute', inset: 0, borderRadius: 48, backgroundColor: 'rgba(42,31,23,0.55)', alignItems: 'center', justifyContent: 'center', gap: 2 } as object,
+  picOverlayText: { fontSize: 11, color: '#FFFAF2', fontFamily: fonts.bodyBold },
+  removePic: { fontSize: 11, color: colors.greenDim, textAlign: 'center', marginTop: 4, textDecorationLine: 'underline' },
+  editHint: { fontSize: 12, color: colors.greenDim, textDecorationLine: 'underline' },
+  nameInput: { borderBottomWidth: 2, borderBottomColor: colors.signal, paddingVertical: 0 },
   avatarInitial: { fontSize: 44, lineHeight: 50, color: colors.indigo, fontFamily: fonts.displayBold },
   mark: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFAF2' },
   name: { fontSize: 38, lineHeight: 42, color: colors.mint },

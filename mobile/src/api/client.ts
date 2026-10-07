@@ -80,6 +80,7 @@ interface SpUserFact {
 interface SpUserProfile {
   authUserId: string;
   username: string | null;
+  avatar?: string | null;
   facts: SpUserFact[];
   visitCount: number;
   firstSeen: string;
@@ -87,6 +88,8 @@ interface SpUserProfile {
 }
 function adaptProfile(p: SpUserProfile): Profile {
   return {
+    username: p.username,
+    avatar: p.avatar ?? null,
     facts: p.facts.map((f) => f.text),
     visitCount: p.visitCount,
     firstSeen: p.firstSeen,
@@ -100,10 +103,11 @@ interface SpConversationTurn {
   authUserId: string;
   userText: string;
   botText: string;
+  image?: string | null;
   timestamp: string;
 }
 function adaptConversationTurn(t: SpConversationTurn): ConversationTurn {
-  return { id: t.id, rating: t.rating ?? null, userText: t.userText, botText: t.botText, timestamp: t.timestamp };
+  return { id: t.id, rating: t.rating ?? null, userText: t.userText, botText: t.botText, image: t.image ?? null, timestamp: t.timestamp };
 }
 
 interface SpChatAction {
@@ -268,8 +272,8 @@ export const api = {
   /** One camera frame (base64 JPEG), described by WYRD's vision model. */
   /** What WYRD remembers seeing of the signed-in person (descriptions only), newest first. */
   sightings: (limit = 3) => callEndpoint<Sighting[]>('photo', 'getSightings', { limit }),
-  photo: (imageBase64Jpeg: string, caption?: string, trackingNote?: string) =>
-    callEndpoint<SpChatReply>('photo', 'describe', { imageBase64Jpeg, caption: caption || null, trackingNote: trackingNote || null }).then(adaptChatResult),
+  photo: (imageBase64Jpeg: string, caption?: string, trackingNote?: string, thumb?: string) =>
+    callEndpoint<SpChatReply>('photo', 'describe', { imageBase64Jpeg, caption: caption || null, trackingNote: trackingNote || null, thumb: thumb || null }).then(adaptChatResult),
   /** 👍 1, 👎 -1, or 0 to clear, on one of WYRD's replies to you. */
   rateReply: (turnId: number, rating: 1 | -1 | 0) => callEndpoint<void>('chat', 'rate', { turnId, rating }),
   conversations: async (limit = 50) => {
@@ -280,6 +284,8 @@ export const api = {
   // ---- profile / account ----
   profile: () => callEndpoint<SpUserProfile>('profile', 'getProfile', {}).then(adaptProfile),
   // records a visit; also creates the WYRD profile row and stores the sign-in email on it
+  setName: (username: string) => callEndpoint<SpUserProfile>('profile', 'setUsername', { username }).then(adaptProfile),
+  setAvatar: (dataUrl: string | null) => callEndpoint<SpUserProfile>('profile', 'setAvatar', { dataUrl }).then(adaptProfile),
   touchVisit: () => callEndpoint<SpUserProfile>('profile', 'touchVisit', {}).then(adaptProfile),
   exportAccount: () => callEndpoint<SpAccountExport>('account', 'exportData', {}),
   deleteAccount: () => callEndpoint<void>('account', 'deleteMyData', {}).then(() => ({ ok: true })),

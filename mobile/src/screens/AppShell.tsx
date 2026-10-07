@@ -166,6 +166,7 @@ export function AppShell() {
             {tab === 'games' && <GamesTab />}
             {tab === 'drone' && droneAccess && <DroneTab />}
             {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
+            {tab === 'settings' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
           </Suspense>
         </View>
 

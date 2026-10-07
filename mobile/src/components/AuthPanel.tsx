@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { api } from '../api/client';
+import { wyrdStream } from '../api/stream';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Display, Mono } from './ui';
 import { FaceMark } from './FaceMark';
@@ -19,6 +21,7 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [callMe, setCallMe] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
 
@@ -71,7 +74,11 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
     } else if (mode === 'signup') {
       if (step === 1 && e) await auth.startRegister(e);
       else if (step === 2 && code.trim()) await auth.verifyCode(code.trim());
-      else if (step === 3 && password) await auth.finishRegister(password);
+      else if (step === 3 && password && callMe.trim()) {
+        const name = callMe.trim();
+        // signed in: tell WYRD what to call them (the session is live once this resolves)
+        if (await auth.finishRegister(password)) api.setName(name).then((p) => wyrdStream.publish('profile', p)).catch(() => {});
+      }
     } else {
       if (step === 1 && e) await auth.startReset(e);
       else if (step === 2 && code.trim()) await auth.verifyResetCode(code.trim());
@@ -166,6 +173,22 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
               onFocus={() => setFocus('code')}
               onBlur={() => setFocus(null)}
               style={[styles.input, styles.codeInput, focus === 'code' && styles.inputFocus]}
+            />
+          </Field>
+        )}
+        {mode === 'signup' && step === 3 && (
+          <Field label="WHAT SHOULD WYRD CALL YOU?">
+            <TextInput
+              value={callMe}
+              onChangeText={setCallMe}
+              placeholder="your name, or a nickname"
+              placeholderTextColor={colors.greenBorder}
+              autoComplete="nickname"
+              maxLength={40}
+              returnKeyType="next"
+              onFocus={() => setFocus('callMe')}
+              onBlur={() => setFocus(null)}
+              style={[styles.input, focus === 'callMe' && styles.inputFocus]}
             />
           </Field>
         )}

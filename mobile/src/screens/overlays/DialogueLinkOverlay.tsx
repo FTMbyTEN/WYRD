@@ -75,6 +75,27 @@ async function photoFromFile(file: File): Promise<{ base64: string; preview: str
     URL.revokeObjectURL(url);
   }
 }
+/** A small JPEG of a photo (longest side 480 px) to keep in the conversation. */
+function thumbOf(dataUrl: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') return resolve(undefined);
+    const img = new window.Image();
+    img.onload = () => {
+      const k = Math.min(1, 480 / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+      cv.getContext('2d')?.drawImage(img, 0, 0, cv.width, cv.height);
+      resolve(cv.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = () => resolve(undefined);
+    img.src = dataUrl;
+  });
+}
+
+/** Replying to a message: the quote goes at the top as '> ' lines, so WYRD (and the history) see it. */
+const QUOTE = /^((?:> [^\n]*\n?)+)\n*/;
+const quoteOf = (text: string) => '> ' + text.replace(/\s+/g, ' ').trim().slice(0, 160) + (text.length > 160 ? '…' : '');
+
 const isImage = (f: File) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f.name);
 
 const ATTACHED = /^📎 ([^\n]+)\n*/;
@@ -88,7 +109,9 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
   const [staged, setStaged] = useState<Staged | null>(null);
-  const [pending, setPending] = useState<{ text: string; at: string } | null>(null);
+  const [pending, setPending] = useState<{ text: string; at: string; image?: string } | null>(null);
+  // the message being replied to, shown above the composer until sent or dismissed
+  const [replyTo, setReplyTo] = useState<{ who: 'you' | 'WYRD'; text: string } | null>(null);
   const [camOpen, setCamOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   // replies WYRD gave from its own learned answers this session, marked in the thread
@@ -113,14 +136,17 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   }, [onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks]);
 
   const send = async (override?: string) => {
-    const text = (override ?? draft).trim();
+    const typed = (override ?? draft).trim();
+    const quote = override == null && replyTo ? quoteOf(replyTo.text) + '\n\n' : '';
+    const text = typed ? quote + typed : typed;
+    if (override == null && (typed || staged)) setReplyTo(null);
     // a staged photo goes to WYRD's eyes, with the message as the question about it
     if (override == null && staged?.status === 'photo') {
       const photo = staged;
       setDraft('');
       setStaged(null);
       sfx('send');
-      await lookAt(photo.base64, text || `[shared a photo: ${photo.name}]`);
+      await lookAt(photo.base64, text || `[shared a photo: ${photo.name}]`, undefined, await thumbOf(photo.preview));
       return;
     }
     const file = override == null && staged?.status === 'ready' ? staged.doc : null;
@@ -175,13 +201,13 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   };
 
   /** One look: a frame (plus on-device tracking notes) to the vision model. Returns the reply. */
-  const lookAt = async (base64: string, caption: string, trackingNote?: string): Promise<string | null> => {
+  const lookAt = async (base64: string, caption: string, trackingNote?: string, thumb?: string): Promise<string | null> => {
     const shown = caption || '[let you look through their camera]';
     setError(null);
-    setPending({ text: shown, at: new Date().toISOString() });
+    setPending({ text: shown, at: new Date().toISOString(), image: thumb });
     try {
-      const result = await api.photo(base64, caption || undefined, trackingNote);
-      wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      const result = await api.photo(base64, caption || undefined, trackingNote, thumb);
+      wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, image: thumb ?? null, timestamp: result.block.timestamp, nonce: null });
       wyrdStream.publish('mind', result.mind);
       if (tts && result.reply) speakAsWyrd(result.reply);
       return result.reply;
@@ -311,6 +337,15 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
               </View>
             )}
             <View style={[styles.composer, focused && styles.composerFocused]}>
+              {replyTo && (
+                <View style={styles.replyBar}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Mono style={styles.replyWho}>Replying to {replyTo.who}</Mono>
+                    <Mono style={styles.replyText} numberOfLines={1}>{replyTo.text}</Mono>
+                  </View>
+                  <Pressable onPress={() => setReplyTo(null)} hitSlop={8} accessibilityLabel="Cancel reply"><Mono style={styles.replyX}>✕</Mono></Pressable>
+                </View>
+              )}
               {staged && <StagedFile staged={staged} onRemove={() => { reading.current++; setStaged(null); }} />}
               <TextInput
                 value={draft}
@@ -390,15 +425,15 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
           return (
             <View key={`${t.timestamp}-${i}`} style={styles.turn}>
               {newDay && <DayRule iso={t.timestamp} />}
-              {t.userText ? <Mine text={t.userText} at={t.timestamp} /> : null}
-              {t.botText ? <Reply text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} /> : null}
+              {t.userText ? <Mine text={t.userText} at={t.timestamp} image={t.image as string | null | undefined} onReply={(x) => setReplyTo({ who: 'you', text: x })} /> : null}
+              {t.botText ? <Reply text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} onReply={(x) => setReplyTo({ who: 'WYRD', text: x })} /> : null}
             </View>
           );
         })}
 
         {pending && (
           <View style={styles.turn}>
-            <Mine text={pending.text} at={pending.at} />
+            <Mine text={pending.text} at={pending.at} image={pending.image} />
             <Thinking reading={ATTACHED.test(pending.text)} />
           </View>
         )}
@@ -550,12 +585,18 @@ function timeLabel(iso: string) {
   return Number.isNaN(d.getTime()) ? '' : d.toTimeString().slice(0, 5);
 }
 
-const Mine = React.memo(function Mine({ text, at }: { text: string; at: string }) {
-  const m = text.match(ATTACHED);
+const Mine = React.memo(function Mine({ text, at, image, onReply }: { text: string; at: string; image?: string | null; onReply?: (text: string) => void }) {
+  const q = text.match(QUOTE);
+  const quoted = q ? q[1].split('\n').filter(Boolean).map((l) => l.replace(/^> ?/, '')).join(' ') : null;
+  const rest = q ? text.slice(q[0].length) : text;
+  const m = rest.match(ATTACHED);
   const file = m?.[1];
-  const body = m ? text.slice(m[0].length) : text;
+  let body = m ? rest.slice(m[0].length) : rest;
+  if (image && /^\[(shared a photo|let you look)/.test(body)) body = ''; // the picture says it
   return (
     <View style={styles.mineRow}>
+      {quoted && <View style={styles.quote}><Mono style={styles.quoteText} numberOfLines={2}>{quoted}</Mono></View>}
+      {image ? <Image source={{ uri: image }} style={styles.minePhoto} resizeMode="cover" accessibilityLabel="Your photo" /> : null}
       {file && (
         <View style={styles.mineFile}>
           <FileGlyph label={kindLabel(file, 'file')} inverse />
@@ -567,12 +608,15 @@ const Mine = React.memo(function Mine({ text, at }: { text: string; at: string }
           <Mono style={styles.mineText}>{body}</Mono>
         </View>
       )}
-      <Mono style={styles.timeRight}>{timeLabel(at)}</Mono>
+      <View style={styles.mineMeta}>
+        {onReply && <Pressable onPress={() => onReply(body || (image ? 'your photo' : file ?? text))} hitSlop={6}><Mono style={styles.replyLink}>↩ Reply</Mono></Pressable>}
+        <Mono style={styles.timeRight}>{timeLabel(at)}</Mono>
+      </View>
     </View>
   );
 });
 
-const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, rating }: { text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null }) {
+const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, rating, onReply }: { text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null; onReply?: (text: string) => void }) {
   return (
     <View style={styles.theirsRow}>
       <View style={styles.avatar}>
@@ -600,6 +644,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
           {recalled && <Mono style={styles.badge}>↺ from memory · no AI call</Mono>}
           {judged && <Mono style={styles.badge}>⚖ {judged === 'softened' ? 'worth double-checking' : judged === 'corrected' ? 'corrected' : 'held back'}</Mono>}
           {turnId != null && <Thumbs turnId={turnId} initial={rating ?? null} />}
+          {onReply && <Pressable onPress={() => onReply(text)} hitSlop={6}><Mono style={styles.replyLink}>↩ Reply</Mono></Pressable>}
         </View>
       </View>
     </View>
@@ -771,6 +816,15 @@ const styles = StyleSheet.create({
   stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
   stagedX: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.greenBorderDim },
   stagedXText: { fontSize: 10, color: colors.greenDim },
+  minePhoto: { width: 240, height: 180, borderRadius: 16, marginBottom: 6, alignSelf: 'flex-end', backgroundColor: colors.sand },
+  quote: { alignSelf: 'flex-end', maxWidth: '80%', borderLeftWidth: 3, borderLeftColor: colors.signal, paddingLeft: 10, paddingVertical: 4, marginBottom: 4 },
+  quoteText: { fontSize: 12, color: colors.greenDim, fontStyle: 'italic' },
+  mineMeta: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12 },
+  replyLink: { fontSize: 11, color: colors.greenDim },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderLeftWidth: 3, borderLeftColor: colors.signal, paddingLeft: 10, paddingVertical: 4, marginBottom: 6 },
+  replyWho: { fontSize: 11, color: colors.signal, fontFamily: fonts.bodyBold },
+  replyText: { fontSize: 12, color: colors.greenDim },
+  replyX: { fontSize: 14, color: colors.greenDim },
   photoThumb: { width: 44, height: 44, borderRadius: 6, borderWidth: 1, borderColor: colors.greenBorderDim },
   stagedReady: { color: colors.signal },
   spinner: {

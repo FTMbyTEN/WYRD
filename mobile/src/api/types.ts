@@ -272,6 +272,8 @@ export interface ConversationTurn {
   rating?: number | null;
   userText?: string;
   botText?: string;
+  /** a photo they sent with this message (small JPEG data URL) */
+  image?: string | null;
   timestamp: string;
   [k: string]: unknown;
 }
@@ -283,6 +285,10 @@ export interface AuthResult {
 }
 
 export interface Profile {
+  /** what they asked WYRD to call them */
+  username?: string | null;
+  /** their profile picture, as a data URL */
+  avatar?: string | null;
   facts: string[];
   visitCount: number;
   firstSeen: string;
