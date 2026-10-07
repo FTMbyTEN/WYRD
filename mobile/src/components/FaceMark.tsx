@@ -1,11 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { Image, Platform, View, type LayoutChangeEvent } from 'react-native';
 import { Canvas, Picture, PointMode, Skia, type SkCanvas, type SkPicture } from '@shopify/react-native-skia';
 import { useSkiaLoop } from '../vortex/skiaLoop';
 import { SkiaLoopView } from '../vortex/SkiaLoopView';
 import { disposeSoon, withArena } from '../vortex/arena';
 import { faceProject } from '../face/faceProject';
 import { FACE_FACES } from '../face/faceMeshData';
+import { draw2d } from '../vortex/canvas2d';
+
+// Web: a still mark is drawn once per mode and size into a plain image and shared by every copy.
+// (A Skia canvas each meant one GPU surface per chat reply -- hundreds in a long conversation.)
+const stills = new Map<string, string>();
+function stillImage(mode: Mode, w: number, h: number): string | null {
+  const key = mode + ':' + Math.round(w) + 'x' + Math.round(h);
+  const hit = stills.get(key);
+  if (hit) return hit;
+  if (typeof document === 'undefined') return null;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const el = document.createElement('canvas');
+  el.width = Math.round(w * dpr); el.height = Math.round(h * dpr);
+  const ctx = el.getContext('2d');
+  if (!ctx) return null;
+  withArena(() => draw2d(ctx, w, h, dpr, (c) => drawFace(c, w, h, mode, 0.18)));
+  const url = el.toDataURL('image/png');
+  stills.set(key, url);
+  return url;
+}
 
 type Mode = 'wire' | 'scan' | 'points';
 
@@ -77,8 +97,9 @@ export function FaceMark({ mode = 'scan', spin = false, style }: Props) {
     spin,
   );
 
+  const still = useMemo(() => (Platform.OS === 'web' && !spin && size.width > 0 && size.height > 0 ? stillImage(mode, size.width, size.height) : null), [spin, size.width, size.height, mode]);
   const staticPicture = useMemo<SkPicture | null>(() => {
-    if (spin || size.width <= 0 || size.height <= 0) return null;
+    if (spin || Platform.OS === 'web' || size.width <= 0 || size.height <= 0) return null;
     const recorder = Skia.PictureRecorder();
     const canvas = recorder.beginRecording(Skia.XYWHRect(0, 0, size.width, size.height));
     withArena(() => drawFace(canvas, size.width, size.height, mode, 0.18));
@@ -97,7 +118,9 @@ export function FaceMark({ mode = 'scan', spin = false, style }: Props) {
   return (
     <View style={[{ width: '100%', height: '100%' }, style]} onLayout={onLayout}>
       {size.width > 0 && (
-        spin
+        still
+          ? <Image source={{ uri: still }} style={{ width: size.width, height: size.height }} />
+          : spin
           ? <SkiaLoopView loop={loop} width={size.width} height={size.height} />
           : (
             <Canvas style={{ width: size.width, height: size.height }}>
