@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './api/AuthContext';
 import { colors } from './theme';
@@ -6,7 +6,8 @@ import { colors } from './theme';
 // The entry screen (with its vortex) and the app itself are loaded separately: someone already
 // signed in never downloads the gate, and the gate never waits for the whole app.
 const GateScreen = lazy(() => import('./screens/GateScreen').then((m) => ({ default: m.GateScreen })));
-const AppShell = lazy(() => import('./screens/AppShell').then((m) => ({ default: m.AppShell })));
+const loadShell = () => import('./screens/AppShell');
+const AppShell = lazy(() => loadShell().then((m) => ({ default: m.AppShell })));
 
 function Loading() {
   return (
@@ -21,6 +22,13 @@ const DirectGame = lazy(() => import('./world/LagosWorld').then((m) => ({ defaul
 function Root() {
   const { status } = useAuth();
   const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));
+  // while someone is on the gate typing their details, fetch the app in the background so
+  // signing in opens it at once instead of waiting on a download after the server says yes
+  useEffect(() => {
+    if (status === 'checking' || status === 'signedIn') return;
+    const t = setTimeout(() => { void loadShell().catch(() => {}); }, 1500);
+    return () => clearTimeout(t);
+  }, [status]);
   if (play) {
     return (
       <View style={styles.game}>
