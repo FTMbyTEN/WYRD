@@ -70,14 +70,18 @@ function snapshotSource<T>(event: EventName, intervalMs: number, fetch: () => Pr
   };
 }
 
+// the diary, dreams and COP are the owner's: everyone else's app doesn't ask for them at all
+const ownerOnly = <T,>(fetch: () => Promise<T[]>) => async (): Promise<T[]> =>
+  (await shared('droneAccess', api.droneIsOperator).catch(() => false)) ? fetch() : [];
+
 const SOURCES: Source[] = [
   // the same keyed requests the screens use, so a poll here and a screen opening never both ask
   snapshotSource('mind', 5000, () => shared('mind', api.mind)),
   snapshotSource('profile', 30000, () => shared('profile', api.profile)),
   listSource('ingested', 15000, () => shared('feed', api.feedRecent)),
-  listSource('diary', 30000, () => api.diary(5)),
-  listSource('dream', 30000, () => api.dreams(5)),
-  listSource('cop_report', 30000, () => api.copLog(5)),
+  listSource('diary', 30000, ownerOnly(() => api.diary(5))),
+  listSource('dream', 30000, ownerOnly(() => api.dreams(5))),
+  listSource('cop_report', 30000, ownerOnly(() => api.copLog(5))),
   {
     events: ['self_modify'],
     intervalMs: 30000,

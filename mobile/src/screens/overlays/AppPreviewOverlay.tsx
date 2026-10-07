@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { OverlayShell } from './OverlayShell';
 import { Mono } from '../../components/ui';
@@ -29,7 +29,17 @@ export function AppPreviewOverlay({ visible, onClose, html }: Props) {
       }
     >
       <View style={{ flex: 1, backgroundColor: '#FFFAF2' }}>
-        {html ? (
+        {html && Platform.OS === 'web' ? (
+          // web: a sealed frame -- scripts run, but it is its own origin with no way into this app,
+          // its storage, its sign-in or the server (no allow-same-origin, no top navigation)
+          React.createElement('iframe', {
+            srcDoc: html,
+            sandbox: 'allow-scripts allow-forms allow-modals',
+            referrerPolicy: 'no-referrer',
+            title: 'App WYRD built',
+            style: { border: 0, width: '100%', height: '100%', background: '#FFFAF2' },
+          })
+        ) : html ? (
           <WebView
             originWhitelist={['*']}
             source={{ html }}
