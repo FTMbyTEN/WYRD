@@ -18,7 +18,7 @@ function Loading() {
 }
 
 // a direct link to the game: wryd00.serverpod.space/#play opens NAIJA 2099 full screen, no tabs on the way
-const DirectGame = lazy(() => import('./world/LagosWorld').then((m) => ({ default: m.LagosWorld })));
+const DirectGame = lazy(() => import('./world2d/Lagos2D').then((m) => ({ default: m.Lagos2D })));
 function Root() {
   const { status } = useAuth();
   const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));

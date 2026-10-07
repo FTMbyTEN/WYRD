@@ -35,7 +35,7 @@ function OverApp({ children }: { children: React.ReactElement }) {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return children;
   return createPortal(children, document.body);
 }
-const LagosWorld = lazy(() => import('../../world/LagosWorld').then((m) => ({ default: m.LagosWorld })));
+const LagosWorld = lazy(() => import('../../world2d/Lagos2D').then((m) => ({ default: m.Lagos2D })));
 /** If the world fails to load or crashes (an old phone, a lost connection), only the world goes:
  *  the rest of WYRD stays up, and there's a way back. */
 class WorldBoundary extends React.Component<{ onExit: () => void; children: React.ReactNode }, { failed: boolean }> {

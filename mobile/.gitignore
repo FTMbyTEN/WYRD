@@ -43,3 +43,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# NAIJA 2099 art pipeline: raw generations and pre-WebP pictures (the game uses public/world2d)
+scripts/.sprites-raw/
+scripts/.sprites-png/
+scripts/.landmarks-found.json
