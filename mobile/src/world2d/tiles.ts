@@ -15,10 +15,12 @@ export type Road = { kind: number; w: number; bridge: boolean; name: string | nu
 export type BldStyle = 'house' | 'block' | 'shops' | 'tower';
 export type Bld = { p: Float32Array; h: number; minX: number; maxX: number; minZ: number; maxZ: number; cx: number; cz: number; tone: number; glass: boolean; ccw: boolean;
   style: BldStyle; area: number; tanks: number;
-  /** under a landmark's picture: not drawn (still solid) */ hide?: boolean };
+  /** under a landmark's picture: not drawn (still solid) */ hide?: boolean;
+  /** a road runs through it on the map: dropped, not drawn and not solid */ gone?: boolean };
 export type Water = { p: Float32Array; ribbon: number }; // ribbon > 0: a river of that width (m); 0: an area
 export type Prop = { s: string; x: number; z: number };
-export type Tile = { key: string; tx: number; tz: number; roads: Road[]; blds: Bld[]; water: Water[]; rail: Float32Array[]; props: Prop[]; grid: Map<number, Bld[]>; used: number };
+export type Tile = { key: string; tx: number; tz: number; roads: Road[]; blds: Bld[]; water: Water[]; rail: Float32Array[]; props: Prop[]; grid: Map<number, Bld[]>; used: number;
+  /** every street in the tile, kept or not, with its signature: so it can take over one whose keeper is unloaded */ all: { sig: string; r: Road }[] };
 
 type Raw = { x: number; z: number; names: string[]; roads: number[][]; buildings: number[][]; water: number[][]; rail: number[][] };
 
@@ -62,6 +64,8 @@ export class World {
   /** keeps the famous buildings' plots clear of the map's own footprints */
   clearings: { x: number; z: number; r: number }[] = [];
   markets: { x: number; z: number }[] = [];
+  /** bumped whenever what is loaded changes, so cached drawings know to redraw */
+  version = 0;
 
   constructor() {
     this.ready = fetch(`${BASE}/index.json`).then((r) => r.json()).then((j) => { this.index = j; this.have = new Set(j.tiles); });
@@ -84,19 +88,30 @@ export class World {
         this.tiles.delete(t.key); this.loading.delete(t.key);
         for (const [sig, k] of this.owners) if (k === t.key) this.owners.delete(sig);
       }
+      // streets the forgotten tiles kept are taken over by a loaded tile that has them too, so no road breaks off
+      for (const t of this.tiles.values()) {
+        let got = false;
+        for (const { sig, r } of t.all) if (!this.owners.has(sig)) { this.owners.set(sig, t.key); t.roads.push(r); got = true; }
+        if (got) this.clearRoads(t);
+        if (got) t.roads.sort((a, b) => b.kind - a.kind);
+        this.version++;
+      }
     }
   }
 
   private async load(key: string) {
     try {
       const raw = (await fetch(`${BASE}/${key}.json`).then((r) => r.json())) as Raw;
-      this.tiles.set(key, this.parse(key, raw));
+      const tile = this.parse(key, raw);
+      this.tiles.set(key, tile);
+      this.clearRoads(tile);
+      this.version++;
     } catch { this.loading.delete(key); }
   }
 
   private parse(key: string, d: Raw): Tile {
     const ox = d.x * TILE, oz = d.z * TILE;
-    const roads: Road[] = [];
+    const roads: Road[] = [], all: { sig: string; r: Road }[] = [];
     for (const r of d.roads) {
       const [kind, w10, bridge, nameI, oneway] = r;
       const n = (r.length - 5) >> 1;
@@ -109,11 +124,13 @@ export class World {
         if (x < minX) minX = x; if (x > maxX) maxX = x; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
       }
       const sig = `${Math.round(p[0])},${Math.round(p[1])},${Math.round(p[p.length - 2])},${Math.round(p[p.length - 1])},${n}`;
+      const cum = lengths(p);
+      const road: Road = { kind, w: w10 / 10, bridge: !!bridge, name: nameI >= 0 ? d.names[nameI] : null, oneway: !!oneway, p, cum, len: cum[cum.length - 1], minX, maxX, minZ, maxZ };
+      all.push({ sig, r: road });
       const owner = this.owners.get(sig);
       if (owner && owner !== key) continue;
       this.owners.set(sig, key);
-      const cum = lengths(p);
-      roads.push({ kind, w: w10 / 10, bridge: !!bridge, name: nameI >= 0 ? d.names[nameI] : null, oneway: !!oneway, p, cum, len: cum[cum.length - 1], minX, maxX, minZ, maxZ });
+      roads.push(road);
     }
     // roads drawn widest-kind last, so main roads sit over side streets
     roads.sort((a, b) => b.kind - a.kind);
@@ -165,7 +182,7 @@ export class World {
     }
     const rail = d.rail.map((r) => { const p = new Float32Array(r.length); for (let i = 0; i < r.length; i += 2) { p[i] = r[i] / 10 + ox; p[i + 1] = r[i + 1] / 10 + oz; } return p; });
 
-    const tile: Tile = { key, tx: d.x, tz: d.z, roads, blds, water, rail, props: [], grid, used: performance.now() };
+    const tile: Tile = { key, tx: d.x, tz: d.z, roads, blds, water, rail, props: [], grid, used: performance.now(), all };
     tile.props = this.furnish(tile, rnd);
     return tile;
   }
@@ -211,10 +228,62 @@ export class World {
     return out;
   }
 
+  /**
+   * The map's buildings and roads come from different surveys and don't always agree. A building a road
+   * runs through is dropped (the road wins); one that only cuts into the pavement has those corners pulled
+   * back to the pavement's edge. Checked both ways as each tile arrives, so roads from a neighbouring tile count.
+   */
+  private clearRoads(tile: Tile) {
+    const all = [...this.tiles.values()];
+    const check = (b: Bld, roads: Road[]) => {
+      if (b.gone) return;
+      for (const r of roads) {
+        if (r.bridge || r.kind > KIND.residential) continue;
+        const band = r.w / 2 + (r.kind <= KIND.tertiary ? 3.5 : 1.75); // the road and its pavement, as drawn
+        if (r.maxX + band < b.minX || r.minX - band > b.maxX || r.maxZ + band < b.minZ || r.minZ - band > b.maxZ) continue;
+        // through it: any point along the road's middle inside the footprint
+        for (let i = 2; i < r.p.length; i += 2) {
+          const L = Math.hypot(r.p[i] - r.p[i - 2], r.p[i + 1] - r.p[i - 1]), n = Math.max(1, Math.ceil(L / 2));
+          for (let k = 0; k <= n; k++) {
+            const x = r.p[i - 2] + ((r.p[i] - r.p[i - 2]) * k) / n, z = r.p[i - 1] + ((r.p[i + 1] - r.p[i - 1]) * k) / n;
+            if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && inPoly(b.p, x, z)) { b.gone = true; b.hide = true; return; }
+          }
+        }
+        // into the pavement: pull those corners out to its edge
+        let moved = false;
+        for (let v = 0; v < b.p.length; v += 2) {
+          for (let i = 2; i < r.p.length; i += 2) {
+            const x0 = r.p[i - 2], z0 = r.p[i - 1], dx = r.p[i] - x0, dz = r.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1;
+            const u = Math.max(0, Math.min(1, ((b.p[v] - x0) * dx + (b.p[v + 1] - z0) * dz) / L2));
+            const px = x0 + dx * u, pz = z0 + dz * u, ox = b.p[v] - px, oz = b.p[v + 1] - pz, d = Math.hypot(ox, oz);
+            if (d < band && d > 0.01) { b.p[v] = px + (ox / d) * band; b.p[v + 1] = pz + (oz / d) * band; moved = true; }
+          }
+        }
+        if (moved) {
+          b.minX = Infinity; b.maxX = -Infinity; b.minZ = Infinity; b.maxZ = -Infinity;
+          for (let v = 0; v < b.p.length; v += 2) { b.minX = Math.min(b.minX, b.p[v]); b.maxX = Math.max(b.maxX, b.p[v]); b.minZ = Math.min(b.minZ, b.p[v + 1]); b.maxZ = Math.max(b.maxZ, b.p[v + 1]); }
+          if (b.maxX - b.minX < 3 || b.maxZ - b.minZ < 3) { b.gone = true; b.hide = true; return; } // squeezed to nothing
+        }
+      }
+    };
+    // (a long street is kept by whichever tile loaded first, which may be far off: so every loaded tile is checked)
+    // (a building can reach well past its own tile, so each tile's reach is taken from its buildings)
+    const reach = (t: Tile) => { let a = t.tx * TILE, b = (t.tx + 1) * TILE, c = t.tz * TILE, d = (t.tz + 1) * TILE; for (const q of t.blds) { a = Math.min(a, q.minX); b = Math.max(b, q.maxX); c = Math.min(c, q.minZ); d = Math.max(d, q.maxZ); } return [a - 12, b + 12, c - 12, d + 12]; };
+    const over = (t: Tile) => { const [a, b, c, d] = reach(t); return (r: Road) => r.maxX > a && r.minX < b && r.maxZ > c && r.minZ < d; };
+    const mine = over(tile), here: Road[] = [];
+    for (const t of all) for (const r of t.roads) if (mine(r)) here.push(r);
+    for (const b of tile.blds) check(b, here);
+    for (const t of all) {
+      if (t === tile) continue;
+      const theirs = tile.roads.filter(over(t));
+      if (theirs.length) for (const b of t.blds) check(b, theirs);
+    }
+  }
+
   private blockedIn(t: Tile, x: number, z: number, pad: number) {
     for (const g of [gkey(Math.floor((x - pad) / GRID), Math.floor((z - pad) / GRID)), gkey(Math.floor((x + pad) / GRID), Math.floor((z + pad) / GRID))]) {
       for (const b of t.grid.get(g) ?? []) {
-        if (x < b.minX - pad || x > b.maxX + pad || z < b.minZ - pad || z > b.maxZ + pad) continue;
+        if (b.gone || x < b.minX - pad || x > b.maxX + pad || z < b.minZ - pad || z > b.maxZ + pad) continue;
         if (inPoly(b.p, x, z) || inPoly(b.p, x + pad, z) || inPoly(b.p, x - pad, z) || inPoly(b.p, x, z + pad) || inPoly(b.p, x, z - pad)) return true;
       }
     }

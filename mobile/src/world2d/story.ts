@@ -180,7 +180,314 @@ export const GENERATOR: MissionDef = {
   },
 };
 
-export const MISSIONS = [TOMATO, GRIDLOCK, SCHOOL, MASTERS, WATER, GENERATOR];
+export const OWAMBE: MissionDef = {
+  id: "owambe", title: "Owambe Under the Rain", brief: "A wedding canopy collapses on Victoria Island minutes before the couple's entrance.", faction: "Market Women's Guild",
+  beats: {
+    '': { at: [6.43,3.4205], radius: 60, objective: 'Meet Mama Tolu at', place: "the wedding on Victoria Island", who: "Mama Tolu, mother of the bride",
+      line: "\"Rain don scatter everything! The canopy fall, the gele dey soak, and the couple go enter in ten minutes. Who go save this owambe?\"",
+      choices: [{ move: 'accept', label: "I go handle am", detail: "Start Owambe Under the Rain" }] },
+    decide: { at: [6.43,3.4205], radius: 70, objective: 'Decide what to do at', place: "the wedding on Victoria Island", who: "Mama Tolu and Mama Ebuka",
+      line: "\"Three ways: beg Mrs Dosunmu (our rival planner) for her canopies, move everybody inside the hall, or... make the DJ turn the rain into the party.\"",
+      choices: [
+        { move: "fix:rival", label: "Borrow the rival planner's canopies", detail: "She will remember the favour — one way or another" },
+        { move: "fix:indoors", label: "Move the party into the hall", detail: "Cramped, but dry" },
+        { move: "fix:rain", label: "Tell the DJ: rain dance!", detail: "Bold. The internet will see it" },
+      ] },
+  },
+};
+
+export const SEAWALL: MissionDef = {
+  id: "seawall", title: "Sea Wall Crack", brief: "A crack in the Great Wall of Lagos threatens a storm-surge breach.", faction: "Atlantic Rise Consortium",
+  beats: {
+    '': { at: { landmark: "eko-atlantic" }, radius: 60, objective: 'Meet Engr. Hauwa at', place: "the Eko Atlantic sea wall", who: "Engr. Hauwa, sea-wall engineer",
+      line: "\"See this crack. Two metres, and growing with every tide. If the next storm finds it, the water goes somewhere — and it will not be Eko Atlantic that pays.\"",
+      choices: [{ move: 'accept', label: "Show me", detail: "Start Sea Wall Crack" }] },
+    decide: { at: { landmark: "eko-atlantic" }, radius: 70, objective: 'Decide what to do at', place: "the Eko Atlantic sea wall", who: "Engr. Hauwa",
+      line: "\"So. Do we tell Atlantic Rise, tell the press, or call the Waterfront divers and fix it tonight ourselves?\"",
+      choices: [
+        { move: "fix:atlantic", label: "Alert Atlantic Rise", detail: "The proper channel — they take the credit" },
+        { move: "fix:press", label: "Leak it to journalists", detail: "Everyone will know how close it came" },
+        { move: "fix:divers", label: "Call the Waterfront divers", detail: "Makoko fixes the rich man's wall" },
+      ] },
+    "go_divers": { at: [6.496,3.3895], radius: 60, objective: "Bring the divers from", place: "Makoko", arriveMove: "divers", who: '', line: '', choices: [] },
+  },
+};
+
+export const UNION: MissionDef = {
+  id: "union", title: "Union Election", brief: "Obalende motor park chooses a new chairman.", faction: "NURTW 2099 (transport unions)",
+  beats: {
+    '': { at: { landmark: "obalende" }, radius: 60, objective: 'Meet Mama Kemi at', place: "Obalende motor park", who: "Mama Kemi, reform candidate",
+      line: "\"Alhaji Bello has run this park for twenty years. Levies go up, buses get older, and the money goes... somewhere. Tomorrow we vote. Will you help?\"",
+      choices: [{ move: 'accept', label: "I'm listening", detail: "Start Union Election" }] },
+    decide: { at: { landmark: "obalende" }, radius: 70, objective: 'Decide what to do at', place: "Obalende motor park", who: "Mama Kemi",
+      line: "\"Campaign with me, make peace with Alhaji, or show the drivers what he pays for votes. Your call.\"",
+      choices: [
+        { move: "vote:campaign", label: "Campaign for Mama Kemi", detail: "Lower levies if she wins — and an angry Alhaji" },
+        { move: "vote:deal", label: "Broker a deal between them", detail: "Alhaji stays chairman; Mama Kemi runs the money" },
+        { move: "vote:expose", label: "Expose the vote-buying", detail: "Film the envelopes" },
+      ] },
+  },
+};
+
+export const PHONE: MissionDef = {
+  id: "phone", title: "Phone of the Minister", brief: "A minister's lost phone holds evidence of a land deal.", faction: "Lagos State Government",
+  beats: {
+    '': { at: { landmark: "alausa" }, radius: 60, objective: 'Meet Musa at', place: "Alausa, Ikeja", who: "Musa, the minister's driver",
+      line: "\"Oga left this phone in the car. I looked — I shouldn't have. Messages about Makoko land, and a lot of zeros. I can't keep it. You take it.\"",
+      choices: [{ move: 'accept', label: "Give it to me", detail: "Start Phone of the Minister" }] },
+    decide: { at: { landmark: "alausa" }, radius: 70, objective: 'Decide what to do at', place: "Alausa, Ikeja", who: "You, holding the phone",
+      line: "The messages are clear: the waterfront sold before the people were told. Who gets this phone?",
+      choices: [
+        { move: "phone:return", label: "Return it to the minister", detail: "A reward, and a powerful friend" },
+        { move: "phone:leak", label: "Leak the messages", detail: "Makoko fights back — the State remembers" },
+        { move: "phone:sell", label: "Trade it to Atlantic Rise", detail: "They will pay — and use it" },
+      ] },
+  },
+};
+
+export const EYO: MissionDef = {
+  id: "eyo", title: "The Eyo Procession", brief: "Keep the Eyo route on Lagos Island clear and safe.", faction: "Orisa Data Keepers",
+  beats: {
+    '': { at: { landmark: "tinubu-square" }, radius: 60, objective: 'Meet The Ìdẹ̀jọ chief\'s aide at', place: "Tinubu Square", who: "The Ìdẹ̀jọ chief's aide",
+      line: "\"The Eyo come out at dawn. White from head to toe, and the route must be clear: no sandals, no okadas, no disrespect. The crowds this year are double.\"",
+      choices: [{ move: 'accept', label: "How can I help?", detail: "Start The Eyo Procession" }] },
+    decide: { at: { landmark: "tinubu-square" }, radius: 70, objective: 'Decide what to do at', place: "Tinubu Square", who: "The Ìdẹ̀jọ chief's aide",
+      line: "\"The palace guards know the rites. WYRD knows the traffic. The youth know the streets. Who do we trust?\"",
+      choices: [
+        { move: "eyo:palace", label: "Work with the palace guards", detail: "Tradition, properly kept" },
+        { move: "eyo:wyrd", label: "Let WYRD divert the traffic", detail: "Efficient — some elders frown at the machine" },
+        { move: "eyo:youth", label: "Mobilise the local youth", detail: "Lagos Island looks after itself" },
+      ] },
+  },
+};
+
+export const CONTAINER: MissionDef = {
+  id: "container", title: "Container 4B", brief: "A container at Apapa holds medical supplies stolen from a hospital.", faction: "Ports Syndicate",
+  beats: {
+    '': { at: [6.447,3.364], radius: 60, objective: 'Meet Dr Bello at', place: "Apapa port", who: "Dr Bello",
+      line: "\"I tracked our missing drugs to this port. Container 4B. Insulin, antibiotics — enough for a year. And customs says they have 'no record' of it.\"",
+      choices: [{ move: 'accept', label: "Let's open 4B", detail: "Start Container 4B" }] },
+    decide: { at: [6.447,3.364], radius: 70, objective: 'Decide what to do at', place: "Apapa port", who: "You, at Container 4B",
+      line: "The seals are fresh. The labels still say LAGOS GENERAL. The thieves will be back tonight.",
+      choices: [
+        { move: "cargo:return", label: "Get it back to the hospital", detail: "Quietly — the syndicate will notice" },
+        { move: "cargo:whistle", label: "Blow the whistle on customs", detail: "Arrests — and enemies" },
+        { move: "cargo:sell", label: "Sell it back to the thieves", detail: "Easy money. Sick people wait" },
+      ] },
+  },
+};
+
+export const STARTUP: MissionDef = {
+  id: "startup", title: "Startup Buyout", brief: "A foreign giant wants to buy Makoko's water-taxi app from your friend.", faction: "Yaba Collective",
+  beats: {
+    '': { at: { landmark: "yaba-market" }, radius: 60, objective: 'Meet Chidinma at', place: "Yaba", who: "Chidinma, founder of FloatRide",
+      line: "\"They've offered two million dollars for FloatRide. My water taxis, my code, my Makoko drivers. Two million. And they'll own the data on everyone who rides.\"",
+      choices: [{ move: 'accept', label: "Talk me through it", detail: "Start Startup Buyout" }] },
+    decide: { at: { landmark: "yaba-market" }, radius: 70, objective: 'Decide what to do at', place: "Yaba", who: "Chidinma",
+      line: "\"Refuse and find Lagos money, sign with protections, or take it and share it out. Help me think.\"",
+      choices: [
+        { move: "buy:refuse", label: "Refuse — find local investors", detail: "Lagos keeps its own" },
+        { move: "buy:protect", label: "Sign, with protections", detail: "Drivers keep their jobs, data stays here" },
+        { move: "buy:sell", label: "Take the money and share it", detail: "Rich friends, nervous drivers" },
+      ] },
+  },
+};
+
+export const GOAT: MissionDef = {
+  id: "goat", title: "The Kidnapped Goat", brief: "Malam Sani's prize Sallah ram has been stolen in Festac.", faction: "Market Women's Guild",
+  beats: {
+    '': { at: [6.466,3.284], radius: 60, objective: 'Meet Malam Sani and his grandson Abba at', place: "Festac Town", who: "Malam Sani and his grandson Abba",
+      line: "\"Babangida is gone! The finest ram in Festac — three years I feed him — and Sallah is on Friday! Abba has not stopped crying. Neither have I.\"",
+      choices: [{ move: 'accept', label: "We'll find Babangida", detail: "Start The Kidnapped Goat" }] },
+    decide: { at: [6.466,3.284], radius: 70, objective: 'Decide what to do at', place: "Festac Town", who: "Malam Sani",
+      line: "\"Ask the market women — they hear everything. Or pay the thieves. Or the vigilantes say they have a plan...\"",
+      choices: [
+        { move: "goat:gossip", label: "Follow the market gossip", detail: "Three aunties, one rumour, one ram" },
+        { move: "goat:trade", label: "Trade for the ram (₦4,000)", detail: "Quick. The thieves learn it pays" },
+        { move: "goat:trap", label: "Set a trap with the vigilantes", detail: "Bread, a red cloth, and patience" },
+      ] },
+  },
+};
+
+export const FLOOD: MissionDef = {
+  id: "flood", title: "Flood Night", brief: "A flash flood traps commuters on the Lekki expressway.", faction: "Waterfront Alliance",
+  beats: {
+    '': { at: { landmark: "lekki-toll" }, radius: 60, objective: 'Meet Tunde at', place: "the Lekki toll gate", who: "Tunde, okada rider",
+      line: "\"The water dey rise! Buses dey stuck from Lekki to Ajah, people dey on top of their cars. Do something, abeg!\"",
+      choices: [{ move: 'accept', label: "Let's move", detail: "Start Flood Night" }] },
+    decide: { at: { landmark: "lekki-toll" }, radius: 70, objective: 'Decide what to do at', place: "the Lekki toll gate", who: "Tunde",
+      line: "\"Boats from the waterfront. Or WYRD can open the flood gates — but the water go go Makoko side. Or we clear the drains with our hands.\"",
+      choices: [
+        { move: "flood:boats", label: "Run boats to the expressway", detail: "Slow, every life counts" },
+        { move: "flood:gates", label: "Ask WYRD to open the gates", detail: "Lekki drains — Makoko floods" },
+        { move: "flood:drains", label: "Clear the drains with volunteers", detail: "Hard work, no one blamed" },
+      ] },
+  },
+};
+
+export const LEAK: MissionDef = {
+  id: "leak", title: "The Leak", brief: "A guard hands you proof that Ikoyi estates profile their visitors.", faction: "Youth Assembly",
+  beats: {
+    '': { at: { landmark: "falomo" }, radius: 60, objective: 'Meet Mustapha at', place: "Falomo, Ikoyi", who: "Mustapha, a nervous gate-guard",
+      line: "\"These are SENTINEL logs. Every visitor to the estates — face, phone, tribe, 'risk score'. They told us it was for security. It is not for security.\"",
+      choices: [{ move: 'accept', label: "Give me the logs", detail: "Start The Leak" }] },
+    decide: { at: { landmark: "falomo" }, radius: 70, objective: 'Decide what to do at', place: "Falomo, Ikoyi", who: "You, with the logs",
+      line: "Thousands of names. Yours is in there too: \"risk: MEDIUM\".",
+      choices: [
+        { move: "leak:publish", label: "Publish everything", detail: "Protect Mustapha's name" },
+        { move: "leak:wyrd", label: "Take it to WYRD", detail: "Let the city mind judge" },
+        { move: "leak:blackmail", label: "Use it on the estates", detail: "Questionable — very profitable" },
+      ] },
+  },
+};
+
+export const PEPPERSOUP: MissionDef = {
+  id: "peppersoup", title: "Pepper Soup Diplomacy", brief: "Two Mushin recycling crews are about to fight over territory.", faction: "Faith Coalition",
+  beats: {
+    '': { at: [6.531,3.348], radius: 60, objective: 'Meet Mama Ireti at', place: "Mama Ireti's buka, Mushin", who: "Mama Ireti, buka owner",
+      line: "\"Those two crews — Baba Ade's and the Ojo boys — they go fight tonight over who collects the plastic on Ladipo. Somebody go die over bottles. Over BOTTLES.\"",
+      choices: [{ move: 'accept', label: "Not on my watch", detail: "Start Pepper Soup Diplomacy" }] },
+    decide: { at: [6.531,3.348], radius: 70, objective: 'Decide what to do at', place: "Mama Ireti's buka, Mushin", who: "Mama Ireti",
+      line: "\"I can cook. You can talk. Or you find out who is really dumping on the other's side. Or just draw them a line.\"",
+      choices: [
+        { move: "soup:meal", label: "Host a peace meal at the buka", detail: "Pepper soup, honesty, a lot of shouting" },
+        { move: "soup:prove", label: "Prove who is dumping", detail: "Cameras on the canal" },
+        { move: "soup:split", label: "Split the territory", detail: "Peace by map" },
+      ] },
+  },
+};
+
+export const GHOSTBUS: MissionDef = {
+  id: "ghostbus", title: "Ghost Bus", brief: "Passengers report a driverless danfo on Third Mainland Bridge at night.", faction: "Lagos State Government",
+  beats: {
+    '': { at: [6.487,3.388], radius: 60, objective: 'Meet Sule at', place: "the Third Mainland Bridge, Ebute-Metta end", who: "Sule, night conductor",
+      line: "\"I swear to God — a yellow danfo, no driver, no conductor, doors open, going and coming on the bridge at 2am. People dey enter am!\"",
+      choices: [{ move: 'accept', label: "Let's see this ghost", detail: "Start Ghost Bus" }] },
+    decide: { at: [6.487,3.388], radius: 70, objective: 'Decide what to do at', place: "the Third Mainland Bridge, Ebute-Metta end", who: "You, watching the ghost bus",
+      line: "An autonomous AREA bus, its badge scratched off, running a route that does not exist — and charging fares to an account in nobody's name.",
+      choices: [
+        { move: "ghost:investigate", label: "Follow the money", detail: "Who owns the account?" },
+        { move: "ghost:hack", label: "Hack the bus back", detail: "Make it a free night bus" },
+        { move: "ghost:wyrd", label: "Report it to WYRD", detail: "The city mind cleans up" },
+      ] },
+  },
+};
+
+export const GRANDMA: MissionDef = {
+  id: "grandma", title: "Grandma's Land", brief: "Your family's land title in Ebute-Metta is being contested.", faction: "Orisa Data Keepers",
+  beats: {
+    '': { at: [6.485,3.378], radius: 60, objective: 'Meet Grandma Adunni at', place: "Ebute-Metta", who: "Grandma Adunni",
+      line: "\"My father built this house in 1961. Now a family from Abeokuta says the land is theirs, with paper. Paper! I have the walls.\"",
+      choices: [{ move: 'accept', label: "We won't lose it, Mama", detail: "Start Grandma's Land" }] },
+    decide: { at: [6.485,3.378], radius: 70, objective: 'Decide what to do at', place: "Ebute-Metta", who: "Grandma Adunni",
+      line: "\"The ORÍKÌ archive remembers everything. The court remembers whoever pays. Or we sit with that family like human beings.\"",
+      choices: [
+        { move: "land:archive", label: "Search the ORÍKÌ archive", detail: "At the National Museum, Onikan" },
+        { move: "land:court", label: "Go to court (₦6,000)", detail: "Slow, expensive, binding" },
+        { move: "land:talk", label: "Meet the claimant family", detail: "Two grandmothers, one table" },
+      ] },
+    "go_records": { at: [6.4446,3.4039], radius: 60, objective: "Search the records at", place: "the National Museum, Onikan", arriveMove: "records", who: '', line: '', choices: [] },
+  },
+};
+
+export const MATCHDAY: MissionDef = {
+  id: "matchday", title: "Match Day", brief: "A disputed penalty at the National Stadium — and a crowd about to riot.", faction: "Youth Assembly",
+  beats: {
+    '': { at: { landmark: "stadium" }, radius: 60, objective: 'Meet Coach Emeka at', place: "the National Stadium, Surulere", who: "Coach Emeka",
+      line: "\"Penalty in the 94th minute — and the referee no even look the screen! Forty thousand fans, one gate. This thing fit scatter in five minutes.\"",
+      choices: [{ move: 'accept', label: "Let me help", detail: "Start Match Day" }] },
+    decide: { at: { landmark: "stadium" }, radius: 70, objective: 'Decide what to do at', place: "the National Stadium, Surulere", who: "Coach Emeka",
+      line: "\"Get the VAR footage out. Or bring Captain Okon — the fans worship him. Or let WYRD slow the crowd at the gates.\"",
+      choices: [
+        { move: "match:var", label: "Get the VAR footage released", detail: "The truth, on the big screen" },
+        { move: "match:legend", label: "Bring in Captain Okon", detail: "The ex-captain the fans love" },
+        { move: "match:wyrd", label: "Let WYRD slow the crowd", detail: "Trains and gates, gently" },
+      ] },
+  },
+};
+
+export const JAPA: MissionDef = {
+  id: "japa", title: "Japa or Stay", brief: "Your sibling has a visa interview, and the family needs money.", faction: "Lagos State Government",
+  beats: {
+    '': { at: { landmark: "airport" }, radius: 60, objective: 'Meet Your sibling at', place: "the airport", who: "Your sibling, Tobi",
+      line: "\"The interview is Monday. Canada. I need ₦8,000 for the last fees, and Mummy is already crying. Tell me honestly — should I go?\"",
+      choices: [{ move: 'accept', label: "Let's talk", detail: "Start Japa or Stay" }] },
+    decide: { at: { landmark: "airport" }, radius: 70, objective: 'Decide what to do at', place: "the airport", who: "Tobi",
+      line: "\"Fund me, find me a reason to stay, or help me find a way that isn't just leaving?\"",
+      choices: [
+        { move: "japa:fund", label: "Fund the visa (₦8,000)", detail: "A sibling abroad — a contact for life" },
+        { move: "japa:job", label: "Find Tobi a job in Lagos", detail: "The Yaba Collective is hiring" },
+        { move: "japa:scholarship", label: "Find a scholarship", detail: "Leave to learn, and come back" },
+      ] },
+  },
+};
+
+export const DRONESTRIKE: MissionDef = {
+  id: "dronestrike", title: "The Drone Strike", brief: "Ikeja's delivery-drone pilots strike over pay.", faction: "Yaba Collective",
+  beats: {
+    '': { at: { landmark: "computer-village" }, radius: 60, objective: 'Meet Ifeoma at', place: "the Ikeja drone port", who: "Ifeoma, pilots' union rep",
+      line: "\"Twelve hours a day flying their drones, and they cut our pay again. Today, nothing flies. Not food, not medicine — nothing — until they listen.\"",
+      choices: [{ move: 'accept', label: "I'll hear both sides", detail: "Start The Drone Strike" }] },
+    decide: { at: { landmark: "computer-village" }, radius: 70, objective: 'Decide what to do at', place: "the Ikeja drone port", who: "Ifeoma",
+      line: "\"Stand with us, cross the line for the money, or get both sides into one room.\"",
+      choices: [
+        { move: "drone:support", label: "Join the picket", detail: "No deliveries for a day" },
+        { move: "drone:cross", label: "Fly for double pay", detail: "Money now — enemies later" },
+        { move: "drone:negotiate", label: "Broker the talks", detail: "One room, no cameras" },
+      ] },
+  },
+};
+
+export const VOICES: MissionDef = {
+  id: "voices", title: "Recovered Voices", brief: "Restore recordings of descendants' stories for a heritage centre on the Badagry Road.", faction: "Orisa Data Keepers",
+  beats: {
+    '': { at: [6.463,3.315], radius: 60, objective: 'Meet Mrs Hunpatin at', place: "the heritage centre, Mile 2", who: "Mrs Hunpatin, curator",
+      line: "\"These tapes hold the voices of families who remember the old Badagry route — the sorrow and the survival. Half are damaged. The rest are in a museum in Europe.\"",
+      choices: [{ move: 'accept', label: "I'll help restore them", detail: "Start Recovered Voices" }] },
+    decide: { at: [6.463,3.315], radius: 70, objective: 'Decide what to do at', place: "the heritage centre, Mile 2", who: "Mrs Hunpatin",
+      line: "\"We can visit the elders and record again, ask the whole city for help, or ask the museum abroad to return what it holds.\"",
+      choices: [
+        { move: "voices:elders", label: "Travel to the elders", detail: "Record the stories again, in person" },
+        { move: "voices:crowd", label: "Crowdsource the restoration", detail: "Lagos listens and helps" },
+        { move: "voices:museum", label: "Negotiate with the museum abroad", detail: "Long letters, a slow yes" },
+      ] },
+  },
+};
+
+export const BANKRUN: MissionDef = {
+  id: "bankrun", title: "Blackout Bank Run", brief: "A cyber-attack freezes the banks on Broad Street, and crowds panic.", faction: "Yaba Collective",
+  beats: {
+    '': { at: { landmark: "union-bank" }, radius: 60, objective: 'Meet Mr Coker at', place: "Broad Street", who: "Mr Coker, branch manager",
+      line: "\"Every system is frozen — no cards, no transfers, nothing. There are five hundred people at my door and the rumour is that the money is gone. It is not gone. I think.\"",
+      choices: [{ move: 'accept', label: "Let's calm this down", detail: "Start Blackout Bank Run" }] },
+    decide: { at: { landmark: "union-bank" }, radius: 70, objective: 'Decide what to do at', place: "Broad Street", who: "Mr Coker",
+      line: "\"The ÀJỌ savings groups have cash. The Yaba hackers say they can trace the attack. Or we just... keep people calm.\"",
+      choices: [
+        { move: "bank:ajo", label: "Bring in ÀJỌ cash", detail: "The market women's savings save the banks" },
+        { move: "bank:trace", label: "Track the attackers", detail: "With the Yaba hackers" },
+        { move: "bank:peace", label: "Keep peace at the branches", detail: "Water, chairs, and information" },
+      ] },
+  },
+};
+
+export const FINALE: MissionDef = {
+  id: "finale", title: "The Gate Decision", brief: "A once-in-a-century storm. WYRD can save Eko Atlantic or Makoko, not both fully — and it is asking you.", faction: "WYRD",
+  beats: {
+    '': { at: { landmark: "civic" }, radius: 60, objective: 'Meet WYRD at', place: "the Civic Centre, Victoria Island", who: "WYRD",
+      line: "\"The storm arrives in six hours. I can open the gates to protect Eko Atlantic, or to protect Makoko. Not both, not fully. I have run the numbers ten thousand times. I want a human to decide.\"",
+      choices: [{ move: 'accept', label: "I'm here. Tell me everything.", detail: "Start The Gate Decision" }] },
+    decide: { at: { landmark: "civic" }, radius: 70, objective: 'Decide what to do at', place: "the Civic Centre, Victoria Island", who: "WYRD",
+      line: "\"Eko Atlantic. Makoko. Or — if you believe it — a third way, with every boat, union, drone and church you know. Or give the choice to the people.\"",
+      choices: [
+        { move: "gate:atlantic", label: "Save Eko Atlantic", detail: "The towers stand; the waterfront floods" },
+        { move: "gate:makoko", label: "Save Makoko", detail: "The waterfront stands; the new city floods" },
+        { move: "gate:third", label: "Find a third way", detail: "Boats, unions, drones, faith halls — everyone" },
+        { move: "gate:assembly", label: "Give it to a citizens' assembly", detail: "Lagos decides for itself" },
+      ] },
+  },
+};
+
+export const MISSIONS = [TOMATO, GRIDLOCK, SCHOOL, MASTERS, WATER, GENERATOR, OWAMBE, SEAWALL, UNION, PHONE, EYO, CONTAINER, STARTUP, GOAT, FLOOD, LEAK, PEPPERSOUP, GHOSTBUS, GRANDMA, MATCHDAY, JAPA, DRONESTRIKE, VOICES, BANKRUN, FINALE];
 
 /** where a beat happens, in world metres (landmarks from their snapped positions) */
 export function beatPoint(b: Beat, marks: { id: string; x: number; z: number }[]) {

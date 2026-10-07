@@ -13,12 +13,10 @@
 import { SIZE } from './geo';
 import { drawPerson, facingOf, type Look } from './person';
 import { KIND, inPoly, type Road, type Tile } from './tiles';
-
 /** The camera: centre (x, z) in metres, zoom (px per metre), screen size, and its angles. */
 export type Cam = { x: number; z: number; scale: number; w: number; h: number; dpr: number;
   /** turn around the vertical axis (radians) */ yaw: number;
   /** ground squash = sin(pitch); height rise = cos(pitch) */ tilt: number; rise: number };
-
 export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boolean; lift?: number; scale?: number;
   /** which way it is heading in the world, atan2(dx, dz) -- picks the right baked view */
   heading?: number;
@@ -28,10 +26,12 @@ export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boole
   look?: Look; walk?: number;
   /** TEN or Ama, from their baked motion-capture sheets */
   hero?: { who: 'ten' | 'ama'; anim: 'walk' | 'run' | 'idle'; frame: number } };
-
 // baked sheets: people 192 px cells x 8 rows of headings, spanning 1.7 m, feet 90% down
 const HERO_FRAMES = { walk: 10, run: 10, idle: 6 } as const;
-const HERO_CELL = 192, HERO_SPAN = 1.7, HERO_FEET = 0.9, HERO_SIZE = 1.8;
+const HERO_CELL = 192, HERO_FEET = 0.9, HERO_SIZE = 1.8;
+/** TEN and Ama are baked from four camera angles (as in Bake.tsx); each cell spans 2 x heroHalf metres, feet 90% down */
+const HERO_PITCHES = [0.2, 0.42, Math.asin(0.6), 0.9];
+const heroHalf = (e: number) => Math.max(0.85, (1.8 * Math.cos(e)) / 1.75 + 0.03);
 // vehicles: 160 px cells, 32 headings across x 6 camera pitches down; how many metres a cell spans (BakeVehicles.tsx)
 const VEH_CELL = 160, VEH_DIRS = 32, VEH_PITCHES = [0.15, 0.25, 0.35, 0.55, 0.75, 0.95];
 const vehGround = (span: number, pitch: number) => 0.5 + (0.06 * span * Math.cos(pitch)) / span;
@@ -40,13 +40,11 @@ export const VEH_SPAN: Record<string, number> = {
   'car-danfo': 6.8, 'bus-brt': 14.5, okada: 3.2, keke: 3.8,
 };
 const VEH_SIZE = 1.25; // a touch larger than life, like the poster
-
 const DAY = {
   grass: '#B9DB9A', grass2: '#A9D08A', pave: '#E6E9EC', kerbFace: '#AEB5C0', road: '#4B5059', line: '#F4F6F8', yellow: '#F2C94C',
   water: '#2E9FE0', waterEdge: '#7FCDF2', roofs: ['#F7F8FA', '#EEF1F4', '#F3F0EA', '#E9EEF3'], glassRoof: '#8EB9E6', wall: '#D5DAE1', wallGlass: '#4F7FC0', outline: 'rgba(30,40,60,0.18)',
   rail: '#8C8F96', shadow: 'rgba(20,30,50,0.16)',
 };
-
 // ---- facades: one small repeating tile per style (a bay 3 m wide, a storey 3.2 m tall), laid along
 // each wall with a pattern transform, so a whole wall of windows costs one fill ----
 const WALLS = ['#F3E9D2', '#F2D7A6', '#EBCFC8', '#CFE3EE', '#FFFFFF', '#E6DEF0', '#DCE9CC', '#F5F0E6'];
@@ -98,14 +96,12 @@ function shopfront(ctx: CanvasRenderingContext2D, awning: string, night: boolean
   if (p) patterns.set(key, p);
   return p;
 }
-
 const imgs = new Map<string, HTMLImageElement>();
 export function img(name: string) {
   let i = imgs.get(name);
   if (!i) { i = new Image(); i.src = `world2d/${name.includes('.') ? name : `pics/${name}.webp`}`; imgs.set(name, i); }
   return i;
 }
-
 /** world -> camera-turned coordinates (rx across the screen, rz down it) */
 function turn(c: Cam, x: number, z: number) {
   const dx = x - c.x, dz = z - c.z, co = Math.cos(c.yaw), si = Math.sin(c.yaw);
@@ -113,7 +109,6 @@ function turn(c: Cam, x: number, z: number) {
 }
 /** depth for painting order: larger is nearer the camera */
 export const depth = (c: Cam, x: number, z: number) => Math.sin(c.yaw) * (x - c.x) + Math.cos(c.yaw) * (z - c.z);
-
 /** world -> screen */
 export function toScreen(c: Cam, x: number, z: number, y = 0) {
   const { rx, rz } = turn(c, x, z);
@@ -121,7 +116,6 @@ export function toScreen(c: Cam, x: number, z: number, y = 0) {
 }
 /** a heading in the world, as seen on screen (0 = towards the camera, down the screen) */
 export const screenHeading = (c: Cam, heading: number) => heading - c.yaw; // the turned direction (sin h, cos h) is (sin(h - yaw), cos(h - yaw)) on screen
-
 /** Ground drawing in world metres: the canvas itself turned and tilted. [lift] raises it (bridges). */
 function worldSpace(ctx: CanvasRenderingContext2D, c: Cam, lift = 0) {
   ctx.translate(c.w / 2, c.h / 2 - lift * c.scale * c.rise);
@@ -143,7 +137,6 @@ function offsetPath(ctx: CanvasRenderingContext2D, r: Road, off: number) {
     if (i) ctx.lineTo(x, z); else ctx.moveTo(x, z);
   }
 }
-
 export type View = { minX: number; maxX: number; minZ: number; maxZ: number };
 export function viewOf(c: Cam): View {
   // whatever the turn, everything on screen lies within this distance of the centre (tall things reach in from below)
@@ -151,7 +144,6 @@ export function viewOf(c: Cam): View {
   return { minX: c.x - r, maxX: c.x + r, minZ: c.z - r, maxZ: c.z + r };
 }
 const inView = (v: View, minX: number, maxX: number, minZ: number, maxZ: number) => maxX > v.minX && minX < v.maxX && maxZ > v.minZ && minZ < v.maxZ;
-
 /** The ground: grass, water, then every road (verge, kerbed pavement, asphalt, markings, crossings), rail. */
 export type Sand = { p: Float32Array; line: boolean };
 export function drawGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], sea: { p: Float32Array; island: boolean }[], v: View, sand: Sand[] = []) {
@@ -159,7 +151,6 @@ export function drawGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
   ctx.fillRect(0, 0, c.w, c.h);
   const k = c.scale;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
   const roads: Road[] = [];
   for (const t of tiles) for (const r of t.roads) if (inView(v, r.minX, r.maxX, r.minZ, r.maxZ) && r.kind !== KIND.foot) roads.push(r);
   const pass = (pick: (r: Road) => number, color: string) => {
@@ -167,7 +158,6 @@ export function drawGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
     for (const r of roads) { const w = pick(r); if (w <= 0) continue; ctx.lineWidth = w; ctx.beginPath(); wpath(ctx, r.p); ctx.stroke(); }
   };
   const pave = (r: Road) => (r.bridge ? 0 : r.w + (r.kind <= KIND.tertiary ? 7 : 3.5));
-
   ctx.save(); worldSpace(ctx, c);
   for (const q of sea) {
     ctx.beginPath(); wpath(ctx, q.p); ctx.closePath();
@@ -190,10 +180,8 @@ export function drawGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
   }
   pass((r) => (r.kind <= KIND.secondary && !r.bridge ? r.w + 16 : 0), DAY.grass2);
   ctx.restore();
-
   // the kerb's face: the pavement drawn a kerb's height lower first, so a darker sliver shows under its edge
   ctx.save(); worldSpace(ctx, c, -0.18); pass(pave, DAY.kerbFace); ctx.restore();
-
   ctx.save(); worldSpace(ctx, c);
   pass(pave, DAY.pave);
   pass((r) => (r.bridge ? 0 : r.w), DAY.road);
@@ -202,7 +190,6 @@ export function drawGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
   if (k > 3) markings(ctx, roads, k);
   ctx.restore();
 }
-
 /** Lane lines, solid edge lines and zebra crossings, in world metres (the transform is already set). */
 function markings(ctx: CanvasRenderingContext2D, roads: Road[], k: number) {
   for (const r of roads) {
@@ -241,7 +228,6 @@ function markings(ctx: CanvasRenderingContext2D, roads: Road[], k: number) {
   }
   ctx.lineCap = 'round';
 }
-
 /** Bridges float over everything on the ground, with their shadow beneath. */
 export function drawBridges(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], v: View) {
   const k = c.scale, lift = 7;
@@ -263,9 +249,7 @@ export function drawBridges(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   }
   ctx.restore();
 }
-
 type Item = { z: number; draw: () => void };
-
 /** Buildings and pictures, back to front. Returns whether anything solid stands between the camera and [focus]
  *  (the game then shows the player's silhouette through it -- buildings never turn see-through). */
 export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], sprites: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }): boolean {
@@ -309,7 +293,6 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   for (const it of items) it.draw();
   return hidden;
 }
-
 /** The player seen through whatever hides them: a soft silhouette drawn over everything. */
 export function drawGhost(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   ctx.save();
@@ -317,7 +300,6 @@ export function drawGhost(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   picture(ctx, c, s);
   ctx.restore();
 }
-
 function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], night: boolean) {
   if (b.hide) return;
   const k = c.scale, up = b.h * k * c.rise;
@@ -441,16 +423,16 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
   }
   void top;
 }
-
 /** which of [n] baked headings to show for a world heading, as this camera sees it */
 const view = (c: Cam, heading: number, n: number) => ((Math.round((screenHeading(c, heading) / (Math.PI * 2)) * n) % n) + n) % n;
-
 function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   const { sx, sy } = toScreen(c, s.x, s.z, s.lift ?? 0);
   if (s.hero) {
-    const sheet = img(`people/${s.hero.who}-${s.hero.anim}.webp`);
+    const pitch = Math.asin(c.tilt);
+    let row = 0; HERO_PITCHES.forEach((p, k) => { if (Math.abs(p - pitch) < Math.abs(HERO_PITCHES[row] - pitch)) row = k; });
+    const sheet = img(`people/${s.hero.who}-${s.hero.anim}-p${'abcd'[row]}.webp`);
     if (sheet.complete && sheet.naturalWidth) {
-      const size = HERO_SPAN * HERO_SIZE * c.scale;
+      const size = 2 * heroHalf(HERO_PITCHES[row]) * HERO_SIZE * c.scale;
       const f = Math.floor(s.hero.frame) % HERO_FRAMES[s.hero.anim];
       ctx.fillStyle = 'rgba(20,30,50,0.3)';
       ctx.beginPath(); ctx.ellipse(sx, sy, size * 0.14, size * 0.05, 0, 0, Math.PI * 2); ctx.fill();
@@ -502,12 +484,10 @@ function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
     ctx.restore();
   }
 }
-
 /** A landmark: its picture standing over its real spot, [width] metres across. */
 export function landmarkSprite(id: string, sprite: string, x: number, z: number, width: number): Sprite & { id: string } {
   return { id, s: sprite, x, z, up: true, scale: width / (SIZE[sprite] ?? 4) };
 }
-
 /** Night, step 1 -- the ground: dimmed, then the neon kerb strips and the pools of light on the road.
  *  (Buildings and people are drawn after this, on their own dimmed layer, so they stand in front of the neon.) */
 export function nightGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], pools: Light[], v: View) {
@@ -532,7 +512,6 @@ export function nightGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   glows(ctx, c, pools, v);
   ctx.restore();
 }
-
 /** Night, step 2 -- the upright layer (buildings, people, vehicles, props) drawn on its own canvas is dimmed where it has anything. */
 export function nightTint(layer: CanvasRenderingContext2D, c: Cam) {
   layer.save();
@@ -541,7 +520,6 @@ export function nightTint(layer: CanvasRenderingContext2D, c: Cam) {
   layer.fillRect(0, 0, c.w, c.h);
   layer.restore();
 }
-
 /** Night, step 3 -- what glows in the air: lamp heads, headlights, the landmarks' light. */
 export function nightLights(ctx: CanvasRenderingContext2D, c: Cam, lights: Light[], v: View, tiles: Tile[]) {
   // a light behind a building (from the camera) is hidden by it
@@ -562,7 +540,6 @@ export function nightLights(ctx: CanvasRenderingContext2D, c: Cam, lights: Light
   });
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; glows(ctx, c, seen, v); ctx.restore();
 }
-
 export type Light = { x: number; z: number; r: number; color: string; y?: number };
 function glows(ctx: CanvasRenderingContext2D, c: Cam, lights: Light[], v: View) {
   const k = c.scale;
@@ -575,7 +552,6 @@ function glows(ctx: CanvasRenderingContext2D, c: Cam, lights: Light[], v: View) 
     ctx.fillStyle = g; ctx.fillRect(sx - R, sy - R, R * 2, R * 2);
   }
 }
-
 /** Low cameras look far up the street: the distance fades into a pale haze (a deep blue one at night). */
 export function drawHaze(ctx: CanvasRenderingContext2D, c: Cam, night: boolean) {
   const s = Math.max(0, Math.min(1, (0.62 - c.tilt) / 0.32));

@@ -12,16 +12,16 @@ export const toXZ = ([lat, lon]: LatLon) => ({ x: (lon - ORIGIN.lon) * KX, z: -(
 export type Landmark = { id: string; name: string; at: LatLon; sprite: string; width: number;
   /** open places (squares, parks, beaches, bridges, parks of buses) stand where they are, not on a building */ open?: boolean };
 export const LANDMARKS: Landmark[] = [
-  { id: 'civic', name: 'Lagos Civic Centre', at: [6.4380, 3.4227], sprite: 'lm-civic-centre', width: 70 },
-  { id: 'theatre', name: 'National Theatre', at: [6.4766, 3.3692], sprite: 'lm-national-theatre', width: 150 },
-  { id: 'cathedral', name: 'Cathedral Church of Christ', at: [6.4509, 3.3917], sprite: 'lm-cathedral', width: 70 },
-  { id: 'lekki-toll', name: 'Lekki Toll Gate', at: [6.4352, 3.4562], sprite: 'lm-lekki-toll', width: 160 },
-  { id: 'eko-hotel', name: 'Eko Hotel', at: [6.4262, 3.429], sprite: 'lm-eko-hotel', width: 140 },
+  { id: 'civic', name: 'Lagos Civic Centre', at: [6.44012, 3.43087], sprite: 'lm-civic-centre', width: 70 },
+  { id: 'theatre', name: 'National Theatre', at: [6.47468, 3.36877], sprite: 'lm-national-theatre', width: 150 },
+  { id: 'cathedral', name: 'Cathedral Church of Christ', at: [6.45089, 3.39020], sprite: 'lm-cathedral', width: 70 },
+  { id: 'lekki-toll', name: 'Lekki Toll Gate', at: [6.43593, 3.44721], sprite: 'lm-lekki-toll', width: 160 },
+  { id: 'eko-hotel', name: 'Eko Hotel', at: [6.42661, 3.43030], sprite: 'lm-eko-hotel', width: 140 },
   { id: 'balogun', name: 'Balogun Market', at: [6.4553, 3.3903], sprite: 'lm-balogun', width: 140, open: true }, // the market streets between the mosque and Tinubu Square
-  { id: 'stadium', name: 'National Stadium', at: [6.4982, 3.3653], sprite: 'lm-stadium', width: 260 },
+  { id: 'stadium', name: 'National Stadium', at: [6.49827, 3.36457], sprite: 'lm-stadium', width: 260 },
   { id: 'tbs', name: 'Tafawa Balewa Square', at: [6.4476, 3.3986], sprite: 'lm-tbs', width: 220 },
   { id: 'airport', name: 'Murtala Muhammed Airport', at: [6.5774, 3.3212], sprite: 'lm-airport', width: 300 },
-  { id: 'mall', name: 'Ikeja City Mall', at: [6.6135, 3.3576], sprite: 'lm-mall', width: 180 },
+  { id: 'mall', name: 'Ikeja City Mall', at: [6.61432, 3.35780], sprite: 'lm-mall', width: 180 },
   { id: 'eko-atlantic', name: 'Eko Atlantic', at: [6.4067, 3.4106], sprite: 'lm-eko-atlantic', width: 400 },
   { id: 'ojuelegba', name: 'Ojuelegba', at: [6.50955, 3.36395], sprite: 'lm-ojuelegba', width: 140 },
   // the second set: positions from OpenStreetMap (Nominatim); '~' = placed by hand, approximately
@@ -34,7 +34,7 @@ export const LANDMARKS: Landmark[] = [
   { id: 'city-hall', name: 'Lagos City Hall', at: [6.45065, 3.39714], sprite: 'lm-city-hall', width: 70 },
   { id: 'idumota', name: 'Idumota', at: [6.46294, 3.38669], sprite: 'lm-idumota', width: 80 },
   { id: 'obalende', name: 'Obalende Motor Park', at: [6.4467, 3.4085], sprite: 'lm-obalende', width: 120, open: true }, // ~
-  { id: 'falomo', name: 'Falomo Shopping Centre', at: [6.4490, 3.4272], sprite: 'lm-falomo', width: 90 }, // ~
+  { id: 'falomo', name: 'Falomo Shopping Centre', at: [6.44481, 3.42821], sprite: 'lm-falomo', width: 90 }, // ~
   { id: 'link-bridge', name: 'Lekki-Ikoyi Link Bridge', at: [6.4400, 3.4436], sprite: 'lm-link-bridge', width: 260, open: true }, // ~
   { id: 'bar-beach', name: 'Bar Beach', at: [6.4084, 3.4300], sprite: 'lm-bar-beach', width: 160, open: true }, // on the Atlantic shore, from the coastline data
   { id: 'federal-palace', name: 'Federal Palace Hotel', at: [6.43056, 3.40737], sprite: 'lm-federal-palace', width: 130 },
@@ -42,7 +42,7 @@ export const LANDMARKS: Landmark[] = [
   { id: 'unilag-senate', name: 'UNILAG Senate Building', at: [6.5197, 3.39876], sprite: 'lm-unilag-senate', width: 60 },
   { id: 'unilag-gate', name: 'UNILAG Main Gate', at: [6.5150, 3.3880], sprite: 'lm-unilag-gate', width: 60, open: true }, // ~
   { id: 'yaba-market', name: 'Yaba Market', at: [6.5110, 3.3780], sprite: 'lm-yaba-market', width: 110, open: true }, // ~
-  { id: 'tejuosho', name: 'Tejuosho Market', at: [6.5037, 3.36954], sprite: 'lm-tejuosho', width: 110 },
+  { id: 'tejuosho', name: 'Tejuosho Market', at: [6.50815, 3.36975], sprite: 'lm-tejuosho', width: 110 },
   { id: 'oshodi', name: 'Oshodi Interchange', at: [6.55581, 3.35083], sprite: 'lm-oshodi', width: 150 },
   { id: 'computer-village', name: 'Computer Village', at: [6.59425, 3.34022], sprite: 'lm-computer-village', width: 110 },
   { id: 'alausa', name: 'Lagos State Secretariat, Alausa', at: [6.61562, 3.36074], sprite: 'lm-alausa', width: 220 },

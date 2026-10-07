@@ -9,8 +9,8 @@ import { DISTRICTS, LANDMARKS, toXZ } from './geo';
 export type Overview = { bounds: [number, number, number, number]; roads: number[][][]; rail: number[][]; water: { w: number; p: number[] }[] };
 type Sea = { p: Float32Array; island: boolean }[];
 
-export function CityMap({ overview, sea, me, onTravel, onClose }: {
-  overview: Overview | null; sea: Sea; me: { x: number; z: number };
+export function CityMap({ overview, sea, sand = [], me, onTravel, onClose }: {
+  overview: Overview | null; sea: Sea; sand?: { p: Float32Array; line: boolean }[]; me: { x: number; z: number };
   onTravel: (x: number, z: number, name: string) => void; onClose: () => void;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
@@ -33,6 +33,12 @@ export function CityMap({ overview, sea, me, onTravel, onClose }: {
     const { cx, cz, k } = view.current;
     const X = (x: number) => (x - cx) * k + W / 2, Z = (z: number) => (z - cz) * k + H / 2;
     ctx.fillStyle = '#EEF1EA'; ctx.fillRect(0, 0, W, H);
+    // the beaches first: the sea is laid over the seaward half of the shore strip
+    for (const q of sand) {
+      ctx.beginPath(); for (let i = 0; i < q.p.length; i += 2) { const x = X(q.p[i]), y = Z(q.p[i + 1]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      if (q.line) { ctx.strokeStyle = '#EAD49A'; ctx.lineWidth = Math.max(3, 90 * k); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(); }
+      else { ctx.closePath(); ctx.fillStyle = '#EAD49A'; ctx.fill(); }
+    }
     // water: the sea and lagoon, then the mapped creeks and canals
     for (const q of sea) {
       ctx.beginPath(); for (let i = 0; i < q.p.length; i += 2) { const x = X(q.p[i]), y = Z(q.p[i + 1]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }

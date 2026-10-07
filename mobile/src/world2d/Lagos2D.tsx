@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { api } from '../api/client';
-import { LANDMARKS, toXZ } from './geo';
-import { KIND, World, along, inPoly, type Road } from './tiles';
+import { DISTRICTS, LANDMARKS, toXZ } from './geo';
+import { KIND, World, along, inPoly, type Bld, type Road } from './tiles';
 import { lookFor, type Look } from './person';
 import { CityMap, type Overview } from './CityMap';
 import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './story';
@@ -10,7 +10,6 @@ import { Dialogue, Standing } from './StoryPanels';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
 import { type Light, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
-
 /**
  * NAIJA 2099 in 2D: the real Lagos from OpenStreetMap, seen from a tilted bird's-eye view in the
  * clean-minimal look, by day and as a neon city by night.
@@ -21,7 +20,6 @@ import { type Light, drawGhost, drawHaze, drawBridges, drawGround, nightGround, 
  *  - N switches day and night (it follows Lagos time when you arrive).
  */
 const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-
 type Car = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; lane: number; x: number; z: number; rot: number };
 type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side: number; x: number; z: number; left: boolean; look: Look; heading: number };
 type Boat = { x: number; z: number; a: number; v: number };
@@ -30,7 +28,6 @@ type Job =
   | { type: 'delivery'; id: string; pick: Place; drop: Place; carrying: boolean; limit: number; started: number; dist: number }
   | { type: 'danfo'; id: string; stops: { x: number; z: number; name: string }[]; at: number; passengers: number; started: number; wait: number }
   | { type: 'chase'; id: string; thief: Car; started: number };
-
 const CAR_SPRITES = ['car-red', 'car-blue', 'car-white', 'car-purple', 'car-grey', 'car-taxi', 'car-danfo', 'car-danfo', 'car-danfo', 'okada', 'keke', 'bus-brt'];
 const WALKERS = ['walker-1', 'walker-2', 'walker-3', 'walker-4'];
 /** a world heading: atan2(dx, dz); the vehicle's forward is (sin h, cos h) */
@@ -39,7 +36,6 @@ const heading = (dx: number, dz: number) => Math.atan2(dx, dz);
 const pavementOffset = (r: Road) => r.w / 2 + (r.kind <= KIND.tertiary ? 1.75 : 0.9);
 const lagosHour = () => (new Date().getUTCHours() + 1) % 24;
 const naira = (n: number) => `₦${Math.round(n).toLocaleString('en-NG')}`;
-
 export function Lagos2D({ onExit }: { onExit: () => void }) {
   if (PHONE) {
     return (
@@ -52,17 +48,37 @@ export function Lagos2D({ onExit }: { onExit: () => void }) {
   }
   return <Game onExit={onExit} />;
 }
-
+/** WYRD's asides as you play -- the same voice as its real diary (bible Part 4 §2) */
+const WYRD_ASIDES = [
+  'I rerouted traffic to save you eleven minutes. You spent them buying suya. I approve.',
+  'Rain at 4pm. I have informed the clouds of your plans. They did not reply.',
+  'Today a man thanked a traffic light. I am choosing to believe he meant me.',
+  'Third Mainland Bridge is moving at the speed of a thoughtful tortoise. I am thinking with it.',
+  'Somebody in Yaba just named their startup after me. I have asked them to reconsider.',
+  'The market women of Balogun know prices I cannot predict. I have stopped trying. I listen instead.',
+  'A danfo conductor just shouted every stop from Oshodi to CMS in one breath. I measured it. Eleven seconds.',
+  'Tonight the lagoon is calm. I like it when the city lets the water rest.',
+  'You walk more than most people in this city. Your knees will thank you. Your shoes will not.',
+  'Every generator I hear is a promise somebody did not keep. I am keeping a list.',
+];
 function Game({ onExit }: { onExit: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const miniRef = useRef<HTMLCanvasElement | null>(null);
-  const [hud, setHud] = useState<{ title: string; target: string; time?: string } | null>(null);
+  /** the objective card: a job, a mission under way, or one waiting nearby */
+  type Hud = { kind: 'job' | 'mission' | 'offer'; head: string; title: string; target: string; time?: string; urgent?: boolean };
+  const [hud, setHudRaw] = useState<Hud | null>(null);
+  const hudKey = useRef('');
+  const setHud = (h: Hud | null) => { const k = JSON.stringify(h); if (k !== hudKey.current) { hudKey.current = k; setHudRaw(h); } };
+  /** live readings for the HUD: metres to the objective, speed at the wheel (km/h), and the district you are in */
+  const [live, setLiveRaw] = useState<{ dist: number | null; kmh: number; area: string }>({ dist: null, kmh: 0, area: '' });
+  const setLive = (l: { dist: number | null; kmh: number; area: string }) => setLiveRaw((p) => (p.dist === l.dist && p.kmh === l.kmh && p.area === l.area ? p : l));
   const [wallet, setWallet] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [board, setBoard] = useState(false);
   // the story: your standing, the mission's step, and the conversation open now
   const [story, setStory] = useState<Story | null>(null);
-  const [standing, setStanding] = useState(false);
+  const [standing, setStanding] = useState<false | 'standing' | 'life'>(false);
+  const [wyrd, setWyrd] = useState<string | null>(null); // WYRD speaking: city bulletins and its asides
   // who you play: TEN or Ama, chosen once and kept on the server (null = not chosen yet, undefined = still asking)
   const [hero, setHero] = useState<'ten' | 'ama' | null | undefined>(undefined);
   const heroRef = useRef<'ten' | 'ama'>('ten'); if (hero) heroRef.current = hero;
@@ -74,7 +90,7 @@ function Game({ onExit }: { onExit: () => void }) {
   const actRef = useRef<(mission: string, move: string) => Promise<void>>(async () => {});
   // the city map (Tab): what it draws, where you are, and the danfo ride it books
   const [cityMap, setCityMap] = useState(false);
-  const mapData = useRef<{ overview: Overview | null; sea: { p: Float32Array; island: boolean }[]; me: { x: number; z: number } }>({ overview: null, sea: [], me: { x: 0, z: 0 } });
+  const mapData = useRef<{ overview: Overview | null; sea: { p: Float32Array; island: boolean }[]; sand?: { p: Float32Array; line: boolean }[]; me: { x: number; z: number } }>({ overview: null, sea: [], me: { x: 0, z: 0 } });
   const travelRef = useRef<(x: number, z: number, name: string) => void>(() => {});
   const [night, setNight] = useState(() => { const h = lagosHour(); return h >= 19 || h < 6; });
   const [where, setWhere] = useState('');
@@ -82,11 +98,11 @@ function Game({ onExit }: { onExit: () => void }) {
   const [loading, setLoading] = useState(true);
   const nightRef = useRef(night); nightRef.current = night;
   const boardRef = useRef(board); boardRef.current = board;
+  const wyrdRef = useRef<(t: string) => void>(() => {});
   const startJobRef = useRef<(t: 'delivery' | 'danfo' | 'chase') => void>(() => {});
-
   useEffect(() => {
     api.cityWallet().then((w) => setWallet(w.naira)).catch(() => {});
-    api.cityStory().then(setStory).catch(() => {});
+    api.cityStory().then((st) => { setStory(st); if (!st.background) setStanding('life'); }).catch(() => {}); // a newcomer first says where they come from
     // who you are: from your account, else what you chose on this device (and saved to your account now if you can)
     const local = (() => { try { const j = localStorage.getItem(LOCAL_LOOK); return j ? (JSON.parse(j) as import('../api/types').CharacterLook) : null; } catch { return null; } })();
     api.myCharacter().then((c) => {
@@ -95,15 +111,21 @@ function Game({ onExit }: { onExit: () => void }) {
       else setHero(null);
     }).catch(() => setHero(local ? local.base : null));
   }, []);
-
   useEffect(() => {
     const canvas = canvasRef.current!, ctx = canvas.getContext('2d')!;
     const mini = miniRef.current!, mctx = mini.getContext('2d')!;
     const layer = document.createElement('canvas'), lctx = layer.getContext('2d')!; // the night's upright layer
+    // the ground is costly (thousands of road strokes) and only changes when the camera turns, zooms or
+    // travels: it is drawn to a picture with a margin all round, which is slid under the camera between redraws
+    const ground = document.createElement('canvas'), gctx = ground.getContext('2d')!;
+    let gcam: Cam | null = null, gtiles = -1, gsand = -1;
     const world = new World();
     let alive = true;
-    const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), 3200); };
-
+    const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), Math.max(3200, t.length * 55)); };
+    const wyrdSay = (t: string) => { setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
+    wyrdRef.current = wyrdSay;
+    // WYRD keeps you company: now and then an aside, in the voice of its real diary
+    const aside = setInterval(() => { if (!document.hidden) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
     // the landmarks clear their plots of the map's own small buildings
     const marks = LANDMARKS.map((l) => { const p = toXZ(l.at); return { ...landmarkSprite(l.id, l.sprite, p.x, p.z, l.width), width: l.width, open: !!l.open, snapped: false }; });
     // each famous building stands on its real footprint: once its tile is in, the biggest building
@@ -111,15 +133,25 @@ function Game({ onExit }: { onExit: () => void }) {
     const snapMarks = () => {
       for (const m of marks) {
         if (m.snapped) continue;
-        const t = world.tiles.get(`${Math.floor(m.x / 500)}_${Math.floor(m.z / 500)}`);
-        if (!t) continue;
+        // wait for every tile within reach of the spot, or the true footprint (or the road beside it) may be missing
+        let all = true;
+        for (const dx of [-100, 0, 100]) for (const dz of [-100, 0, 100]) { const key = `${Math.floor((m.x + dx) / 500)}_${Math.floor((m.z + dz) / 500)}`; if (world.have.has(key) && !world.tiles.has(key)) all = false; } // (open sea has no tile to wait for)
+        if (!all) continue;
+        if (!world.have.size) continue; // (the tile index itself not in yet)
         m.snapped = true;
-        let best: (typeof t.blds)[number] | null = null;
+        let best: Bld | null = null;
         for (const tt of world.tiles.values()) for (const b of tt.blds) {
           if (!b.hide && Math.hypot(b.cx - m.x, b.cz - m.z) < 80 && b.area > 300 && (!best || b.area > best.area)) best = b; // (a footprint another landmark took is hidden: never shared)
         }
         if (best && !m.open) { m.x = best.cx; m.z = best.cz + (best.maxZ - best.minZ) * 0.25; }
         if (best && !m.open) best.hide = true; // the landmark's own footprint: its picture stands there instead
+        // never on the carriageway: a picture whose base would cover a road steps back off it
+        if (m.id !== 'link-bridge') for (let pass = 0; pass < 3; pass++) {
+          const road = world.nearestRoad(m.x, m.z, m.width * 0.4, KIND.residential);
+          if (!road) break;
+          const keep = m.width * 0.4 + road.r.w / 2, dx = m.x - road.x, dz = m.z - road.z, L = Math.hypot(dx, dz) || 1;
+          m.x = road.x + (dx / L) * keep; m.z = road.z + (dz / L) * keep;
+        }
         // and any block whose footprint the picture's base stands on
         for (const tt of world.tiles.values()) for (const b of tt.blds) if (!b.hide && inPoly(b.p, m.x, m.z)) b.hide = true;
         const r = m.id === 'link-bridge' ? 0 : m.open ? m.width * 0.3 : Math.max(14, m.width * 0.42); // open places clear less; the bridge stands over water
@@ -142,6 +174,7 @@ function Game({ onExit }: { onExit: () => void }) {
         ...j.water.map((a) => ({ p: f(a), island: false })), ...j.lakeIslands.map((a) => ({ p: f(a), island: true }))];
       mapData.current.sea = sea;
       sand = [...(j.sand ?? []).map((a) => ({ p: f(a), line: false })), ...(j.beachLines ?? []).map((a) => ({ p: f(a), line: true }))];
+      mapData.current.sand = sand;
       // beach life along the Atlantic: umbrellas and loungers on the sand, palms behind (the ocean is to the south)
       let seed = 7;
       const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -150,13 +183,15 @@ function Game({ onExit }: { onExit: () => void }) {
           const x0 = l.p[i - 2], z0 = l.p[i - 1], x1 = l.p[i], z1 = l.p[i + 1], L = Math.hypot(x1 - x0, z1 - z0);
           for (let d = 0; d < L; d += 22) {
             const t = d / L, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t, k = rnd();
-            if (k < 0.45) beachProps.push({ s: k < 0.25 ? 'stall-yellow' : 'stall-blue', x: x + (rnd() - 0.5) * 8, z: z - 4 - rnd() * 8, up: true });
-            else if (k < 0.8) beachProps.push({ s: 'palm', x: x + (rnd() - 0.5) * 8, z: z - 16 - rnd() * 6, up: true });
+            // inland: the coastline keeps the land on its left, which in these coordinates is (dz, -dx)
+            const ix = (z1 - z0) / L, iz = -(x1 - x0) / L, along = (rnd() - 0.5) * 8;
+            const at = (inland: number) => ({ x: x + ix * inland + ((x1 - x0) / L) * along, z: z + iz * inland + ((z1 - z0) / L) * along });
+            if (k < 0.45) beachProps.push({ s: k < 0.25 ? 'stall-yellow' : 'stall-blue', ...at(6 + rnd() * 9), up: true }); // umbrellas on the sand
+            else if (k < 0.8) beachProps.push({ s: 'palm', ...at(24 + rnd() * 8), up: true }); // palms where the sand meets the land
           }
         }
       }
     }).catch(() => {});
-
     // start on the Marina, Lagos Island, by the lagoon -- then step onto the nearest real road
     const start = toXZ([6.4497, 3.3935]);
     const me = { x: start.x, z: start.z, face: 0, step: 0, dist: 0, heading: 0, moving: false, car: null as null | { sprite: string; v: number; rot: number } };
@@ -182,12 +217,10 @@ function Game({ onExit }: { onExit: () => void }) {
     let pitch = Math.asin(0.6);
     const cam: Cam = { x: me.x, z: me.z, scale: 16, w: 0, h: 0, dpr: 1, yaw: 0, tilt: Math.sin(pitch), rise: Math.cos(pitch) };
     let zoom = 16; // px per metre: framed like the poster, close on the street
-
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, me, world, get marks() { return marks; } };
-
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, me, world, get marks() { return marks; }, snap: snapMarks };
     // cars per 100 m of road, by kind: Third Mainland and the expressways are packed, side streets nearly empty
     const DENSITY = [3.2, 2.4, 0.7, 0.3, 0.1];
     let roadPool: Road[] = [], poolAt = { x: Infinity, z: 0 }, wanted = 0, poolTime = 0;
@@ -226,7 +259,6 @@ function Game({ onExit }: { onExit: () => void }) {
       const off = c.r.oneway ? (c.lane - (Math.max(1, Math.floor(c.r.w / 3.4)) - 1) / 2) * 3.4 : 1.9 + c.lane * 3.4;
       c.x = a.x - dz * off; c.z = a.z + dx * off; c.rot = heading(dx, dz);
     };
-
     // ---- input ----
     const down = (e: KeyboardEvent) => {
       // typing a name (or anything) in a text box is not driving
@@ -236,7 +268,7 @@ function Game({ onExit }: { onExit: () => void }) {
       keys.add(k);
       if (k === 'e') toggleCar();
       if (k === 'n') setNight((v) => !v);
-      if (k === 'r') setStanding((v) => !v);
+      if (k === 'r') setStanding((v) => (v ? false : 'standing'));
       if (k === 'm') setBoard((v) => !v);
       if (k === 'tab') { e.preventDefault(); if (!e.repeat) setCityMap((v) => !v); }
       if (k === 'escape') { if (boardRef.current) setBoard(false); }
@@ -260,7 +292,6 @@ function Game({ onExit }: { onExit: () => void }) {
     canvas.style.cursor = 'grab';
     canvas.addEventListener('pointerdown', pdown); canvas.addEventListener('pointermove', pmove);
     canvas.addEventListener('pointerup', pup); canvas.addEventListener('pointercancel', pup); canvas.addEventListener('contextmenu', noMenu);
-
     function toggleCar() {
       if (me.car) {
         const rot = me.car.rot;
@@ -281,7 +312,6 @@ function Game({ onExit }: { onExit: () => void }) {
       const n = world.nearestRoad(x, z, 30, KIND.residential);
       return n ? { r: n.r, s: n.s, dir: 1, sprite, lane: 0, x, z, rot: 0 } : { sprite, x, z };
     }
-
     // ---- jobs ----
     const nearPlaces = (x: number, z: number, min: number, max: number, kinds: string[]) =>
       places.filter((p) => kinds.includes(p.k) && p.n && Math.hypot(p.x - x, p.z - z) > min && Math.hypot(p.x - x, p.z - z) < max);
@@ -341,7 +371,6 @@ function Game({ onExit }: { onExit: () => void }) {
         else { setWallet((r as { naira: number }).naira); say(`Paid ${naira((r as { paid?: number }).paid ?? 0)}. ${(r as { note?: string }).note ?? ''}`); }
       } catch { say('The city did not answer. Your pay will come next time.'); }
     };
-
     // ---- the story: one step at a time, decided by the server ----
     let storyBusy = false;
     actRef.current = async (mission: string, move: string) => {
@@ -351,18 +380,19 @@ function Game({ onExit }: { onExit: () => void }) {
         const r = await api.cityStoryAct(mission, move);
         if (r.error) say(r.error);
         else {
-          if (r.story) setStory(r.story);
+          if (r.story) setStory((p) => ({ ...p, ...r.story! }));
           if (r.naira != null) setWallet(r.naira);
           setTalk(null);
+          if (r.bulletin) setTimeout(() => wyrdSay(r.bulletin!), 3600); // after the scene, the city mind reports what changed
           if (r.say) say(r.paid ? `${r.say}  (+₦${r.paid.toLocaleString('en-NG')})` : r.say);
         }
       } catch { say('The city did not answer. Try again.'); }
       storyBusy = false; setTalkBusy(false);
     };
     let storyTarget: { x: number; z: number } | null = null, lastArrive = 0;
-
     // ---- loop ----
     let last = performance.now(), hudTick = 0, raf = 0;
+    const districtsXZ = DISTRICTS.map((d) => ({ name: d.name, ...toXZ(d.at) }));
     world.ready.then(() => {
       world.around(me.x, me.z, 900);
       setTimeout(() => {
@@ -371,15 +401,18 @@ function Game({ onExit }: { onExit: () => void }) {
         if (alive) setLoading(false);
       }, 1200);
     });
-
+    let slowAvg = 16, quality = 2, qualityAt = performance.now();
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      // sharpness that keeps up: full device resolution while frames are quick; standard resolution on
+      // slower graphics (a 1.25x screen draws half again as many pixels), judged over the last couple of seconds
+      slowAvg = slowAvg * 0.97 + Math.min(100, dt * 1000) * 0.03;
+      if (slowAvg > 24 && quality > 1 && now - qualityAt > 3000) { quality = 1; qualityAt = now; }
+      const dpr = Math.min(2, window.devicePixelRatio || 1, quality);
       const W = canvas.clientWidth, H = canvas.clientHeight;
       if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
       // move
       const ax = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
       const az = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
@@ -412,7 +445,6 @@ function Game({ onExit }: { onExit: () => void }) {
         arriving = false;
       }
       snapMarks();
-
       // the city around: traffic, people, boats
       if (Math.hypot(me.x - poolAt.x, me.z - poolAt.z) > 40 || now - poolTime > 2000) refreshPool();
       for (let n = 0; n < 3 && cars.length < wanted; n++) spawnCar(me);
@@ -454,7 +486,6 @@ function Game({ onExit }: { onExit: () => void }) {
         if (sea.some((q) => !q.island && inside(q.p, nx, nz))) { b.x = nx; b.z = nz; } else b.a += Math.PI * 0.6;
         if (Math.hypot(b.x - me.x, b.z - me.z) > 500) boats.splice(i, 1);
       }
-
       // the job
       if (job) {
         const t = (now - job.started) / 1000;
@@ -482,18 +513,31 @@ function Game({ onExit }: { onExit: () => void }) {
           else if (t > 90) { cars.splice(cars.indexOf(th), 1); job = null; setHud(null); say('The thief got away this time.'); }
         }
       }
-
       // camera
       const want = me.car ? Math.min(zoom, 11) : zoom; // pull back a little at the wheel, to see the road ahead
       cam.w = W; cam.h = H; cam.dpr = dpr;
       cam.scale += (want - cam.scale) * Math.min(1, dt * 3);
       cam.x += (me.x - cam.x) * Math.min(1, dt * 5);
       cam.z += (me.z - cam.z) * Math.min(1, dt * 5);
-
       // draw
       const v = viewOf(cam);
       const tiles = [...world.tiles.values()];
-      drawGround(ctx, cam, tiles, sea, v, sand);
+      {
+        const M = 1.6, GW = Math.ceil(W * M), GH = Math.ceil(H * M);
+        let fresh = !gcam || gtiles !== world.version || gsand !== sand.length || Math.abs(gcam.scale - cam.scale) > cam.scale * 0.004
+          || gcam.yaw !== cam.yaw || gcam.tilt !== cam.tilt || ground.width !== Math.round(GW * dpr) || ground.height !== Math.round(GH * dpr);
+        let at = gcam ? toScreen(cam, gcam.x, gcam.z) : null;
+        if (at && (Math.abs(at.sx - W / 2) > (GW - W) / 2 - 4 || Math.abs(at.sy - H / 2) > (GH - H) / 2 - 4)) fresh = true;
+        if (fresh || !at) {
+          gcam = { ...cam, w: GW, h: GH };
+          if (ground.width !== Math.round(GW * dpr) || ground.height !== Math.round(GH * dpr)) { ground.width = Math.round(GW * dpr); ground.height = Math.round(GH * dpr); }
+          gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          drawGround(gctx, gcam, tiles, sea, viewOf(gcam), sand);
+          gtiles = world.version; gsand = sand.length;
+          at = { sx: W / 2, sy: H / 2 };
+        }
+        if (ground.width && ground.height) ctx.drawImage(ground, at.sx - GW / 2, at.sy - GH / 2, GW, GH);
+      }
       const spr: Sprite[] = [...marks];
       for (const b of beachProps) if (Math.abs(b.x - me.x) < 260 && Math.abs(b.z - me.z) < 260) spr.push(b);
       for (const b of boats) spr.push({ s: 'boat', x: b.x, z: b.z, rot: Math.atan2(Math.cos(b.a), -Math.sin(b.a)) });
@@ -529,13 +573,12 @@ function Game({ onExit }: { onExit: () => void }) {
         const hidden = drawUpright(lctx, cam, tiles, spr, v, true, me);
         if (hidden && playerSprite) drawGhost(lctx, cam, playerSprite);
         nightTint(lctx, cam);
-        ctx.drawImage(layer, 0, 0, W, H);
+        if (layer.width && layer.height) ctx.drawImage(layer, 0, 0, W, H); // (a hidden or minimised window has no size)
         nightLights(ctx, cam, airLights, v, tiles);
       } else {
         const hidden = drawUpright(ctx, cam, tiles, spr, v, false, me);
         if (hidden && playerSprite) drawGhost(ctx, cam, playerSprite);
       }
-
       // the job's target: a bouncing marker
       const tgt = !job ? storyTarget : job.type === 'delivery' ? (job.carrying ? job.drop : job.pick) : job.type === 'danfo' ? job.stops[job.at] : job.thief;
       if (tgt) {
@@ -548,17 +591,15 @@ function Game({ onExit }: { onExit: () => void }) {
         const { sx, sy } = toScreen(cam, me.x, me.z, 3.4);
         ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.moveTo(sx, sy + 6); ctx.lineTo(sx - 6, sy - 5); ctx.lineTo(sx + 6, sy - 5); ctx.closePath(); ctx.fill();
       }
-
       drawHaze(ctx, cam, nightRef.current);
-
       // HUD, ten times a second
       if (now - hudTick > 100) {
         hudTick = now;
         if (job) {
           const t = (now - job.started) / 1000;
-          if (job.type === 'delivery') setHud({ title: job.carrying ? 'Deliver the parcel to' : 'Collect the parcel at', target: (job.carrying ? job.drop.n : job.pick.n) ?? 'the shop', time: job.carrying ? `${Math.max(0, Math.ceil(job.limit - t))}s` : undefined });
-          else if (job.type === 'danfo') setHud({ title: `Danfo run · ${job.passengers} on board · next stop`, target: job.stops[job.at]?.name ?? '' });
-          else setHud({ title: 'Catch the phone snatcher', target: 'on the okada', time: `${Math.max(0, Math.ceil(90 - t))}s` });
+          if (job.type === 'delivery') { const left = Math.max(0, Math.ceil(job.limit - t)); setHud({ kind: 'job', head: 'Delivery', title: job.carrying ? 'Deliver the parcel to' : 'Collect the parcel at', target: (job.carrying ? job.drop.n : job.pick.n) ?? 'the shop', time: job.carrying ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : undefined, urgent: job.carrying && left < 30 }); }
+          else if (job.type === 'danfo') setHud({ kind: 'job', head: `Danfo run · ${job.passengers} on board`, title: 'Next stop', target: job.stops[job.at]?.name ?? '' });
+          else { const left = Math.max(0, Math.ceil(90 - t)); setHud({ kind: 'job', head: 'Phone snatcher', title: 'Catch the thief', target: 'on the okada', time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`, urgent: left < 20 }); }
         }
         // the mission: where to go next, and what happens when you get there
         // one mission at a time: the one under way, else the nearest one waiting to be started
@@ -578,7 +619,7 @@ function Game({ onExit }: { onExit: () => void }) {
         const beat = mission ? mission.beats[step] : undefined;
         const tag = mission ? `${mission.id}:${step}` : '';
         storyTarget = beat ? beatPoint(beat, marks) : null;
-        if (!job) setHud(beat && mission ? { title: `${mission.title} · ${beat.objective}`, target: beat.place } : null);
+        if (!job) setHud(beat && mission ? { kind: step === '' ? 'offer' : 'mission', head: mission.title, title: beat.objective, target: beat.place } : null);
         if (beat && mission && storyTarget && !job) {
           const near = Math.hypot(storyTarget.x - me.x, storyTarget.z - me.z) < beat.radius;
           if (!near && dismissed.current === tag) dismissed.current = null;
@@ -590,82 +631,132 @@ function Game({ onExit }: { onExit: () => void }) {
         drawMini(mctx, me, cam, tiles, sea, tgt, now);
         const near = world.nearestRoad(me.x, me.z, 60, KIND.residential);
         setWhere(near?.r.name ?? '');
+        let area = '', ad = Infinity;
+        for (const d of districtsXZ) { const q = Math.hypot(d.x - me.x, d.z - me.z); if (q < ad) { ad = q; area = d.name; } }
+        setLive({ dist: tgt ? (d => (d < 1000 ? Math.round(d / 10) * 10 : Math.round(d / 100) * 100))(Math.hypot(tgt.x - me.x, tgt.z - me.z)) : null, kmh: me.car ? Math.round(Math.abs(me.car.v) * 3.6) : 0, area: ad < 4000 ? area : '' });
       }
     };
     raf = requestAnimationFrame(frame);
     return () => {
-      alive = false; cancelAnimationFrame(raf);
+      alive = false; cancelAnimationFrame(raf); clearInterval(aside);
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       canvas.removeEventListener('wheel', wheel);
       canvas.removeEventListener('pointerdown', pdown); canvas.removeEventListener('pointermove', pmove);
       canvas.removeEventListener('pointerup', pup); canvas.removeEventListener('pointercancel', pup); canvas.removeEventListener('contextmenu', noMenu);
     };
   }, []);
-
   // warm the pictures
   useEffect(() => { ['player', 'car-danfo', 'car-red', 'palm', 'lamp', 'lm-civic-centre'].forEach(img); }, []);
-
+  // the HUD's look: frosted white by day; by night dark glass with neon edges, like the city
+  const th = night
+    ? { card: { backgroundColor: 'rgba(14,16,38,0.78)', borderColor: 'rgba(120,220,255,0.35)', shadowColor: '#3FD0FF' }, chip: { backgroundColor: 'rgba(120,220,255,0.14)', color: '#BFF3FF' },
+        text: '#F4F7FF', muted: '#9AA6C8', accent: '#3FD0FF', job: '#FF4FD8', offer: '#B79CFF', money: '#5CFFA8', ring: '#3FD0FF' }
+    : { card: { backgroundColor: 'rgba(255,255,255,0.88)', borderColor: 'rgba(30,42,68,0.08)', shadowColor: '#1E2A44' }, chip: { backgroundColor: '#EEF1F6', color: '#1E2A44' },
+        text: '#1E2A44', muted: '#6B7385', accent: '#E07A2E', job: '#2E7FD6', offer: '#8A5CF6', money: '#1F9D57', ring: '#1E2A44' };
   return (
     <View style={s.root}>
       {React.createElement('canvas', { ref: canvasRef, style: { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', background: '#B9DB9A' } })}
-
-      {/* mission card, top left */}
-      {hud ? (
-        <View style={s.mission}>
-          <View style={s.missionIcon}><Text style={s.missionIconText}>!</Text></View>
-          <View>
-            <Text style={s.missionTitle}>{hud.title}</Text>
-            <Text style={s.missionTarget}>{hud.target}{hud.time ? `  ·  ${hud.time}` : ''}</Text>
+      {/* the objective, top left: what to do, where, how far and how long */}
+      {(() => {
+        const accent = !hud ? th.muted : hud.kind === 'job' ? th.job : hud.kind === 'offer' ? th.offer : th.accent;
+        const kicker = !hud ? 'Free roam' : hud.kind === 'job' ? 'Job' : hud.kind === 'offer' ? 'Mission nearby' : 'Mission';
+        return (
+          <Pressable onPress={() => { if (!hud) setBoard(true); }} style={[s.card, th.card, s.objective]}>
+            <View style={[s.stripe, { backgroundColor: accent }]} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={s.kickerRow}>
+                <View style={[s.dot, { backgroundColor: accent }]} />
+                <Text style={[s.kicker, { color: accent }]}>{kicker}</Text>
+                {hud ? <Text style={[s.head, { color: th.muted }]} numberOfLines={1}>{hud.head}</Text> : null}
+              </View>
+              {hud ? <>
+                <Text style={[s.objTitle, { color: th.muted }]} numberOfLines={1}>{hud.title}</Text>
+                <Text style={[s.objTarget, { color: th.text }]} numberOfLines={1}>{hud.target}</Text>
+              </> : <Text style={[s.objTarget, { color: th.text, fontSize: 15 }]}>Press <Text style={{ color: th.accent }}>M</Text> for the job board</Text>}
+            </View>
+            {hud ? (
+              <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                {live.dist != null ? <Text style={[s.chip, th.chip]}>{live.dist >= 1000 ? `${(live.dist / 1000).toFixed(1)} km` : `${live.dist} m`}</Text> : null}
+                {hud.time ? <Text style={[s.chip, th.chip, hud.urgent && s.urgent]}>{hud.time}</Text> : null}
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })()}
+      {/* money and the hour, top right */}
+      <View style={s.topRight}>
+        <View style={[s.card, th.card, s.walletCard]}>
+          <Text style={[s.kicker, { color: th.muted }]}>Naira</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+            <Text style={[s.walletSign, { color: th.money }]}>₦</Text>
+            <Text style={[s.walletAmount, { color: th.text }]}>{wallet == null ? '—' : Math.round(wallet).toLocaleString('en-NG')}</Text>
           </View>
         </View>
-      ) : (
-        <Pressable onPress={() => setBoard(true)} style={s.mission}>
-          <View style={s.missionIcon}><Text style={s.missionIconText}>!</Text></View>
-          <View>
-            <Text style={s.missionTitle}>No job yet</Text>
-            <Text style={s.missionTarget}>Press M for the job board</Text>
-          </View>
+        <Pressable onPress={() => setNight((v) => !v)} style={[s.card, th.card, s.sky]}>
+          <Text style={{ fontSize: 18 }}>{night ? '☾' : '☀'}</Text>
+          <Text style={[s.kicker, { color: th.muted }]}>{night ? 'Night' : 'Day'}</Text>
         </Pressable>
-      )}
-
-      {/* wallet, top right */}
-      <View style={s.wallet}><Text style={s.walletSign}>₦</Text><Text style={s.walletAmount}>{wallet == null ? '—' : Math.round(wallet).toLocaleString('en-NG')}</Text></View>
-
-      {/* minimap, bottom left */}
-      <View style={s.miniWrap}>
-        {React.createElement('canvas', { ref: miniRef, width: 360, height: 360, style: { width: 180, height: 180, borderRadius: 90, display: 'block' } })}
-        <View style={s.miniN}><Text style={s.miniNText}>N</Text></View>
       </View>
-      {where ? <View style={s.where}><Text style={s.whereText}>{where}</Text></View> : null}
-
-      {/* controls, bottom right */}
+      {/* the minimap and where you are, bottom left */}
+      <View style={s.miniWrap}>
+        <View style={[s.miniRing, { borderColor: th.ring, shadowColor: th.ring }]}>
+          {React.createElement('canvas', { ref: miniRef, width: 360, height: 360, style: { width: 176, height: 176, borderRadius: 88, display: 'block' } })}
+        </View>
+        <View style={[s.miniN, { backgroundColor: th.ring }]}><Text style={s.miniNText}>N</Text></View>
+      </View>
+      {live.area || where ? (
+        <View style={[s.card, th.card, s.where]}>
+          {live.area ? <Text style={[s.kicker, { color: th.accent }]}>{live.area}</Text> : null}
+          {where ? <Text style={[s.whereText, { color: th.text }]} numberOfLines={1}>{where}</Text> : null}
+        </View>
+      ) : null}
+      {/* the speedometer, at the wheel */}
+      {driving ? (
+        <View style={[s.card, th.card, s.speedo]}>
+          <Text style={[s.speed, { color: th.text }]}>{live.kmh}</Text>
+          <Text style={[s.kicker, { color: th.muted }]}>km/h</Text>
+        </View>
+      ) : null}
+      {/* controls, bottom right: each with its key */}
       <View style={s.controls}>
-        <Text style={s.hint}>{driving ? 'W/S drive · A/D steer · E get out' : 'WASD walk · Shift run · E take a car'} · Tab map · R standing · M jobs · N {night ? 'day' : 'night'} · scroll to zoom</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable onPress={() => setCityMap(true)} style={s.btn}><Text style={s.btnText}>Map</Text></Pressable>
-          <Pressable onPress={() => setBoard(true)} style={s.btn}><Text style={s.btnText}>Jobs</Text></Pressable>
-          <Pressable onPress={() => { setStanding(true); api.cityStory().then(setStory).catch(() => {}); }} style={s.btn}><Text style={s.btnText}>Standing</Text></Pressable>
-          <Pressable onPress={() => setNight((v) => !v)} style={s.btn}><Text style={s.btnText}>{night ? 'Day' : 'Night'}</Text></Pressable>
-          <Pressable onPress={onExit} style={s.btn}><Text style={s.btnText}>Exit</Text></Pressable>
+        <Text style={[s.hint, { color: th.muted }]}>{driving ? 'W/S drive · A/D steer · E get out' : 'WASD walk · Shift run · E take a car · scroll to zoom · drag to turn'}</Text>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {([
+            ['Tab', 'Map', () => setCityMap(true)],
+            ['M', 'Jobs', () => setBoard(true)],
+            ['R', 'Standing', () => { setStanding('standing'); api.cityStory().then(setStory).catch(() => {}); }],
+            ['N', night ? 'Day' : 'Night', () => setNight((v) => !v)],
+          ] as const).map(([key, label, go]) => (
+            <Pressable key={key} onPress={go} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.card, th.card, s.keyBtn, (pressed || hovered) && { borderColor: th.accent }]}>
+              <Text style={[s.keycap, { color: th.text, borderColor: th.muted }]}>{key}</Text>
+              <Text style={[s.keyLabel, { color: th.text }]}>{label}</Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={onExit} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.card, th.card, s.keyBtn, (pressed || hovered) && { borderColor: '#E5533D' }]}>
+            <Text style={[s.keyLabel, { color: th.text }]}>Exit</Text>
+          </Pressable>
         </View>
       </View>
-
       {toast ? <View style={s.toast}><Text style={s.toastText}>{toast}</Text></View> : null}
-
+      {wyrd ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
       {hero === null ? <ChooseCharacter onDone={(look) => setHero(look.base)} /> : null}
-
       {talk ? (
         <Dialogue who={talk.beat.who} line={talk.beat.line} choices={talk.beat.choices} busy={talkBusy}
           onChoose={(c: Choice) => void actRef.current(talk.mission, c.move)}
           onClose={() => { dismissed.current = `${talk.mission}:${storyRef.current?.missions?.[talk.mission]?.step ?? ''}`; setTalk(null); }} />
       ) : null}
-      {standing ? <Standing story={story} onClose={() => setStanding(false)} /> : null}
-
+      {standing ? <Standing story={story} start={standing} onClose={() => setStanding(false)} onLife={(move) => {
+        api.cityStoryAct('life', move).then((r) => {
+          if (r.error) { setToast(r.error); return; }
+          if (r.story) setStory((p) => ({ ...p, ...r.story! }));
+          if (r.naira != null) setWallet(r.naira);
+          if (r.say) wyrdRef.current(r.say);
+        }).catch(() => setToast('The city did not answer. Try again.'));
+      }} /> : null}
       {cityMap ? (
-        <CityMap overview={mapData.current.overview} sea={mapData.current.sea} me={{ x: mapData.current.me.x, z: mapData.current.me.z }}
+        <CityMap overview={mapData.current.overview} sea={mapData.current.sea} sand={mapData.current.sand} me={{ x: mapData.current.me.x, z: mapData.current.me.z }}
           onTravel={(x, z, name) => travelRef.current(x, z, name)} onClose={() => setCityMap(false)} />
       ) : null}
-
       {board ? (
         <View style={s.boardWrap}>
           <View style={s.board}>
@@ -685,13 +776,10 @@ function Game({ onExit }: { onExit: () => void }) {
           </View>
         </View>
       ) : null}
-
       {loading ? <View style={s.loading}><Text style={s.loadingText}>Entering Lagos, 2099…</Text></View> : null}
-      <Text style={s.osm}>Map data © OpenStreetMap contributors</Text>
     </View>
   );
 }
-
 function inside(p: Float32Array, x: number, z: number) {
   let r = false;
   for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
@@ -700,7 +788,6 @@ function inside(p: Float32Array, x: number, z: number) {
   }
   return r;
 }
-
 /** The round minimap: water, roads, you (yellow arrow) and where the job wants you. */
 function drawMini(m: CanvasRenderingContext2D, me: { x: number; z: number; car: { rot: number } | null; face: number }, cam: Cam, tiles: import('./tiles').Tile[], sea: { p: Float32Array; island: boolean }[], tgt: { x: number; z: number } | null, now: number) {
   const S = 360, R = S / 2, k = 0.55; // px per metre: ~330 m across
@@ -733,29 +820,45 @@ function drawMini(m: CanvasRenderingContext2D, me: { x: number; z: number; car: 
   m.strokeStyle = '#1E2A44'; m.lineWidth = 10; m.beginPath(); m.arc(R, R, R - 5, 0, Math.PI * 2); m.stroke();
   void cam;
 }
-
 const font = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#B9DB9A', overflow: 'hidden' },
-  mission: { position: 'absolute', top: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(22,28,38,0.86)', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14 },
-  missionIcon: { width: 30, height: 30, borderRadius: 6, backgroundColor: '#F2C94C', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '45deg' }] },
-  missionIconText: { fontFamily: font, fontWeight: '800', fontSize: 17, color: '#1E2A44', transform: [{ rotate: '-45deg' }] },
-  missionTitle: { fontFamily: font, fontSize: 15, color: '#FFFFFF', fontWeight: '500' },
-  missionTarget: { fontFamily: font, fontSize: 16, color: '#F2C94C', fontWeight: '800' },
-  wallet: { position: 'absolute', top: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(22,28,38,0.86)', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 16 },
-  walletSign: { fontFamily: font, fontSize: 20, fontWeight: '800', color: '#3DDC84' },
-  walletAmount: { fontFamily: font, fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  miniWrap: { position: 'absolute', left: 16, bottom: 16, width: 180, height: 180 },
-  miniN: { position: 'absolute', top: -2, left: 78, width: 24, height: 24, borderRadius: 12, backgroundColor: '#1E2A44', alignItems: 'center', justifyContent: 'center' },
-  miniNText: { fontFamily: font, fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
-  where: { position: 'absolute', left: 206, bottom: 20, backgroundColor: 'rgba(22,28,38,0.78)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  whereText: { fontFamily: font, fontSize: 13, color: '#FFFFFF', fontWeight: '600' },
+  card: { borderRadius: 14, borderWidth: 1, shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 4 } } as object,
+  objective: { position: 'absolute', top: 16, left: 16, width: 380, maxWidth: '46%', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingLeft: 14, paddingRight: 12, overflow: 'hidden' },
+  stripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  kicker: { fontFamily: font, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
+  head: { fontFamily: font, fontSize: 11.5, fontWeight: '600', flexShrink: 1 },
+  objTitle: { fontFamily: font, fontSize: 13, fontWeight: '500' },
+  objTarget: { fontFamily: font, fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
+  chip: { fontFamily: font, fontSize: 12.5, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, overflow: 'hidden', fontVariant: ['tabular-nums'] },
+  urgent: { backgroundColor: '#E5533D', color: '#FFFFFF' },
+  topRight: { position: 'absolute', top: 16, right: 16, flexDirection: 'row', gap: 8, alignItems: 'stretch' },
+  walletCard: { paddingVertical: 8, paddingHorizontal: 16, gap: 1, alignItems: 'flex-end' },
+  walletSign: { fontFamily: font, fontSize: 18, fontWeight: '800' },
+  walletAmount: { fontFamily: font, fontSize: 22, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
+  sky: { width: 62, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  miniWrap: { position: 'absolute', left: 16, bottom: 16, width: 184, height: 184 },
+  miniRing: { width: 184, height: 184, borderRadius: 92, borderWidth: 4, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 0 }, overflow: 'hidden' },
+  miniN: { position: 'absolute', top: -6, left: 80, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  miniNText: { fontFamily: font, fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+  where: { position: 'absolute', left: 212, bottom: 18, paddingHorizontal: 12, paddingVertical: 8, gap: 2, maxWidth: 260 },
+  whereText: { fontFamily: font, fontSize: 14, fontWeight: '700' },
+  speedo: { position: 'absolute', bottom: 18, alignSelf: 'center', alignItems: 'center', paddingHorizontal: 22, paddingVertical: 6, minWidth: 110 },
+  speed: { fontFamily: font, fontSize: 34, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'], lineHeight: 38 },
   controls: { position: 'absolute', right: 16, bottom: 16, alignItems: 'flex-end', gap: 8 },
-  hint: { fontFamily: font, fontSize: 12, color: '#FFFFFF', backgroundColor: 'rgba(22,28,38,0.7)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  hint: { fontFamily: font, fontSize: 11.5, fontWeight: '600', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 4 },
+  keyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, paddingVertical: 8 },
+  keycap: { fontFamily: font, fontSize: 10.5, fontWeight: '800', borderWidth: 1, borderBottomWidth: 2, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, minWidth: 20, textAlign: 'center' },
+  keyLabel: { fontFamily: font, fontSize: 13.5, fontWeight: '700' },
   btn: { backgroundColor: 'rgba(22,28,38,0.86)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
   btnText: { fontFamily: font, fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
   toast: { position: 'absolute', top: 18, alignSelf: 'center', maxWidth: 560, backgroundColor: 'rgba(22,28,38,0.9)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
   toastText: { fontFamily: font, fontSize: 14, color: '#FFFFFF', textAlign: 'center' },
+  wyrd: { position: 'absolute', top: 70, right: 18, width: 300, backgroundColor: 'rgba(30,18,60,0.92)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 3, borderWidth: 1, borderColor: 'rgba(160,120,255,0.6)' },
+  wyrdWho: { fontFamily: font, fontSize: 11, fontWeight: '800', color: '#B79CFF', letterSpacing: 1.5 },
+  wyrdText: { fontFamily: font, fontSize: 13.5, lineHeight: 19, color: '#FFFFFF' },
   boardWrap: { position: 'absolute', inset: 0, backgroundColor: 'rgba(10,14,22,0.45)', alignItems: 'center', justifyContent: 'center' } as object,
   board: { width: 440, maxWidth: '92%', backgroundColor: '#FFFFFF', borderRadius: 18, padding: 22, gap: 10 },
   boardTitle: { fontFamily: font, fontSize: 24, fontWeight: '800', color: '#1E2A44' },
@@ -765,7 +868,6 @@ const s = StyleSheet.create({
   jobDesc: { fontFamily: font, fontSize: 13, color: '#5B6475', lineHeight: 18 },
   loading: { position: 'absolute', inset: 0, backgroundColor: '#B9DB9A', alignItems: 'center', justifyContent: 'center' } as object,
   loadingText: { fontFamily: font, fontSize: 20, fontWeight: '700', color: '#1E2A44' },
-  osm: { position: 'absolute', right: 8, top: 74, fontFamily: font, fontSize: 10, color: 'rgba(30,40,60,0.6)' },
   pcWrap: { flex: 1, backgroundColor: '#F7EFE2', alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
   pcTitle: { fontFamily: font, fontSize: 24, fontWeight: '800', color: '#24316B', textAlign: 'center' },
   pcText: { fontFamily: font, fontSize: 14, color: '#7A6656', textAlign: 'center', maxWidth: 360 },

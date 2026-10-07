@@ -8,9 +8,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  * background, and sends each sheet to a local receiver that writes public/world2d/people/.
  * The 2D game then plays the real mocap animation as pictures, with no 3D engine at runtime.
  */
-const CELL = 192, DIRS = 8, HALF = 0.85, LOOK_Y = 0.85; // the cell spans 1.7 m, snug round a 1.8 m body seen from ~37 degrees up
+const CELL = 192, DIRS = 8;
+/** the camera angles baked (radians up from the ground), lettered a-d in the file names; the game shows the nearest */
+export const HERO_PITCHES = [0.2, 0.42, Math.asin(0.6), 0.9];
+/** half the cell's span in metres at each angle: lower cameras see the whole 1.8 m standing up, so need more room */
+export const heroHalf = (e: number) => Math.max(0.85, (1.8 * Math.cos(e)) / 1.75 + 0.03);
 const ANIMS: { name: string; frames: number }[] = [{ name: 'walk', frames: 10 }, { name: 'run', frames: 10 }, { name: 'idle', frames: 6 }];
-const ELEVATION = Math.asin(0.6); // the 2D view squashes the ground to 0.6: the camera is ~37 degrees up
 
 export function Bake() {
   const [log, setLog] = useState<string[]>([]);
@@ -40,12 +43,14 @@ export function Bake() {
         model.position.y -= box2.min.y;
         const holder = new THREE.Group(); holder.add(model); scene.add(holder);
 
-        const cam = new THREE.OrthographicCamera(-HALF, HALF, HALF, -HALF, 0.1, 50);
-        const d = 10;
-        cam.position.set(0, LOOK_Y + Math.sin(ELEVATION) * d, Math.cos(ELEVATION) * d);
-        cam.lookAt(0, LOOK_Y, 0);
 
         const mixer = new THREE.AnimationMixer(model);
+        for (const [pi, e] of HERO_PITCHES.entries()) {
+        // the feet always 90% down the cell, so the game stands every angle on the same spot
+        const HALF = heroHalf(e), LOOK_Y = (0.8 * HALF) / Math.cos(e), d = 10;
+        const cam = new THREE.OrthographicCamera(-HALF, HALF, HALF, -HALF, 0.1, 50);
+        cam.position.set(0, LOOK_Y + Math.sin(e) * d, Math.cos(e) * d);
+        cam.lookAt(0, LOOK_Y, 0);
         for (const a of ANIMS) {
           // in place: keep only the hips' height from root motion
           const clip = clips[a.name].clone();
@@ -72,8 +77,9 @@ export function Bake() {
             }
           }
           const url = sheet.toDataURL('image/webp', 0.88);
-          await fetch('http://localhost:8099/', { method: 'POST', body: JSON.stringify({ name: `people/${who}-${a.name}.webp`, data: url.split(',')[1] }) });
-          say(`${who} ${a.name}: ${a.frames} frames x ${DIRS} facings, ${(url.length / 1366).toFixed(0)} KB`);
+          await fetch('http://localhost:8099/', { method: 'POST', body: JSON.stringify({ name: `people/${who}-${a.name}-p${'abcd'[pi]}.webp`, data: url.split(',')[1] }) });
+          say(`${who} ${a.name} angle ${pi}: ${a.frames} frames x ${DIRS} facings, ${(url.length / 1366).toFixed(0)} KB`);
+        }
         }
       }
       say('done');

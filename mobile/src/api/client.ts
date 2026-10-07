@@ -262,7 +262,14 @@ interface SpAccountExport {
 /** reputation by group (district / faction / social) and key, -100..100; missions by id; the city's memory of you */
 export type Story = { rep: { district: Record<string, number>; faction: Record<string, number>; social: Record<string, number> };
   missions: Record<string, { step: string; at: string; moves: string[] }>; memory: { at: string; what: string }[];
-  factions?: Record<string, string>; social?: Record<string, string>; naira?: number };
+  factions?: Record<string, string>; social?: Record<string, string>; naira?: number;
+  /** the nine variables of each district the player has touched, 0..100, and their names */
+  city?: Record<string, Record<string, number>>; cityVars?: Record<string, string>;
+  /** the people who remember you: trust -100..100 and what they remember */
+  people?: Record<string, { trust: number; notes: { at: string; what: string; felt: string }[] }>;
+  bulletins?: { at: string; text: string }[];
+  background?: string; backgrounds?: Record<string, [string, string]>;
+  career?: string; careerXp?: number; careerStage?: string | null; careers?: Record<string, string>; careerStages?: string[] };
 
 export const api = {
   baseUrl: BASE_URL,
@@ -450,7 +457,7 @@ export const api = {
   cityPay: (reason: 'maglev' | 'danfo') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   /** NAIJA 2099's story: reputation and branching missions (the server decides every step). */
   cityStory: () => callEndpoint<string>('city', 'story', {}).then((j) => JSON.parse(j) as Story),
-  cityStoryAct: (mission: string, move: string) => callEndpoint<string>('city', 'storyAct', { mission, move }).then((j) => JSON.parse(j) as { ok?: boolean; error?: string; say?: string; step?: string; naira?: number; paid?: number; cost?: number; story?: Story }),
+  cityStoryAct: (mission: string, move: string) => callEndpoint<string>('city', 'storyAct', { mission, move }).then((j) => JSON.parse(j) as { ok?: boolean; error?: string; say?: string; step?: string; naira?: number; paid?: number; cost?: number; bulletin?: string | null; story?: Story }),
   cityMissionPaid: (id: string) => callEndpoint<string>('city', 'missionPaid', { id }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   cityStats: () => callEndpoint<string>('city', 'stats', {}).then((j) => JSON.parse(j) as CityStats),
   cityCharter: () => callEndpoint<string>('city', 'charter', {}).then((j) => JSON.parse(j) as CityCharter),
