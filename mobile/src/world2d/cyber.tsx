@@ -20,6 +20,9 @@ export function loadCyberFonts() {
   l.id = 'cy-fonts'; l.rel = 'stylesheet';
   l.href = 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap';
   document.head.appendChild(l);
+  const st = document.createElement('style');
+  st.textContent = '@keyframes cyEq{0%,100%{height:4px}50%{height:18px}} .cy-eq{height:4px;animation:cyEq .9s ease-in-out infinite}';
+  document.head.appendChild(st);
 }
 
 /** corners cut at 45 degrees: [cut] px off the top-left and bottom-right */

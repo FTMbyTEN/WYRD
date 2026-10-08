@@ -9,6 +9,7 @@ import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './
 import { Dialogue, Standing } from './StoryPanels';
 import { WyrdPanel, type WyrdLine } from './WyrdPanel';
 import { CY, HEAD, MONO, Panel, loadCyberFonts } from './cyber';
+import { Radio, STATIONS, type Station } from './radio';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
 import { type Light, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
@@ -50,6 +51,9 @@ export function Lagos2D({ onExit }: { onExit: () => void }) {
   }
   return <Game onExit={onExit} />;
 }
+/** a street lamp's two bulbs: metres across the screen from the post, and up from the ground (from the picture) */
+const LAMP_BULBS: [number, number][] = [[-0.88, 4.61], [1.1, 5.33]];
+
 /** WYRD's asides as you play -- the same voice as its real diary (bible Part 4 §2) */
 const WYRD_ASIDES = [
   'I rerouted traffic to save you eleven minutes. You spent them buying suya. I approve.',
@@ -82,6 +86,9 @@ function Game({ onExit }: { onExit: () => void }) {
   const [standing, setStanding] = useState<false | 'standing' | 'life'>(false);
   const [wyrd, setWyrd] = useState<string | null>(null); // WYRD speaking: city bulletins and its asides
   const [wyrdOpen, setWyrdOpen] = useState(false); // the conversation with WYRD (T)
+  const radio = useRef<Radio | null>(null); // FM (Q)
+  const [onAir, setOnAir] = useState<Station | null>(null);
+  const tuneRadio = () => { radio.current ??= new Radio(); setOnAir(radio.current.tune()); };
   const [wyrdLines, setWyrdLines] = useState<WyrdLine[]>([]);
   const addWyrd = (l: WyrdLine) => setWyrdLines((p) => [...p.slice(-60), l]);
   /** what WYRD is told about the moment you speak to it */
@@ -132,7 +139,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const world = new World();
     let alive = true;
     const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), Math.max(3200, t.length * 55)); };
-    const wyrdSay = (t: string) => { addWyrd({ from: t.startsWith('WYRD city bulletin') ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
+    const wyrdSay = (t: string) => { if (t.startsWith('WYRD city bulletin')) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
     wyrdRef.current = wyrdSay;
     // WYRD keeps you company: now and then an aside, in the voice of its real diary
     const aside = setInterval(() => { if (!document.hidden) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
@@ -312,6 +319,7 @@ function Game({ onExit }: { onExit: () => void }) {
       if (k === 'r') setStanding((v) => (v ? false : 'standing'));
       if (k === 'm') setBoard((v) => !v);
       if (k === 't') { e.preventDefault(); setWyrdOpen((v) => !v); }
+      if (k === 'q' && !e.repeat) tuneRadio();
       if (k === 'tab') { e.preventDefault(); if (!e.repeat) setCityMap((v) => !v); }
       if (k === 'escape') { if (boardRef.current) setBoard(false); setWyrdOpen(false); }
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
@@ -607,9 +615,16 @@ function Game({ onExit }: { onExit: () => void }) {
         // the ground at night: dimmed, neon kerbs and light pools -- buildings and people then stand in front of them
         const pools: Light[] = [];
         airLights = [];
+        // each street lamp has two bulbs, on arms out to either side: each one shines, and lights the ground under it.
+        // The lamp's picture always faces the camera, so its arms run along the screen: (cos yaw, -sin yaw) in the world.
+        // Heights are as the picture stands (upright, full height), so they're divided by the camera's rise.
+        const rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
         for (const t of tiles) for (const p of t.props) if (p.s === 'lamp') {
-          pools.push({ x: p.x, z: p.z + 1.5, r: 11, color: 'rgba(255,214,150,0.38)' });
-          airLights.push({ x: p.x, z: p.z, r: 6, color: 'rgba(255,230,190,0.28)', y: 6 }, { x: p.x, z: p.z, r: 2.2, color: 'rgba(255,250,235,1)', y: 6 });
+          for (const [off, up] of LAMP_BULBS) {
+            const bx = p.x + rx * off, bz = p.z + rz * off;
+            pools.push({ x: bx, z: bz + 0.6, r: 8, color: 'rgba(255,214,150,0.34)' });
+            airLights.push({ x: bx, z: bz, r: 4.5, color: 'rgba(255,230,190,0.3)', y: up / cam.rise }, { x: bx, z: bz, r: 1.4, color: 'rgba(255,250,235,1)', y: up / cam.rise });
+          }
         }
         for (const c of cars) pools.push({ x: c.x + Math.sin(c.rot) * 4, z: c.z + Math.cos(c.rot) * 4, r: 6, color: 'rgba(200,240,255,0.5)' });
         if (me.car) pools.push({ x: me.x + Math.sin(me.car.rot) * 5, z: me.z + Math.cos(me.car.rot) * 5, r: 9, color: 'rgba(200,240,255,0.6)' });
@@ -693,7 +708,7 @@ function Game({ onExit }: { onExit: () => void }) {
     // (debug: time [n] whole frames, waiting for the graphics to finish each one)
     (window as unknown as { __naija: Record<string, unknown> }).__naija.bench = (n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) { frame(performance.now()); cancelAnimationFrame(raf); ctx.getImageData(0, 0, 1, 1); } raf = requestAnimationFrame(frame); return (performance.now() - t0) / n; };
     return () => {
-      alive = false; cancelAnimationFrame(raf); clearInterval(aside);
+      alive = false; cancelAnimationFrame(raf); clearInterval(aside); radio.current?.off();
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       canvas.removeEventListener('wheel', wheel);
       canvas.removeEventListener('pointerdown', pdown); canvas.removeEventListener('pointermove', pmove);
@@ -775,6 +790,18 @@ function Game({ onExit }: { onExit: () => void }) {
         </Panel>
       ) : null}
 
+      {/* the radio: what's on, with a level meter */}
+      {onAir ? (
+        <Panel style={s.radio} accent={CY.green} edge="rgba(61,255,154,0.45)" cut={10} pad={0}>
+          <View style={s.radioRow}>
+            <View style={s.eq}>{[0, 1, 2, 3, 4, 5].map((i) => React.createElement('div', { key: i, className: 'cy-eq', style: { width: 3, background: CY.green, animationDelay: `${i * 0.13}s` } }))}</View>
+            <View>
+              <Text style={s.radioFreq}>{onAir.freq} FM  <Text style={{ color: CY.text }}>{onAir.name}</Text></Text>
+              <Text style={s.kickerDim}>{onAir.tag.toUpperCase()}  ·  [Q] NEXT</Text>
+            </View>
+          </View>
+        </Panel>
+      ) : null}
       {/* the speedometer, at the wheel */}
       {driving ? (
         <Panel style={s.speedo} accent={CY.red} cut={12} pad={0}>
@@ -794,6 +821,7 @@ function Game({ onExit }: { onExit: () => void }) {
             ['M', 'JOBS', () => setBoard(true), CY.cyan],
             ['R', 'STANDING', () => { setStanding('standing'); api.cityStory().then(setStory).catch(() => {}); }, CY.cyan],
             ['T', 'WYRD', () => setWyrdOpen((v) => !v), CY.magenta],
+            ['Q', onAir ? onAir.freq : 'RADIO', () => tuneRadio(), CY.green],
             ['N', night ? 'DAY' : 'NIGHT', () => setNight((v) => !v), CY.yellow],
           ] as const).map(([key, label, go, tone]) => (
             <Pressable key={key} onPress={go} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [(pressed || hovered) && { transform: [{ translateY: -1 }] }]}>
@@ -929,6 +957,10 @@ const s = StyleSheet.create({
   miniNText: { fontFamily: HEAD, fontSize: 12, fontWeight: '700', color: CY.ink, transform: [{ rotate: '-45deg' }] },
   where: { position: 'absolute', left: 214, bottom: 22, maxWidth: 280 },
   whereText: { fontFamily: HEAD, fontSize: 16, fontWeight: '700', color: CY.text, letterSpacing: 0.5 },
+  radio: { position: 'absolute', bottom: 92, alignSelf: 'center' },
+  radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 7 },
+  eq: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 18 },
+  radioFreq: { fontFamily: MONO, fontSize: 14, color: CY.green, letterSpacing: 1 },
   speedo: { position: 'absolute', bottom: 22, alignSelf: 'center', minWidth: 120 },
   speed: { fontFamily: MONO, fontSize: 38, color: CY.yellow, lineHeight: 42, letterSpacing: 2, textShadowColor: 'rgba(252,238,10,0.6)', textShadowRadius: 10 },
   controls: { position: 'absolute', right: 16, bottom: 16, alignItems: 'flex-end', gap: 8 },
