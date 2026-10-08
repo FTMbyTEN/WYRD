@@ -17,7 +17,7 @@ import { KIND, inPoly, type Road, type Tile } from './tiles';
 export type Cam = { x: number; z: number; scale: number; w: number; h: number; dpr: number;
   /** turn around the vertical axis (radians) */ yaw: number;
   /** ground squash = sin(pitch); height rise = cos(pitch) */ tilt: number; rise: number };
-export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boolean; lift?: number; scale?: number;
+export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boolean; lift?: number; scale?: number; face?: number;
   /** which way it is heading in the world, atan2(dx, dz) -- picks the right baked view */
   heading?: number;
   /** a vehicle drawn from its baked sheet (16 headings) */
@@ -37,7 +37,7 @@ const VEH_CELL = 160, VEH_DIRS = 32, VEH_PITCHES = [0.15, 0.25, 0.35, 0.55, 0.75
 const vehGround = (span: number, pitch: number) => 0.5 + (0.06 * span * Math.cos(pitch)) / span;
 export const VEH_SPAN: Record<string, number> = {
   'car-red': 6.2, 'car-blue': 6.2, 'car-white': 6.2, 'car-purple': 6.2, 'car-grey': 6.2, 'car-taxi': 6.2,
-  'car-danfo': 6.8, 'bus-brt': 14.5, okada: 3.2, keke: 3.8,
+  'car-danfo': 6.8, 'bus-brt': 14.5, okada: 3.2, keke: 3.8, 'boat-taxi': 10.5,
 };
 const VEH_SIZE = 1.25; // a touch larger than life, like the poster
 const DAY = {
@@ -158,6 +158,13 @@ function worldSpace(ctx: CanvasRenderingContext2D, c: Cam, lift = 0) {
   ctx.rotate(c.yaw);
   ctx.translate(-c.x, -c.z);
 }
+/** a shape's bounding box (x0, x1, z0, z1), worked out once */
+const boxes = new WeakMap<Float32Array, number[]>();
+function boxOf(p: Float32Array) {
+  let b = boxes.get(p);
+  if (!b) { b = [Infinity, -Infinity, Infinity, -Infinity]; for (let i = 0; i < p.length; i += 2) { b[0] = Math.min(b[0], p[i]); b[1] = Math.max(b[1], p[i]); b[2] = Math.min(b[2], p[i + 1]); b[3] = Math.max(b[3], p[i + 1]); } boxes.set(p, b); }
+  return b;
+}
 function wpath(ctx: CanvasRenderingContext2D, p: Float32Array) {
   ctx.moveTo(p[0], p[1]);
   for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
@@ -195,12 +202,16 @@ export function drawGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
   const pave = (r: Road) => (r.bridge ? 0 : r.w + (r.kind <= KIND.tertiary ? 7 : 3.5));
   ctx.save(); worldSpace(ctx, c);
   for (const q of sea) {
+    const bb = boxOf(q.p);
+    if (bb[1] < v.minX || bb[0] > v.maxX || bb[3] < v.minZ || bb[2] > v.maxZ) continue; // (nowhere near: skip its thousands of points)
     ctx.beginPath(); wpath(ctx, q.p); ctx.closePath();
     ctx.fillStyle = q.island ? DAY.grass : DAY.water; ctx.fill();
     if (!q.island) { ctx.strokeStyle = DAY.waterEdge; ctx.lineWidth = Math.max(1 / k, 1.5); ctx.stroke(); }
   }
   // the beaches: mapped sand areas, and a broad strip of sand along the Atlantic shore
   for (const q of sand) {
+    const sb = boxOf(q.p);
+    if (sb[1] + 30 < v.minX || sb[0] - 30 > v.maxX || sb[3] + 30 < v.minZ || sb[2] - 30 > v.maxZ) continue;
     ctx.beginPath(); wpath(ctx, q.p);
     if (q.line) {
       ctx.strokeStyle = '#EAD49A'; ctx.lineWidth = 46; ctx.stroke();
@@ -285,6 +296,120 @@ export function drawBridges(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   ctx.restore();
 }
 type Item = { z: number; draw: () => void };
+type Boxed = Item & { x0: number; x1: number; y0: number; y1: number };
+
+const onCanvas = (c: Cam, b: { x0: number; x1: number; y0: number; y1: number }) => b.x1 > 0 && b.x0 < c.w && b.y1 > 0 && b.y0 < c.h;
+/** a building's box on screen, and its painting depth */
+function buildingBox(c: Cam, b: Tile['blds'][number]) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, rz1 = -Infinity;
+  const up = b.h * c.scale * c.rise;
+  for (let i = 0; i < b.p.length; i += 2) {
+    const q = turn(c, b.p[i], b.p[i + 1]);
+    const sx = q.rx * c.scale + c.w / 2, sy = q.rz * c.scale * c.tilt + c.h / 2;
+    if (sx < x0) x0 = sx; if (sx > x1) x1 = sx; if (sy > y1) y1 = sy; if (sy - up < y0) y0 = sy - up; if (q.rz > rz1) rz1 = q.rz;
+  }
+  return { x0: x0 - 2, x1: x1 + 2, y0: y0 - 2, y1: y1 + 2, z: rz1 };
+}
+/** an upright picture's box on screen (its real size when it's loaded, a guess until then) */
+function pictureBox(c: Cam, s: Sprite) {
+  const { sx, sy } = toScreen(c, s.x, s.z, s.lift ?? 0), k = c.scale;
+  let w: number, h: number;
+  if (s.veh) { const sz = (VEH_SPAN[s.s] ?? 6) * VEH_SIZE * k; w = sz; h = sz * 0.9; }
+  else if (s.hero) { const sz = 2 * 1.05 * HERO_SIZE * k; w = sz * 0.7; h = sz; }
+  else if (!s.up) { const sz = (SIZE[s.s] ?? 8) * k * 1.3; w = sz; h = sz * 0.8; }
+  else {
+    const im = img(s.s), metres = (SIZE[s.s] ?? 4) * (s.scale ?? 1);
+    const ratio = im.naturalWidth ? im.naturalHeight / Math.max(im.naturalWidth, im.naturalHeight) : 1;
+    const wr = im.naturalWidth ? im.naturalWidth / Math.max(im.naturalWidth, im.naturalHeight) : 1;
+    w = metres * wr * k; h = metres * ratio * k;
+  }
+  return { x0: sx - w / 2 - 2, x1: sx + w / 2 + 2, y0: sy - h - 2, y1: sy + Math.max(4, h * 0.3), z: depth(c, s.x, s.z) };
+}
+
+/**
+ * Everything that stands still -- buildings, the map's props (lamps, trees, stalls) and fixed pictures (landmarks,
+ * beach umbrellas) -- back to front, for the scenery cache. [glow] as in drawUpright.
+ */
+export function drawStill(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], fixed: Sprite[], v: View, night: boolean, glow?: CanvasRenderingContext2D) {
+  nightNow = night;
+  const items: Item[] = [];
+  for (const t of tiles) {
+    // only what actually reaches into the picture (a tile is small: most of the nearby city falls outside it)
+    for (const b of t.blds) {
+      if (b.hide || !inView(v, b.minX, b.maxX, b.minZ, b.maxZ)) continue;
+      const bx = buildingBox(c, b);
+      if (onCanvas(c, bx)) items.push({ z: bx.z, draw: () => building(ctx, c, b, night, glow) });
+    }
+    for (const p of t.props) {
+      if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
+      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, bx = pictureBox(c, sp);
+      if (onCanvas(c, bx)) items.push({ z: bx.z, draw: () => picture(ctx, c, sp) });
+    }
+  }
+  for (const s of fixed) {
+    if (s.x < v.minX - 200 || s.x > v.maxX + 200 || s.z < v.minZ - 200 || s.z > v.maxZ + 200) continue;
+    const bx = pictureBox(c, s);
+    if (onCanvas(c, bx)) items.push({ z: bx.z, draw: () => picture(ctx, c, s) });
+  }
+  items.sort((a, b) => a.z - b.z);
+  for (const it of items) it.draw();
+}
+
+/**
+ * What moves (cars, people, boats, you), drawn over the cached scenery -- and every still thing standing in front of
+ * one of them drawn again over it, so a car behind a building stays behind it. Returns whether something hides [focus].
+ */
+/** how many buildings drawMoving redrew in front of something (none: the glow layer has nothing on it) */
+export let redrawn = 0;
+/** the screen box holding everything drawMoving drew (for drawing the night layer only there) */
+export const liveBox = { x0: 0, y0: 0, x1: 0, y1: 0 };
+export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], fixed: Sprite[], moving: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }, glow?: CanvasRenderingContext2D): boolean {
+  nightNow = night; redrawn = 0;
+  const live: Boxed[] = [];
+  for (const s of moving) {
+    if (s.x < v.minX - 50 || s.x > v.maxX + 50 || s.z < v.minZ - 50 || s.z > v.maxZ + 50) continue;
+    const bx = pictureBox(c, s);
+    if (bx.x1 < 0 || bx.x0 > c.w || bx.y1 < 0 || bx.y0 > c.h) continue;
+    live.push({ ...bx, draw: () => picture(ctx, c, s) });
+  }
+  const items: Item[] = [...live];
+  const f = focus ? turn(c, focus.x, focus.z) : null;
+  let hidden = false;
+  const covers = (o: { x0: number; x1: number; y0: number; y1: number; z: number }) => live.some((m) => o.z > m.z && o.x1 > m.x0 && o.x0 < m.x1 && o.y1 > m.y0 && o.y0 < m.y1);
+  for (const t of tiles) {
+    for (const b of t.blds) {
+      if (b.hide || !inView(v, b.minX, b.maxX, b.minZ, b.maxZ)) continue;
+      const bx = buildingBox(c, b);
+      if (f) {
+        let rx0 = Infinity, rx1 = -Infinity, rz0 = Infinity;
+        for (let i = 0; i < b.p.length; i += 2) { const q = turn(c, b.p[i], b.p[i + 1]); if (q.rx < rx0) rx0 = q.rx; if (q.rx > rx1) rx1 = q.rx; if (q.rz < rz0) rz0 = q.rz; }
+        if (bx.z > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3) hidden = true;
+      }
+      if (covers(bx)) { redrawn++; items.push({ ...bx, draw: () => building(ctx, c, b, night, glow) } as Boxed); }
+    }
+    for (const p of t.props) {
+      if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
+      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, bx = pictureBox(c, sp);
+      if (covers(bx)) items.push({ ...bx, draw: () => picture(ctx, c, sp) } as Boxed);
+    }
+  }
+  for (const s of fixed) {
+    if (s.x < v.minX - 200 || s.x > v.maxX + 200 || s.z < v.minZ - 200 || s.z > v.maxZ + 200) continue;
+    const bx = pictureBox(c, s);
+    if (f && s.scale && s.up && bx.z > f.rz) { const q = turn(c, focus!.x, focus!.z), fy = q.rz * c.scale * c.tilt + c.h / 2, fx = q.rx * c.scale + c.w / 2; if (fx > bx.x0 && fx < bx.x1 && fy > bx.y0 && fy < bx.y1) hidden = true; }
+    if (covers(bx)) items.push({ ...bx, draw: () => picture(ctx, c, s) } as Boxed);
+  }
+  liveBox.x0 = Infinity; liveBox.y0 = Infinity; liveBox.x1 = -Infinity; liveBox.y1 = -Infinity;
+  for (const it of items as Boxed[]) if ('x0' in it) { liveBox.x0 = Math.min(liveBox.x0, it.x0); liveBox.y0 = Math.min(liveBox.y0, it.y0); liveBox.x1 = Math.max(liveBox.x1, it.x1); liveBox.y1 = Math.max(liveBox.y1, it.y1); }
+  items.sort((a, b) => a.z - b.z);
+  for (const it of items) it.draw();
+  return hidden;
+}
+
+/** Night: the light pools on the ground (lamps in the cache, headlights live). */
+export function lightPools(ctx: CanvasRenderingContext2D, c: Cam, pools: Light[], v: View) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; glows(ctx, c, pools, v); ctx.restore();
+}
 /** Buildings and pictures, back to front. Returns whether anything solid stands between the camera and [focus]
  *  (the game then shows the player's silhouette through it -- buildings never turn see-through). */
 /** [glow]: at night, what gives off light (neon, lit windows, shop signs, tower crowns) is drawn here as well, in the
@@ -309,7 +434,7 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
-      items.push({ z: depth(c, p.x, p.z), draw: () => picture(ctx, c, { s: p.s, x: p.x, z: p.z, up: true }) });
+      items.push({ z: depth(c, p.x, p.z), draw: () => picture(ctx, c, { s: p.s, x: p.x, z: p.z, up: true, face: p.face }) });
     }
   }
   for (const s of sprites) {
@@ -551,7 +676,9 @@ function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   const k = c.scale, longest = Math.max(im0.naturalWidth, im0.naturalHeight), f = (metres * k) / longest;
   const w = im0.naturalWidth * f, h = im0.naturalHeight * f;
   if (s.up) {
-    ctx.drawImage(im, sx - w / 2, sy - h * 0.92, w, h);
+    // a stall's picture shows its front to the lower left: mirrored when its road is to its right on screen
+    if (s.face !== undefined && Math.sin(s.face - c.yaw) > 0) { ctx.save(); ctx.translate(sx, 0); ctx.scale(-1, 1); ctx.drawImage(im, -w / 2, sy - h * 0.92, w, h); ctx.restore(); }
+    else ctx.drawImage(im, sx - w / 2, sy - h * 0.92, w, h);
   } else {
     // top-down things on the water (boats): turned with the camera
     // a boat sits up in the water: its deck seen less squashed than the flat ground (so it doesn't lie flat when the
@@ -576,7 +703,7 @@ export function landmarkSprite(id: string, sprite: string, x: number, z: number,
 export function nightGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], pools: Light[], v: View) {
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';
-  ctx.fillStyle = '#2A1F55';
+  ctx.fillStyle = '#2B3350';
   ctx.fillRect(0, 0, c.w, c.h);
   ctx.globalCompositeOperation = 'lighter';
   const k = c.scale;
@@ -585,7 +712,7 @@ export function nightGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const t of tiles) for (const r of t.roads) {
       if (r.bridge !== lifted || r.kind > KIND.secondary || !inView(v, r.minX, r.maxX, r.minZ, r.maxZ)) continue;
-      for (const [side, color] of [[-1, 'rgba(255,60,200,0.4)'], [1, 'rgba(40,220,255,0.4)']] as const) {
+      for (const [side, color] of [[-1, 'rgba(255,60,200,0.28)'], [1, 'rgba(40,220,255,0.32)']] as const) {
         ctx.strokeStyle = color; ctx.lineWidth = Math.max(1 / k, 0.35);
         ctx.beginPath(); offsetPath(ctx, r, (r.w / 2 - 0.3) * side); ctx.stroke();
       }
@@ -599,7 +726,7 @@ export function nightGround(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
 export function nightTint(layer: CanvasRenderingContext2D, c: Cam) {
   layer.save();
   layer.globalCompositeOperation = 'source-atop';
-  layer.fillStyle = 'rgba(18,10,48,0.55)';
+  layer.fillStyle = 'rgba(8,12,26,0.55)';
   layer.fillRect(0, 0, c.w, c.h);
   layer.restore();
 }
@@ -624,15 +751,26 @@ export function nightLights(ctx: CanvasRenderingContext2D, c: Cam, lights: Light
   ctx.save(); ctx.globalCompositeOperation = 'lighter'; glows(ctx, c, seen, v); ctx.restore();
 }
 export type Light = { x: number; z: number; r: number; color: string; y?: number };
+/** one soft round glow per colour, drawn once and scaled to each light (a gradient per light per frame is dear) */
+const glowSprites = new Map<string, HTMLCanvasElement>();
+function glowSprite(color: string) {
+  let el = glowSprites.get(color);
+  if (el) return el;
+  el = document.createElement('canvas'); el.width = el.height = 128;
+  const g = el.getContext('2d')!, gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  glowSprites.set(color, el);
+  return el;
+}
 function glows(ctx: CanvasRenderingContext2D, c: Cam, lights: Light[], v: View) {
   const k = c.scale;
   for (const l of lights) {
     if (l.x < v.minX || l.x > v.maxX || l.z < v.minZ || l.z > v.maxZ) continue;
     const { sx, sy } = toScreen(c, l.x, l.z, l.y ?? 0);
     const R = l.r * k;
-    const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, R);
-    g.addColorStop(0, l.color); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(sx - R, sy - R, R * 2, R * 2);
+    if (sx + R < 0 || sx - R > c.w || sy + R < 0 || sy - R > c.h) continue;
+    ctx.drawImage(glowSprite(l.color), sx - R, sy - R, R * 2, R * 2);
   }
 }
 /** Low cameras look far up the street: the distance fades into a pale haze (a deep blue one at night). */

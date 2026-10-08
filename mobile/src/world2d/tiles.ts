@@ -18,7 +18,8 @@ export type Bld = { p: Float32Array; h: number; minX: number; maxX: number; minZ
   /** under a landmark's picture: not drawn (still solid) */ hide?: boolean;
   /** a road runs through it on the map: dropped, not drawn and not solid */ gone?: boolean };
 export type Water = { p: Float32Array; ribbon: number }; // ribbon > 0: a river of that width (m); 0: an area
-export type Prop = { s: string; x: number; z: number };
+/** a thing on the street; [face]: which way a stall or shop faces (world angle, towards its road) */
+export type Prop = { s: string; x: number; z: number; face?: number };
 export type Tile = { key: string; tx: number; tz: number; roads: Road[]; blds: Bld[]; water: Water[]; rail: Float32Array[]; props: Prop[]; grid: Map<number, Bld[]>; used: number;
   /** every street in the tile, kept or not, with its signature: so it can take over one whose keeper is unloaded */ all: { sig: string; r: Road }[] };
 
@@ -82,6 +83,9 @@ export class World {
   markets: { x: number; z: number }[] = [];
   /** bumped whenever what is loaded changes, so cached drawings know to redraw */
   version = 0;
+  /** what changed and where (world boxes: x0, x1, z0, z1), in order: a cached drawing redraws what they touch */
+  changes: [number, number, number, number][] = [];
+  changed(x0: number, x1: number, z0: number, z1: number) { this.changes.push([x0, x1, z0, z1]); this.version++; }
 
   constructor() {
     this.ready = fetch(`${BASE}/index.json`).then((r) => r.json()).then((j) => { this.index = j; this.have = new Set(j.tiles); });
@@ -108,7 +112,7 @@ export class World {
       for (const t of this.tiles.values()) {
         let got = false;
         for (const { sig, r } of t.all) if (!this.owners.has(sig)) { this.owners.set(sig, t.key); t.roads.push(r); got = true; }
-        if (got) this.clearRoads(t);
+        if (got) { this.clearRoads(t); this.changed(t.tx * TILE - 150, (t.tx + 1) * TILE + 150, t.tz * TILE - 150, (t.tz + 1) * TILE + 150); }
         if (got) t.roads.sort((a, b) => b.kind - a.kind);
         this.version++;
       }
@@ -121,7 +125,8 @@ export class World {
       const tile = this.parse(key, raw);
       this.tiles.set(key, tile);
       this.clearRoads(tile);
-      this.version++;
+      // (its own ground, and neighbours' buildings and street ends it may have trimmed or joined)
+      this.changed(tile.tx * TILE - 150, (tile.tx + 1) * TILE + 150, tile.tz * TILE - 150, (tile.tz + 1) * TILE + 150);
     } catch { this.loading.delete(key); }
   }
 
@@ -358,6 +363,24 @@ export class World {
       const theirs = tile.roads.filter(over(t));
       if (theirs.length) for (const b of t.blds) check(b, theirs);
     }
+    // the street's things: none left standing in a road (a stall set by one street may land on a crossing one, or
+    // on a road from a tile that loaded later), and stalls, kiosks and bus stops turned to face their road
+    const room: Record<string, number> = { lamp: 0.4, palm: 1.4, tree: 1.6, bush: 0.8, busstop: 1.6, kiosk: 1.8, 'stall-yellow': 2, 'stall-blue': 2, 'stall-orange': 2 };
+    const near = (t: Tile) => t === tile || (Math.abs(t.tx - tile.tx) <= 1 && Math.abs(t.tz - tile.tz) <= 1);
+    for (const t of all) if (near(t)) t.props = t.props.filter((p) => {
+      let best = Infinity, fx = 0, fz = 0;
+      for (const r of cells.get(gkey(Math.floor(p.x / C), Math.floor(p.z / C))) ?? []) {
+        for (let i = 2; i < r.p.length; i += 2) {
+          const x0 = r.p[i - 2], z0 = r.p[i - 1], dx = r.p[i] - x0, dz = r.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1;
+          const u = Math.max(0, Math.min(1, ((p.x - x0) * dx + (p.z - z0) * dz) / L2));
+          const px = x0 + dx * u, pz = z0 + dz * u, d = Math.hypot(px - p.x, pz - p.z) - r.w / 2;
+          if (d < best) { best = d; fx = px - p.x; fz = pz - p.z; }
+        }
+      }
+      if (best < (room[p.s] ?? 1)) return false;
+      if (p.s.startsWith('stall') || p.s === 'kiosk' || p.s === 'busstop') p.face = Math.atan2(fx, fz);
+      return true;
+    });
   }
 
   private blockedIn(t: Tile, x: number, z: number, pad: number) {

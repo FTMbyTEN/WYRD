@@ -10,9 +10,10 @@ import { Dialogue, Standing } from './StoryPanels';
 import { WyrdPanel, type WyrdLine } from './WyrdPanel';
 import { CY, HEAD, MONO, Panel, loadCyberFonts } from './cyber';
 import { Radio, STATIONS, type Station } from './radio';
+import { Scenery } from './scenery';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
-import { type Light, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
+import { type Light, drawMoving, redrawn, liveBox, lightPools, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
 /**
  * NAIJA 2099 in 2D: the real Lagos from OpenStreetMap, seen from a tilted bird's-eye view in the
  * clean-minimal look, by day and as a neon city by night.
@@ -132,11 +133,9 @@ function Game({ onExit }: { onExit: () => void }) {
     const mini = miniRef.current!, mctx = mini.getContext('2d')!;
     const layer = document.createElement('canvas'), lctx = layer.getContext('2d')!; // the night's upright layer
     const glowC = document.createElement('canvas'), gl = glowC.getContext('2d')!; // what shines at night
-    // the ground is costly (thousands of road strokes) and only changes when the camera turns, zooms or
-    // travels: it is drawn to a picture with a margin all round, which is slid under the camera between redraws
-    const ground = document.createElement('canvas'), gctx = ground.getContext('2d')!;
-    let gcam: Cam | null = null, gtiles = -1, gsand = -1;
     const world = new World();
+    // the still city, drawn once in screen tiles and kept (see scenery.ts)
+    const scenery = new Scenery(world);
     let alive = true;
     const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), Math.max(3200, t.length * 55)); };
     const wyrdSay = (t: string) => { if (t.startsWith('WYRD city bulletin')) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
@@ -171,9 +170,10 @@ function Game({ onExit }: { onExit: () => void }) {
         }
         // and any block whose footprint the picture's base stands on
         for (const tt of world.tiles.values()) for (const b of tt.blds) if (!b.hide && inPoly(b.p, m.x, m.z)) b.hide = true;
-        const r = m.id === 'link-bridge' ? 0 : m.open ? m.width * 0.3 : Math.max(14, m.width * 0.42); // open places clear less; the bridge stands over water
+        const r = m.id === 'link-bridge' ? 0 : m.open ? m.width * 0.4 : Math.max(16, m.width * 0.56); // the picture's whole ground: nothing of the map's own pokes through or over it (open places clear less; the bridge stands over water)
         for (const tt of world.tiles.values()) for (const b of tt.blds) if (Math.hypot(b.cx - m.x, b.cz - m.z) < r) b.hide = true;
         world.clearings.push({ x: m.x, z: m.z, r }); // and in tiles that load later
+        world.changed(m.x - 160, m.x + 160, m.z - 160, m.z + 160); // (the cached scenery redraws round it)
       }
     };
     let places: Place[] = [];
@@ -268,7 +268,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet };
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery };
     // cars per 100 m of road, by kind: Third Mainland and the expressways are packed, side streets nearly empty
     const DENSITY = [3.2, 2.4, 0.7, 0.3, 0.1];
     let roadPool: Road[] = [], poolAt = { x: Infinity, z: 0 }, wanted = 0, poolTime = 0;
@@ -451,7 +451,7 @@ function Game({ onExit }: { onExit: () => void }) {
         if (alive) setLoading(false);
       }, 1200);
     });
-    let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1;
+    let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1, lastHazeNight = false, lastLive = { x0: 0, y0: 0, x1: 99999, y1: 99999 };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -567,34 +567,18 @@ function Game({ onExit }: { onExit: () => void }) {
       const want = me.car ? Math.min(zoom, 11) : zoom; // pull back a little at the wheel, to see the road ahead
       cam.w = W; cam.h = H; cam.dpr = dpr;
       cam.scale += (want - cam.scale) * Math.min(1, dt * 3);
+      if (Math.abs(want - cam.scale) < want * 0.002) cam.scale = want; // settle exactly, so the scenery cache can hold
       cam.x += (me.x - cam.x) * Math.min(1, dt * 5);
       cam.z += (me.z - cam.z) * Math.min(1, dt * 5);
       // draw
       const v = viewOf(cam);
       const tiles = [...world.tiles.values()];
-      {
-        const M = 1.6, GW = Math.ceil(W * M), GH = Math.ceil(H * M);
-        let fresh = !gcam || gtiles !== world.version || gsand !== sand.length || Math.abs(gcam.scale - cam.scale) > cam.scale * 0.004
-          || gcam.yaw !== cam.yaw || gcam.tilt !== cam.tilt || ground.width !== Math.round(GW * dpr) || ground.height !== Math.round(GH * dpr);
-        let at = gcam ? toScreen(cam, gcam.x, gcam.z) : null;
-        if (at && (Math.abs(at.sx - W / 2) > (GW - W) / 2 - 4 || Math.abs(at.sy - H / 2) > (GH - H) / 2 - 4)) fresh = true;
-        if (fresh || !at) {
-          gcam = { ...cam, w: GW, h: GH };
-          if (ground.width !== Math.round(GW * dpr) || ground.height !== Math.round(GH * dpr)) { ground.width = Math.round(GW * dpr); ground.height = Math.round(GH * dpr); }
-          gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          drawGround(gctx, gcam, tiles, sea, viewOf(gcam), sand);
-          gtiles = world.version; gsand = sand.length;
-          at = { sx: W / 2, sy: H / 2 };
-        }
-        // copy just the part of the picture that is on screen (copying all of it costs the graphics chip dear)
-        if (ground.width && ground.height) {
-          const ox = (GW / 2 - at.sx) * dpr, oy = (GH / 2 - at.sy) * dpr;
-          ctx.drawImage(ground, ox, oy, W * dpr, H * dpr, 0, 0, W, H);
-        }
-      }
-      const spr: Sprite[] = [...marks];
-      for (const b of beachProps) if (Math.abs(b.x - me.x) < 260 && Math.abs(b.z - me.z) < 260) spr.push(b);
-      for (const b of boats) spr.push({ s: 'boat', x: b.x, z: b.z, rot: Math.atan2(Math.cos(b.a), -Math.sin(b.a)) });
+      const night = nightRef.current;
+      // the still things (landmarks, beach umbrellas and palms) and the moving ones (boats, traffic, people, you)
+      const fixed: Sprite[] = [...marks, ...beachProps];
+      const spr: Sprite[] = [];
+      // boats: the water taxi, seen from every side and camera height like the cars (it moves along (cos a, sin a); a heading h moves along (sin h, cos h))
+      for (const b of boats) spr.push({ s: 'boat-taxi', x: b.x, z: b.z, veh: true, heading: Math.atan2(Math.cos(b.a), Math.sin(b.a)) });
       for (const c of cars) spr.push({ s: c.sprite, x: c.x, z: c.z, veh: true, heading: c.rot });
       for (const w of walkers) spr.push({ s: w.sprite, x: w.x, z: w.z, look: w.look, heading: w.heading, walk: (w.s / 0.7) % 2 });
       let playerSprite: Sprite | null = null;
@@ -608,42 +592,52 @@ function Game({ onExit }: { onExit: () => void }) {
         playerSprite = { s: 'player', x: me.x, z: me.z, heading: me.heading, hero: { who: heroRef.current, anim, frame } };
         spr.push(playerSprite);
       }
-      drawBridges(ctx, cam, tiles, v);
-      const night = nightRef.current;
-      let airLights: Light[] = [];
+      // night lights: each street lamp has two bulbs, on arms out to either side; each one shines, and lights the
+      // ground under it. The lamp's picture always faces the camera, so its arms run along the screen: (cos yaw,
+      // -sin yaw) in the world. Heights are as the picture stands (upright), so they're divided by the camera's rise.
+      const lampPools: Light[] = [], carPools: Light[] = [], airLights: Light[] = [];
       if (night) {
-        // the ground at night: dimmed, neon kerbs and light pools -- buildings and people then stand in front of them
-        const pools: Light[] = [];
-        airLights = [];
-        // each street lamp has two bulbs, on arms out to either side: each one shines, and lights the ground under it.
-        // The lamp's picture always faces the camera, so its arms run along the screen: (cos yaw, -sin yaw) in the world.
-        // Heights are as the picture stands (upright, full height), so they're divided by the camera's rise.
         const rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
         for (const t of tiles) for (const p of t.props) if (p.s === 'lamp') {
           for (const [off, up] of LAMP_BULBS) {
             const bx = p.x + rx * off, bz = p.z + rz * off;
-            pools.push({ x: bx, z: bz + 0.6, r: 8, color: 'rgba(255,214,150,0.34)' });
-            airLights.push({ x: bx, z: bz, r: 4.5, color: 'rgba(255,230,190,0.3)', y: up / cam.rise }, { x: bx, z: bz, r: 1.4, color: 'rgba(255,250,235,1)', y: up / cam.rise });
+            lampPools.push({ x: bx, z: bz + 0.6, r: 8, color: 'rgba(255,214,150,0.34)' });
+            if (bx > v.minX && bx < v.maxX && bz > v.minZ && bz < v.maxZ) airLights.push({ x: bx, z: bz, r: 4.5, color: 'rgba(255,230,190,0.3)', y: up / cam.rise }, { x: bx, z: bz, r: 1.4, color: 'rgba(255,250,235,1)', y: up / cam.rise });
           }
         }
-        for (const c of cars) pools.push({ x: c.x + Math.sin(c.rot) * 4, z: c.z + Math.cos(c.rot) * 4, r: 6, color: 'rgba(200,240,255,0.5)' });
-        if (me.car) pools.push({ x: me.x + Math.sin(me.car.rot) * 5, z: me.z + Math.cos(me.car.rot) * 5, r: 9, color: 'rgba(200,240,255,0.6)' });
+        for (const c of cars) carPools.push({ x: c.x + Math.sin(c.rot) * 4, z: c.z + Math.cos(c.rot) * 4, r: 6, color: 'rgba(200,240,255,0.5)' });
+        if (me.car) carPools.push({ x: me.x + Math.sin(me.car.rot) * 5, z: me.z + Math.cos(me.car.rot) * 5, r: 9, color: 'rgba(200,240,255,0.6)' });
         for (const m of marks) airLights.push({ x: m.x, z: m.z - 10, r: 40, color: 'rgba(120,80,255,0.18)', y: 20 });
-        nightGround(ctx, cam, tiles, pools, v);
-        // the upright layer on its own canvas, dimmed, then laid over the ground
+      }
+      // the still city from the cache; while the camera turns, tilts or zooms, drawn directly instead
+      const cached = scenery.draw(ctx, cam, dpr, night, sea, sand, fixed, lampPools, now);
+      let hidden: boolean;
+      const upright = (to: CanvasRenderingContext2D, glow?: CanvasRenderingContext2D) => (cached
+        ? drawMoving(to, cam, tiles, fixed, spr, v, night, me, glow)
+        : drawUpright(to, cam, tiles, [...fixed, ...spr], v, night, me, glow));
+      if (!cached) { drawGround(ctx, cam, tiles, sea, v, sand); drawBridges(ctx, cam, tiles, v); }
+      if (night) {
+        if (!cached) nightGround(ctx, cam, tiles, [...lampPools, ...carPools], v);
+        else lightPools(ctx, cam, carPools, v);
+        // the upright layer on its own canvas, dimmed, then laid over the ground; what shines laid over that
         if (layer.width !== canvas.width || layer.height !== canvas.height) { layer.width = canvas.width; layer.height = canvas.height; }
-        lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.clearRect(0, 0, layer.width, layer.height);
-        lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // (clear only what was drawn last frame)
+        lctx.setTransform(dpr, 0, 0, dpr, 0, 0); lctx.clearRect(lastLive.x0, lastLive.y0, lastLive.x1 - lastLive.x0, lastLive.y1 - lastLive.y0);
         if (glowC.width !== canvas.width || glowC.height !== canvas.height) { glowC.width = canvas.width; glowC.height = canvas.height; }
         gl.setTransform(1, 0, 0, 1, 0, 0); gl.clearRect(0, 0, glowC.width, glowC.height); gl.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const hidden = drawUpright(lctx, cam, tiles, spr, v, true, me, gl);
+        hidden = upright(lctx, gl);
         if (hidden && playerSprite) drawGhost(lctx, cam, playerSprite);
-        nightTint(lctx, cam);
-        if (layer.width && layer.height) ctx.drawImage(layer, 0, 0, W, H); // (a hidden or minimised window has no size)
-        if (glowC.width && glowC.height) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(glowC, 0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.drawImage(glowC, 0, 0, W, H); ctx.restore(); }
+        // only the part of the layer holding moving things is darkened and laid over (the whole screen each frame is dear)
+        const bx = cached ? { x0: Math.max(0, Math.floor(liveBox.x0) - 4), y0: Math.max(0, Math.floor(liveBox.y0) - 40), x1: Math.min(W, Math.ceil(liveBox.x1) + 4), y1: Math.min(H, Math.ceil(liveBox.y1) + 4) } : { x0: 0, y0: 0, x1: W, y1: H };
+        if (bx.x1 > bx.x0 && bx.y1 > bx.y0 && layer.width && layer.height) {
+          lctx.save(); lctx.globalCompositeOperation = 'source-atop'; lctx.fillStyle = 'rgba(8,12,26,0.55)'; lctx.fillRect(bx.x0, bx.y0, bx.x1 - bx.x0, bx.y1 - bx.y0); lctx.restore();
+          ctx.drawImage(layer, bx.x0 * dpr, bx.y0 * dpr, (bx.x1 - bx.x0) * dpr, (bx.y1 - bx.y0) * dpr, bx.x0, bx.y0, bx.x1 - bx.x0, bx.y1 - bx.y0);
+        }
+        lastLive = cached ? { x0: liveBox.x0 - 50, y0: liveBox.y0 - 60, x1: liveBox.x1 + 50, y1: liveBox.y1 + 50 } : { x0: 0, y0: 0, x1: W, y1: H };
+        if (glowC.width && glowC.height && (!cached || redrawn)) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(glowC, 0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.drawImage(glowC, 0, 0, W, H); ctx.restore(); }
         nightLights(ctx, cam, airLights, v, tiles);
       } else {
-        const hidden = drawUpright(ctx, cam, tiles, spr, v, false, me);
+        hidden = upright(ctx);
         if (hidden && playerSprite) drawGhost(ctx, cam, playerSprite);
       }
       // the job's target: a bouncing marker
@@ -659,7 +653,7 @@ function Game({ onExit }: { onExit: () => void }) {
         ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.moveTo(sx, sy + 6); ctx.lineTo(sx - 6, sy - 5); ctx.lineTo(sx + 6, sy - 5); ctx.closePath(); ctx.fill();
       }
       // (the distance haze is a page layer, set here from the camera's angle)
-      if (hazeRef.current) { const hz = Math.max(0, Math.min(1, (0.62 - cam.tilt) / 0.32)); if (hz !== lastHaze) { lastHaze = hz; hazeRef.current.style.opacity = String(hz); } }
+      if (hazeRef.current) { const hz = Math.max(0, Math.min(1, (0.62 - cam.tilt) / 0.32)); if (hz !== lastHaze || night !== lastHazeNight) { lastHazeNight = night; lastHaze = hz; hazeRef.current.style.opacity = String(hz); hazeRef.current.style.display = hz > 0.01 && !night ? 'block' : 'none'; } } // (a hidden layer costs nothing to composite)
       // HUD, ten times a second
       if (now - hudTick > 100) {
         hudTick = now;
@@ -721,9 +715,7 @@ function Game({ onExit }: { onExit: () => void }) {
     <View style={s.root}>
       {React.createElement('canvas', { ref: canvasRef, style: { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', background: '#A9C98A' } })}
       {/* the distance haze: low cameras look far up the street, and it fades into the air */}
-      {React.createElement('div', { ref: hazeRef, style: { position: 'absolute', left: 0, right: 0, top: 0, height: '55%', pointerEvents: 'none', opacity: 0, background: night ? 'linear-gradient(180deg, rgba(30,10,52,0.95), rgba(30,10,52,0.5) 45%, rgba(30,10,52,0))' : 'linear-gradient(180deg, rgba(222,232,244,0.95), rgba(222,232,244,0.45) 45%, rgba(222,232,244,0))' } })}
-      {/* the colour grade: warm smog light above, cool shadow below (violet at night) -- a page layer, not canvas work */}
-      {React.createElement('div', { style: { position: 'absolute', inset: 0, pointerEvents: 'none', background: night ? 'linear-gradient(180deg, rgba(120,40,160,0.12), rgba(0,200,255,0.06))' : 'linear-gradient(180deg, rgba(255,170,60,0.05), rgba(0,180,220,0.03))' } })}
+      {React.createElement('div', { ref: hazeRef, style: { position: 'absolute', left: 0, right: 0, top: 0, height: '55%', pointerEvents: 'none', opacity: 0, display: 'none', background: night ? 'linear-gradient(180deg, rgba(30,10,52,0.95), rgba(30,10,52,0.5) 45%, rgba(30,10,52,0))' : 'linear-gradient(180deg, rgba(222,232,244,0.95), rgba(222,232,244,0.45) 45%, rgba(222,232,244,0))' } })}
       {/* the objective, top left: what to do, where, how far and how long */}
       {(() => {
         const accent = !hud ? CY.muted : hud.kind === 'job' ? CY.cyan : hud.kind === 'offer' ? CY.magenta : CY.yellow;

@@ -64,6 +64,32 @@ function brt() {
   return g;
 }
 
+/** A 2099 Lagos water taxi, bow towards +z: a white hull narrowing to the bow, a cyan neon line along it, a cabin
+ *  with a dark windscreen and canopy, benches, an outboard at the stern. */
+function boat() {
+  const g = new THREE.Group();
+  const L = 8.2, W = 2.5;
+  const hullMat = paint(0xf3f5f8), dark = paint(0x24303f);
+  // the hull: a box for the stern half, a tapering wedge for the bow
+  const stern = new THREE.Mesh(new RoundedBoxGeometry(W, 0.9, L * 0.6, 3, 0.2), hullMat); stern.position.set(0, 0.45, -L * 0.2); g.add(stern);
+  const bowShape = new THREE.Shape(); bowShape.moveTo(-W / 2, 0); bowShape.lineTo(W / 2, 0); bowShape.lineTo(0, L * 0.42); bowShape.closePath();
+  const bow = new THREE.Mesh(new THREE.ExtrudeGeometry(bowShape, { depth: 0.9, bevelEnabled: true, bevelSize: 0.08, bevelThickness: 0.08, bevelSegments: 2 }), hullMat);
+  bow.rotation.x = -Math.PI / 2; bow.position.set(0, 0, L * 0.1); g.add(bow);
+  const keel = new THREE.Mesh(new RoundedBoxGeometry(W * 0.96, 0.3, L * 0.62, 2, 0.1), dark); keel.position.set(0, 0.12, -L * 0.2); g.add(keel);
+  for (const sx of [-1, 1]) { const line = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, L * 0.62), glow); line.position.set(sx * (W / 2 + 0.01), 0.72, -L * 0.2); g.add(line); }
+  // deck, benches, cabin, windscreen, canopy
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(W * 0.86, 0.06, L * 0.56), paint(0xb98b5a)); deck.position.set(0, 0.92, -L * 0.2); g.add(deck);
+  for (const z of [-0.2, -1.4, -2.6]) { const bench = new THREE.Mesh(new RoundedBoxGeometry(W * 0.8, 0.3, 0.45, 2, 0.08), paint(0x1e88e5)); bench.position.set(0, 1.12, z); g.add(bench); }
+  const cabin = new THREE.Mesh(new RoundedBoxGeometry(W * 0.78, 0.8, 1.5, 3, 0.18), hullMat); cabin.position.set(0, 1.35, 1.0); g.add(cabin);
+  const screen = new THREE.Mesh(new RoundedBoxGeometry(W * 0.74, 0.5, 0.12, 2, 0.05), glass); screen.position.set(0, 1.7, 1.75); screen.rotation.x = -0.35; g.add(screen);
+  const canopy = new THREE.Mesh(new RoundedBoxGeometry(W * 0.92, 0.1, 3.6, 2, 0.05), paint(0xf2c94c)); canopy.position.set(0, 2.45, -1.4); g.add(canopy);
+  for (const sx of [-1, 1]) for (const z of [0.3, -3.1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), dark); post.position.set(sx * W * 0.42, 1.75, z); g.add(post); }
+  const motor = new THREE.Mesh(new RoundedBoxGeometry(0.55, 1.0, 0.6, 2, 0.12), dark); motor.position.set(0, 0.8, -L * 0.52); g.add(motor);
+  const under = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.4, L * 1.1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 }));
+  under.rotation.x = -Math.PI / 2; under.position.y = 0.02; g.add(under); // the wake round the hull
+  return g;
+}
+
 /** front towards +x in the 3D city's models: turn them to face +z like the rest */
 const turned = (o: THREE.Object3D) => { const g = new THREE.Group(); o.rotation.y = -Math.PI / 2; g.add(o); return g; };
 
@@ -78,6 +104,7 @@ const LIST: { name: string; make: () => THREE.Object3D; span: number }[] = [
   { name: 'bus-brt', make: () => brt(), span: 14.5 },
   { name: 'okada', make: () => turned(makeOkada(false).group), span: 3.2 },
   { name: 'keke', make: () => turned(makeKeke(false).group), span: 3.8 },
+  { name: 'boat-taxi', make: () => boat(), span: 10.5 },
 ];
 
 export function BakeVehicles() {
@@ -88,7 +115,9 @@ export function BakeVehicles() {
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setSize(CELL, CELL); renderer.setClearColor(0x000000, 0); renderer.outputColorSpace = THREE.SRGBColorSpace;
       const meta: Record<string, { span: number; ground: number[] }> = {};
-      for (const v of LIST) {
+      const only = new URLSearchParams(location.hash.split('?')[1] ?? '').get('only');
+      if (only) Object.assign(meta, await fetch('world2d/vehicles/vehicles.json').then((r) => r.json()).catch(() => ({})));
+      for (const v of LIST.filter((x) => !only || x.name === only)) {
         const scene = new THREE.Scene();
         scene.add(new THREE.HemisphereLight(0xffffff, 0xb8c4d6, 2.4));
         const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-4, 8, 5); scene.add(sun);
