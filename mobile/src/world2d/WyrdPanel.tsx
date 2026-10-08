@@ -1,20 +1,47 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { api } from '../api/client';
+import { CY, HEAD, MONO, Panel, clip, scan } from './cyber';
 
 /** One line in the conversation with WYRD: something you said, its answer, or a bulletin it sent. */
 export type WyrdLine = { from: 'you' | 'wyrd' | 'bulletin'; text: string; at: number; petition?: boolean };
 
 const PROMPTS: { label: string; text: string; petition?: boolean }[] = [
-  { label: 'Where should I go?', text: 'Where should I go next? What is worth doing near me?' },
-  { label: "What's happening?", text: "What's happening in the city right now?" },
-  { label: 'Fix this street', text: 'The street I am on needs fixing. Please look into it.', petition: true },
-  { label: 'Report trouble', text: 'I want to report trouble here.', petition: true },
+  { label: 'WHERE NEXT', text: 'Where should I go next? What is worth doing near me?' },
+  { label: 'CITY STATUS', text: "What's happening in the city right now?" },
+  { label: 'FIX THIS STREET', text: 'The street I am on needs fixing. Please look into it.', petition: true },
+  { label: 'REPORT TROUBLE', text: 'I want to report trouble here.', petition: true },
 ];
 
+const clock = (t: number) => new Date(t).toTimeString().slice(0, 8);
+
+/** WYRD's newest answer types itself out, a few characters a frame */
+function Typed({ text, live }: { text: string; live: boolean }) {
+  const [n, setN] = useState(live ? 0 : text.length);
+  useEffect(() => {
+    if (!live) return;
+    let i = 0; const id = setInterval(() => { i = Math.min(text.length, i + 3); setN(i); if (i >= text.length) clearInterval(id); }, 16);
+    return () => clearInterval(id);
+  }, [text, live]);
+  return <Text style={s.text}>{text.slice(0, n)}{n < text.length ? <Text style={{ color: CY.cyan }}>▌</Text> : null}</Text>;
+}
+
+/** the link's signal: five bars that breathe, faster while WYRD is thinking */
+function Signal({ busy }: { busy: boolean }) {
+  const [t, setT] = useState(0);
+  useEffect(() => { const id = setInterval(() => setT((v) => v + 1), busy ? 70 : 180); return () => clearInterval(id); }, [busy]);
+  return (
+    <View style={s.signal}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <View key={i} style={{ width: 3, height: 5 + 13 * (0.5 + 0.5 * Math.sin(t * 0.7 + i * 1.3)), backgroundColor: busy ? CY.magenta : CY.cyan }} />
+      ))}
+    </View>
+  );
+}
+
 /**
- * WYRD in the game (T): talk to the city mind, or petition it. It answers in its own voice, knowing where you
- * are and what you are doing; its bulletins and asides arrive in the same conversation.
+ * WYRD in the game (T): a link to the city mind. Speak to it, or petition it to change something; it
+ * answers knowing where you are and what you are doing, and its bulletins come down the same line.
  */
 export function WyrdPanel({ lines, onLine, situation, night, onClose }: {
   lines: WyrdLine[]; onLine: (l: WyrdLine) => void; situation: () => object; night: boolean; onClose: () => void;
@@ -23,10 +50,16 @@ export function WyrdPanel({ lines, onLine, situation, night, onClose }: {
   const [petition, setPetition] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rank, setRank] = useState<string | null>(null);
+  const [standing, setStanding] = useState<number | null>(null);
+  const [fresh, setFresh] = useState<number | null>(null); // the line typing itself out
   const scroll = useRef<ScrollView | null>(null);
   const input = useRef<TextInput | null>(null);
+  void night;
 
-  useEffect(() => { api.cityStatus().then((d) => setRank(d.rank)).catch(() => {}); setTimeout(() => input.current?.focus(), 50); }, []);
+  useEffect(() => {
+    api.cityStatus().then((d) => { setRank(d.rank); setStanding(d.standing); }).catch(() => {});
+    setTimeout(() => input.current?.focus(), 50);
+  }, []);
   useEffect(() => { setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 30); }, [lines.length, busy]);
 
   const send = async (said: string, asPetition: boolean) => {
@@ -34,91 +67,115 @@ export function WyrdPanel({ lines, onLine, situation, night, onClose }: {
     if (!t || busy) return;
     onLine({ from: 'you', text: t, at: Date.now(), petition: asPetition });
     setText(''); setBusy(true);
+    let reply = '';
     try {
       const d = await api.cityAddress(asPetition ? 'petition' : 'speak', t, situation());
-      setRank(d.rank);
-      onLine({ from: 'wyrd', text: d.say || '…', at: Date.now() });
+      setRank(d.rank); setStanding(d.standing);
+      reply = d.say || '…';
     } catch (e) {
       const m = (e as Error).message ?? '';
-      onLine({ from: 'wyrd', text: /401|auth|sign/i.test(m) ? 'Sign in to WYRD and I will answer you by name.' : m.length < 120 && m ? m : 'The line is busy. Try me again in a moment.', at: Date.now() });
+      reply = /401|auth|sign/i.test(m) ? 'Sign in to WYRD and I will answer you by name.' : m.length < 120 && m ? m : 'Signal lost. Try me again in a moment.';
     }
+    const at = Date.now();
+    setFresh(at);
+    onLine({ from: 'wyrd', text: reply, at });
     setBusy(false);
   };
 
-  const c = night
-    ? { bg: 'rgba(16,12,40,0.96)', edge: 'rgba(160,120,255,0.55)', text: '#F2EEFF', muted: '#A99DCC', me: '#2A2260', wyrd: '#1E1840', accent: '#B79CFF', field: '#120E2E' }
-    : { bg: 'rgba(255,255,255,0.98)', edge: 'rgba(110,70,220,0.25)', text: '#1E2A44', muted: '#6B7385', me: '#EEF1F6', wyrd: '#F4F0FF', accent: '#7B4FE0', field: '#F6F7FA' };
-
   return (
-    <View style={[s.panel, { backgroundColor: c.bg, borderColor: c.edge }]}>
-      <View style={s.head}>
-        <View style={[s.orb, { backgroundColor: c.accent }]} />
-        <View style={{ flex: 1 }}>
-          <Text style={[s.name, { color: c.text }]}>WYRD</Text>
-          <Text style={[s.sub, { color: c.muted }]}>The city mind{rank ? ` · it knows you as ${rank}` : ''}</Text>
-        </View>
-        <Pressable onPress={onClose} style={s.close}><Text style={[s.closeText, { color: c.muted }]}>Close (Esc)</Text></Pressable>
-      </View>
-
-      <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ gap: 8, paddingVertical: 6 }}>
-        {!lines.length ? <Text style={[s.empty, { color: c.muted }]}>Ask WYRD anything about Lagos, or petition it to change something. It sees where you stand.</Text> : null}
-        {lines.map((l, i) => l.from === 'bulletin' ? (
-          <Text key={i} style={[s.bulletin, { color: c.muted, borderColor: c.edge }]}>{l.text.replace(/^WYRD city bulletin: /, 'City bulletin · ')}</Text>
-        ) : (
-          <View key={i} style={[s.bubble, l.from === 'you' ? { alignSelf: 'flex-end', backgroundColor: c.me } : { alignSelf: 'flex-start', backgroundColor: c.wyrd }]}>
-            {l.petition ? <Text style={[s.tag, { color: c.accent }]}>PETITION</Text> : null}
-            <Text style={[s.text, { color: c.text }]}>{l.text}</Text>
+    <View style={s.wrap}>
+      <Panel accent={CY.magenta} edge="rgba(255,43,214,0.45)" cut={18} pad={0} fill="rgba(7,5,16,0.94)" style={{ flex: 1 }} grow>
+        <View style={{ flex: 1, padding: 14, gap: 10 }}>
+          {/* header: who you're linked to, and how it sees you */}
+          <View style={s.head}>
+            <View style={[s.badge, clip(6)]}><Text style={s.badgeText}>W</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.name}>WYRD<Text style={{ color: CY.muted }}>://CITY.MIND</Text></Text>
+              <Text style={s.status}>
+                <Text style={{ color: busy ? CY.magenta : CY.green }}>● </Text>
+                {busy ? 'PROCESSING' : 'LINK ESTABLISHED'}{rank ? `  ·  RANK ${rank.toUpperCase()}` : ''}{standing != null ? `  ·  ${standing > 0 ? '+' : ''}${standing}` : ''}
+              </Text>
+            </View>
+            <Signal busy={busy} />
+            <Pressable onPress={onClose} style={s.close}><Text style={s.closeText}>[ESC]</Text></Pressable>
           </View>
-        ))}
-        {busy ? <Text style={[s.thinking, { color: c.accent }]}>WYRD is thinking…</Text> : null}
-      </ScrollView>
+          <View style={s.rule} />
 
-      <View style={s.prompts}>
-        {PROMPTS.map((p) => (
-          <Pressable key={p.label} disabled={busy} onPress={() => void send(p.text, !!p.petition)} style={[s.prompt, { borderColor: c.edge }]}>
-            <Text style={[s.promptText, { color: c.text }]}>{p.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <View style={s.row}>
-        <Pressable onPress={() => setPetition((v) => !v)} style={[s.mode, { borderColor: c.edge, backgroundColor: petition ? c.accent : 'transparent' }]}>
-          <Text style={[s.modeText, { color: petition ? '#FFFFFF' : c.text }]}>{petition ? 'Petition' : 'Speak'}</Text>
-        </Pressable>
-        <TextInput ref={input} value={text} onChangeText={setText} maxLength={600} editable={!busy}
-          placeholder={petition ? 'Ask WYRD to change something…' : 'Say something to WYRD…'} placeholderTextColor={c.muted}
-          onSubmitEditing={() => void send(text, petition)} blurOnSubmit={false}
-          style={[s.input, { color: c.text, backgroundColor: c.field, borderColor: c.edge }]} />
-        <Pressable disabled={busy || !text.trim()} onPress={() => void send(text, petition)} style={[s.send, { backgroundColor: c.accent, opacity: busy || !text.trim() ? 0.5 : 1 }]}>
-          <Text style={s.sendText}>Send</Text>
-        </Pressable>
-      </View>
+          {/* the log */}
+          <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+            {!lines.length ? (
+              <Text style={s.empty}>{'> channel open\n> ask about the city, or petition it to change something\n> WYRD sees where you stand'}</Text>
+            ) : null}
+            {lines.map((l, i) => l.from === 'bulletin' ? (
+              <View key={i} style={s.bulletin}>
+                <Text style={[s.tag, { color: CY.red }]}>{clock(l.at)}  ! CITY BULLETIN</Text>
+                <Text style={[s.text, { color: '#FFC2CF' }]}>{l.text.replace(/^WYRD city bulletin: /, '')}</Text>
+              </View>
+            ) : (
+              <View key={i} style={[s.entry, { borderLeftColor: l.from === 'you' ? (l.petition ? CY.magenta : CY.yellow) : CY.cyan }]}>
+                <Text style={[s.tag, { color: l.from === 'you' ? (l.petition ? CY.magenta : CY.yellow) : CY.cyan }]}>
+                  {clock(l.at)}  {l.from === 'you' ? (l.petition ? '> PETITION' : '> YOU') : 'WYRD'}
+                </Text>
+                {l.from === 'wyrd' ? <Typed text={l.text} live={l.at === fresh} /> : <Text style={s.text}>{l.text}</Text>}
+              </View>
+            ))}
+            {busy ? <Text style={s.thinking}>WYRD // routing through the city… ▓▓▓▒▒░</Text> : null}
+          </ScrollView>
+
+          {/* quick lines, the mode and the input */}
+          <View style={s.prompts}>
+            {PROMPTS.map((p) => (
+              <Pressable key={p.label} disabled={busy} onPress={() => void send(p.text, !!p.petition)} style={({ hovered }: { hovered?: boolean } & object) => [s.prompt, clip(6), { borderColor: p.petition ? 'rgba(255,43,214,0.6)' : CY.line }, hovered && { backgroundColor: p.petition ? 'rgba(255,43,214,0.15)' : 'rgba(0,240,255,0.12)' }]}>
+                <Text style={[s.promptText, { color: p.petition ? CY.magenta : CY.cyan }]}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={s.row}>
+            <Pressable onPress={() => setPetition((v) => !v)} style={[s.mode, clip(6), { backgroundColor: petition ? CY.magenta : CY.yellow }]}>
+              <Text style={s.modeText}>{petition ? 'PETITION' : 'SPEAK'}</Text>
+            </Pressable>
+            <View style={[s.field, { borderColor: petition ? 'rgba(255,43,214,0.6)' : CY.line }]}>
+              <Text style={[s.caret, { color: petition ? CY.magenta : CY.yellow }]}>{'>'}</Text>
+              <TextInput ref={input} value={text} onChangeText={setText} maxLength={600} editable={!busy}
+                placeholder={petition ? 'ask WYRD to change something' : 'say something to WYRD'} placeholderTextColor={CY.dim}
+                onSubmitEditing={() => void send(text, petition)} blurOnSubmit={false} style={s.input} />
+            </View>
+            <Pressable disabled={busy || !text.trim()} onPress={() => void send(text, petition)} style={[s.send, clip(6), { opacity: busy || !text.trim() ? 0.4 : 1 }]}>
+              <Text style={s.sendText}>SEND</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Panel>
     </View>
   );
 }
 
-const font = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 const s = StyleSheet.create({
-  panel: { position: 'absolute', top: 80, right: 16, bottom: 76, width: 380, maxWidth: '92%', borderRadius: 18, borderWidth: 1, padding: 14, gap: 10,
-    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
+  wrap: { position: 'absolute', top: 92, right: 16, bottom: 84, width: 420, maxWidth: '94%' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  orb: { width: 30, height: 30, borderRadius: 15, shadowColor: '#9B6BFF', shadowOpacity: 0.8, shadowRadius: 10, shadowOffset: { width: 0, height: 0 } },
-  name: { fontFamily: font, fontSize: 17, fontWeight: '800', letterSpacing: 1.5 },
-  sub: { fontFamily: font, fontSize: 12 },
-  close: { paddingHorizontal: 6, paddingVertical: 4 },
-  closeText: { fontFamily: font, fontSize: 12, fontWeight: '700' },
-  empty: { fontFamily: font, fontSize: 13, lineHeight: 19, textAlign: 'center', paddingHorizontal: 12, paddingTop: 20 },
-  bubble: { maxWidth: '86%', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, gap: 2 },
-  tag: { fontFamily: font, fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2 },
-  text: { fontFamily: font, fontSize: 14, lineHeight: 20 },
-  bulletin: { fontFamily: font, fontSize: 12, lineHeight: 17, borderLeftWidth: 2, paddingLeft: 8, marginVertical: 2 },
-  thinking: { fontFamily: font, fontSize: 12.5, fontWeight: '700', paddingLeft: 4 },
+  badge: { width: 34, height: 34, backgroundColor: CY.magenta, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontFamily: HEAD, fontSize: 20, fontWeight: '700', color: CY.ink },
+  name: { fontFamily: HEAD, fontSize: 20, fontWeight: '700', letterSpacing: 2, color: CY.text },
+  status: { fontFamily: MONO, fontSize: 10.5, color: CY.muted, letterSpacing: 0.8 },
+  signal: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 18 },
+  close: { paddingHorizontal: 4, paddingVertical: 4 },
+  closeText: { fontFamily: MONO, fontSize: 11, color: CY.muted },
+  rule: { height: 1, backgroundColor: 'rgba(255,43,214,0.35)' },
+  empty: { fontFamily: MONO, fontSize: 12.5, lineHeight: 20, color: CY.dim, paddingTop: 8 },
+  entry: { borderLeftWidth: 2, paddingLeft: 10, gap: 3 },
+  bulletin: { borderLeftWidth: 2, borderLeftColor: CY.red, paddingLeft: 10, gap: 3, backgroundColor: 'rgba(255,0,60,0.06)', paddingVertical: 4 },
+  tag: { fontFamily: MONO, fontSize: 10.5, letterSpacing: 1 },
+  text: { fontFamily: HEAD, fontSize: 16, fontWeight: '500', lineHeight: 21, color: CY.text },
+  thinking: { fontFamily: MONO, fontSize: 11.5, color: CY.magenta, paddingLeft: 12 },
   prompts: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  prompt: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  promptText: { fontFamily: font, fontSize: 12, fontWeight: '600' },
-  row: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  mode: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9 },
-  modeText: { fontFamily: font, fontSize: 12.5, fontWeight: '800' },
-  input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, fontFamily: font, fontSize: 14, outlineStyle: 'none' } as object,
-  send: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  sendText: { fontFamily: font, fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' },
+  prompt: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5 },
+  promptText: { fontFamily: HEAD, fontSize: 12.5, fontWeight: '700', letterSpacing: 1.4 },
+  row: { flexDirection: 'row', gap: 6, alignItems: 'stretch' },
+  mode: { paddingHorizontal: 10, justifyContent: 'center' },
+  modeText: { fontFamily: HEAD, fontSize: 13, fontWeight: '700', letterSpacing: 1.5, color: CY.ink },
+  field: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.45)', paddingLeft: 8, ...(scan as object) },
+  caret: { fontFamily: MONO, fontSize: 15 },
+  input: { flex: 1, paddingHorizontal: 8, paddingVertical: 9, fontFamily: MONO, fontSize: 14, color: CY.text, outlineStyle: 'none' } as object,
+  send: { backgroundColor: CY.cyan, paddingHorizontal: 14, justifyContent: 'center' },
+  sendText: { fontFamily: HEAD, fontSize: 14, fontWeight: '700', letterSpacing: 1.6, color: CY.ink },
 });

@@ -8,6 +8,7 @@ import { CityMap, type Overview } from './CityMap';
 import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './story';
 import { Dialogue, Standing } from './StoryPanels';
 import { WyrdPanel, type WyrdLine } from './WyrdPanel';
+import { CY, HEAD, MONO, Panel, loadCyberFonts } from './cyber';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
 import { type Light, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
@@ -107,6 +108,7 @@ function Game({ onExit }: { onExit: () => void }) {
   const wyrdRef = useRef<(t: string) => void>(() => {});
   const startJobRef = useRef<(t: 'delivery' | 'danfo' | 'chase') => void>(() => {});
   useEffect(() => {
+    loadCyberFonts();
     api.cityWallet().then((w) => setWallet(w.naira)).catch(() => {});
     api.cityStory().then((st) => { setStory(st); if (!st.background) setStanding('life'); }).catch(() => {}); // a newcomer first says where they come from
     // who you are: from your account, else what you chose on this device (and saved to your account now if you can)
@@ -679,100 +681,122 @@ function Game({ onExit }: { onExit: () => void }) {
   }, []);
   // warm the pictures
   useEffect(() => { ['player', 'car-danfo', 'car-red', 'palm', 'lamp', 'lm-civic-centre'].forEach(img); }, []);
-  // the HUD's look: frosted white by day; by night dark glass with neon edges, like the city
-  const th = night
-    ? { card: { backgroundColor: 'rgba(14,16,38,0.78)', borderColor: 'rgba(120,220,255,0.35)', shadowColor: '#3FD0FF' }, chip: { backgroundColor: 'rgba(120,220,255,0.14)', color: '#BFF3FF' },
-        text: '#F4F7FF', muted: '#9AA6C8', accent: '#3FD0FF', job: '#FF4FD8', offer: '#B79CFF', money: '#5CFFA8', ring: '#3FD0FF' }
-    : { card: { backgroundColor: 'rgba(255,255,255,0.88)', borderColor: 'rgba(30,42,68,0.08)', shadowColor: '#1E2A44' }, chip: { backgroundColor: '#EEF1F6', color: '#1E2A44' },
-        text: '#1E2A44', muted: '#6B7385', accent: '#E07A2E', job: '#2E7FD6', offer: '#8A5CF6', money: '#1F9D57', ring: '#1E2A44' };
   return (
     <View style={s.root}>
-      {React.createElement('canvas', { ref: canvasRef, style: { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', background: '#B9DB9A' } })}
+      {React.createElement('canvas', { ref: canvasRef, style: { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', background: '#2A2E28' } })}
+      {/* the colour grade: warm smog light above, cool shadow below (violet at night) -- a page layer, not canvas work */}
+      {React.createElement('div', { style: { position: 'absolute', inset: 0, pointerEvents: 'none', background: night ? 'linear-gradient(180deg, rgba(120,40,160,0.12), rgba(0,200,255,0.06))' : 'linear-gradient(180deg, rgba(255,150,40,0.12), rgba(0,160,200,0.07))' } })}
       {/* the objective, top left: what to do, where, how far and how long */}
       {(() => {
-        const accent = !hud ? th.muted : hud.kind === 'job' ? th.job : hud.kind === 'offer' ? th.offer : th.accent;
-        const kicker = !hud ? 'Free roam' : hud.kind === 'job' ? 'Job' : hud.kind === 'offer' ? 'Mission nearby' : 'Mission';
+        const accent = !hud ? CY.muted : hud.kind === 'job' ? CY.cyan : hud.kind === 'offer' ? CY.magenta : CY.yellow;
+        const kicker = !hud ? 'FREE ROAM' : hud.kind === 'job' ? 'JOB' : hud.kind === 'offer' ? 'MISSION NEARBY' : 'MISSION';
         return (
-          <Pressable onPress={() => { if (!hud) setBoard(true); }} style={[s.card, th.card, s.objective]}>
-            <View style={[s.stripe, { backgroundColor: accent }]} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={s.kickerRow}>
-                <View style={[s.dot, { backgroundColor: accent }]} />
-                <Text style={[s.kicker, { color: accent }]}>{kicker}</Text>
-                {hud ? <Text style={[s.head, { color: th.muted }]} numberOfLines={1}>{hud.head}</Text> : null}
+          <Pressable onPress={() => { if (!hud) setBoard(true); }} style={s.objective}>
+            <Panel accent={accent} edge={hud?.urgent ? CY.red : CY.line} cut={14} pad={0}>
+              <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+                <View style={[s.objBar, { backgroundColor: accent }]} />
+                <View style={{ flex: 1, gap: 1, paddingVertical: 9, paddingHorizontal: 12 }}>
+                  <View style={s.kickerRow}>
+                    <Text style={[s.kicker, { color: accent }]}>{kicker}</Text>
+                    {hud ? <Text style={s.head} numberOfLines={1}>// {hud.head.toUpperCase()}</Text> : null}
+                  </View>
+                  {hud ? <>
+                    <Text style={s.objTitle} numberOfLines={1}>{hud.title}</Text>
+                    <Text style={s.objTarget} numberOfLines={1}>{hud.target.toUpperCase()}</Text>
+                  </> : <Text style={s.objTarget}>PRESS <Text style={{ color: CY.yellow }}>[M]</Text> FOR THE JOB BOARD</Text>}
+                </View>
+                {hud ? (
+                  <View style={s.objSide}>
+                    {live.dist != null ? <Text style={s.readout}>{live.dist >= 1000 ? `${(live.dist / 1000).toFixed(1)}KM` : `${live.dist}M`}</Text> : null}
+                    {hud.time ? <Text style={[s.readout, { color: hud.urgent ? CY.red : CY.yellow }]}>{hud.time}</Text> : null}
+                  </View>
+                ) : null}
               </View>
-              {hud ? <>
-                <Text style={[s.objTitle, { color: th.muted }]} numberOfLines={1}>{hud.title}</Text>
-                <Text style={[s.objTarget, { color: th.text }]} numberOfLines={1}>{hud.target}</Text>
-              </> : <Text style={[s.objTarget, { color: th.text, fontSize: 15 }]}>Press <Text style={{ color: th.accent }}>M</Text> for the job board</Text>}
-            </View>
-            {hud ? (
-              <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                {live.dist != null ? <Text style={[s.chip, th.chip]}>{live.dist >= 1000 ? `${(live.dist / 1000).toFixed(1)} km` : `${live.dist} m`}</Text> : null}
-                {hud.time ? <Text style={[s.chip, th.chip, hud.urgent && s.urgent]}>{hud.time}</Text> : null}
-              </View>
-            ) : null}
+            </Panel>
           </Pressable>
         );
       })()}
+
       {/* money and the hour, top right */}
       <View style={s.topRight}>
-        <View style={[s.card, th.card, s.walletCard]}>
-          <Text style={[s.kicker, { color: th.muted }]}>Naira</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-            <Text style={[s.walletSign, { color: th.money }]}>₦</Text>
-            <Text style={[s.walletAmount, { color: th.text }]}>{wallet == null ? '—' : Math.round(wallet).toLocaleString('en-NG')}</Text>
+        <Panel accent={CY.green} cut={10} pad={0}>
+          <View style={s.walletCard}>
+            <Text style={s.kickerDim}>NAIRA</Text>
+            <Text style={s.walletAmount}><Text style={{ color: CY.green }}>₦</Text>{wallet == null ? '——' : Math.round(wallet).toLocaleString('en-NG')}</Text>
           </View>
-        </View>
-        <Pressable onPress={() => setNight((v) => !v)} style={[s.card, th.card, s.sky]}>
-          <Text style={{ fontSize: 18 }}>{night ? '☾' : '☀'}</Text>
-          <Text style={[s.kicker, { color: th.muted }]}>{night ? 'Night' : 'Day'}</Text>
+        </Panel>
+        <Pressable onPress={() => setNight((v) => !v)}>
+          <Panel accent={night ? CY.magenta : CY.yellow} cut={10} pad={0}>
+            <View style={s.sky}>
+              <Text style={[s.skyIcon, { color: night ? CY.magenta : CY.yellow }]}>{night ? '◐' : '◉'}</Text>
+              <Text style={s.kickerDim}>{night ? 'NIGHT' : 'DAY'}</Text>
+            </View>
+          </Panel>
         </Pressable>
       </View>
+
       {/* the minimap and where you are, bottom left */}
       <View style={s.miniWrap}>
-        <View style={[s.miniRing, { borderColor: th.ring, shadowColor: th.ring }]}>
-          {React.createElement('canvas', { ref: miniRef, width: 360, height: 360, style: { width: 176, height: 176, borderRadius: 88, display: 'block' } })}
+        <View style={s.miniRing}>
+          {React.createElement('canvas', { ref: miniRef, width: 360, height: 360, style: { width: 172, height: 172, borderRadius: 86, display: 'block' } })}
         </View>
-        <View style={[s.miniN, { backgroundColor: th.ring }]}><Text style={s.miniNText}>N</Text></View>
+        {React.createElement('div', { style: { position: 'absolute', inset: -6, borderRadius: '50%', border: `1px dashed ${CY.line}`, pointerEvents: 'none' } })}
+        <View style={s.miniN}><Text style={s.miniNText}>N</Text></View>
       </View>
       {live.area || where ? (
-        <View style={[s.card, th.card, s.where]}>
-          {live.area ? <Text style={[s.kicker, { color: th.accent }]}>{live.area}</Text> : null}
-          {where ? <Text style={[s.whereText, { color: th.text }]} numberOfLines={1}>{where}</Text> : null}
-        </View>
+        <Panel style={s.where} accent={CY.cyan} cut={10} pad={0}>
+          <View style={{ paddingHorizontal: 12, paddingVertical: 7, gap: 1 }}>
+            {live.area ? <Text style={[s.kicker, { color: CY.cyan }]}>{live.area.toUpperCase()}</Text> : null}
+            {where ? <Text style={s.whereText} numberOfLines={1}>{where}</Text> : null}
+          </View>
+        </Panel>
       ) : null}
+
       {/* the speedometer, at the wheel */}
       {driving ? (
-        <View style={[s.card, th.card, s.speedo]}>
-          <Text style={[s.speed, { color: th.text }]}>{live.kmh}</Text>
-          <Text style={[s.kicker, { color: th.muted }]}>km/h</Text>
-        </View>
+        <Panel style={s.speedo} accent={CY.red} cut={12} pad={0}>
+          <View style={{ alignItems: 'center', paddingHorizontal: 22, paddingVertical: 4 }}>
+            <Text style={s.speed}>{String(live.kmh).padStart(3, '0')}</Text>
+            <Text style={s.kickerDim}>KM/H</Text>
+          </View>
+        </Panel>
       ) : null}
+
       {/* controls, bottom right: each with its key */}
       <View style={s.controls}>
-        <Text style={[s.hint, { color: th.muted }]}>{driving ? 'W/S drive · A/D steer · E get out' : 'WASD walk · Shift run · E take a car · scroll to zoom · drag to turn'}</Text>
+        <Text style={s.hint}>{driving ? 'W/S DRIVE · A/D STEER · E GET OUT' : 'WASD WALK · SHIFT RUN · E TAKE A CAR · SCROLL ZOOM · DRAG TURN'}</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {([
-            ['Tab', 'Map', () => setCityMap(true)],
-            ['M', 'Jobs', () => setBoard(true)],
-            ['R', 'Standing', () => { setStanding('standing'); api.cityStory().then(setStory).catch(() => {}); }],
-            ['T', 'WYRD', () => setWyrdOpen((v) => !v)],
-            ['N', night ? 'Day' : 'Night', () => setNight((v) => !v)],
-          ] as const).map(([key, label, go]) => (
-            <Pressable key={key} onPress={go} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.card, th.card, s.keyBtn, (pressed || hovered) && { borderColor: th.accent }]}>
-              <Text style={[s.keycap, { color: th.text, borderColor: th.muted }]}>{key}</Text>
-              <Text style={[s.keyLabel, { color: th.text }]}>{label}</Text>
+            ['TAB', 'MAP', () => setCityMap(true), CY.cyan],
+            ['M', 'JOBS', () => setBoard(true), CY.cyan],
+            ['R', 'STANDING', () => { setStanding('standing'); api.cityStory().then(setStory).catch(() => {}); }, CY.cyan],
+            ['T', 'WYRD', () => setWyrdOpen((v) => !v), CY.magenta],
+            ['N', night ? 'DAY' : 'NIGHT', () => setNight((v) => !v), CY.yellow],
+          ] as const).map(([key, label, go, tone]) => (
+            <Pressable key={key} onPress={go} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [(pressed || hovered) && { transform: [{ translateY: -1 }] }]}>
+              {((st: { hovered?: boolean }) => (
+                <Panel accent={null} edge={st.hovered ? tone : CY.line} cut={8} pad={0}>
+                  <View style={s.keyBtn}>
+                    <Text style={[s.keycap, { color: CY.ink, backgroundColor: tone }]}>{key}</Text>
+                    <Text style={s.keyLabel}>{label}</Text>
+                  </View>
+                </Panel>
+              ))  as unknown as React.ReactNode}
             </Pressable>
           ))}
-          <Pressable onPress={onExit} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.card, th.card, s.keyBtn, (pressed || hovered) && { borderColor: '#E5533D' }]}>
-            <Text style={[s.keyLabel, { color: th.text }]}>Exit</Text>
+          <Pressable onPress={onExit}>
+            {((st: { hovered?: boolean }) => (
+              <Panel accent={null} edge={st.hovered ? CY.red : CY.line} cut={8} pad={0}>
+                <View style={s.keyBtn}><Text style={[s.keyLabel, { color: CY.red }]}>EXIT</Text></View>
+              </Panel>
+            )) as unknown as React.ReactNode}
           </Pressable>
         </View>
       </View>
+
       {toast ? <View style={s.toast}><Text style={s.toastText}>{toast}</Text></View> : null}
       {wyrdOpen ? <WyrdPanel lines={wyrdLines} onLine={addWyrd} night={night} situation={() => situationRef.current()} onClose={() => setWyrdOpen(false)} /> : null}
-      {wyrd && !wyrdOpen ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
+      {wyrd && !wyrdOpen ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD://CITY.MIND</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
       {hero === null ? <ChooseCharacter onDone={(look) => setHero(look.base)} /> : null}
       {talk ? (
         <Dialogue who={talk.beat.who} line={talk.beat.line} choices={talk.beat.choices} busy={talkBusy}
@@ -794,7 +818,7 @@ function Game({ onExit }: { onExit: () => void }) {
       {board ? (
         <View style={s.boardWrap}>
           <View style={s.board}>
-            <Text style={s.boardTitle}>Job board</Text>
+            <Text style={s.boardTitle}>JOB BOARD</Text>
             <Text style={s.boardSub}>Real jobs, paid by the city when you finish them.</Text>
             {([
               ['delivery', 'Delivery', 'Collect a parcel at a real shop nearby and get it across town before the customer gives up.'],
@@ -810,7 +834,7 @@ function Game({ onExit }: { onExit: () => void }) {
           </View>
         </View>
       ) : null}
-      {loading ? <View style={s.loading}><Text style={s.loadingText}>Entering Lagos, 2099…</Text></View> : null}
+      {loading ? <View style={s.loading}><Text style={s.loadingText}>JACKING INTO LAGOS 2099…</Text></View> : null}
     </View>
   );
 }
@@ -828,80 +852,83 @@ function drawMini(m: CanvasRenderingContext2D, me: { x: number; z: number; car: 
   m.save();
   m.clearRect(0, 0, S, S);
   m.beginPath(); m.arc(R, R, R, 0, Math.PI * 2); m.clip();
-  m.fillStyle = '#E9EDF2'; m.fillRect(0, 0, S, S);
+  m.fillStyle = '#0A0E14'; m.fillRect(0, 0, S, S);
   const P = (x: number, z: number) => [R + (x - me.x) * k, R + (z - me.z) * k] as const;
   const path = (p: Float32Array) => { for (let i = 0; i < p.length; i += 2) { const [x, y] = P(p[i], p[i + 1]); if (i) m.lineTo(x, y); else m.moveTo(x, y); } };
-  for (const q of sea) { m.beginPath(); path(q.p); m.closePath(); m.fillStyle = q.island ? '#E9EDF2' : '#2E7FD6'; m.fill(); }
+  for (const q of sea) { m.beginPath(); path(q.p); m.closePath(); m.fillStyle = q.island ? '#0A0E14' : '#0B4A5A'; m.fill(); }
   m.lineCap = 'round';
   for (const t of tiles) for (const r of t.roads) {
     if (r.kind > KIND.residential) continue;
     if (r.maxX < me.x - 340 || r.minX > me.x + 340 || r.maxZ < me.z - 340 || r.minZ > me.z + 340) continue;
-    m.strokeStyle = r.kind <= KIND.secondary ? '#F2C94C' : '#FFFFFF'; m.lineWidth = r.kind <= KIND.secondary ? 6 : 3;
+    m.strokeStyle = r.kind <= KIND.secondary ? '#FCEE0A' : 'rgba(0,240,255,0.55)'; m.lineWidth = r.kind <= KIND.secondary ? 6 : 3;
     m.beginPath(); path(r.p); m.stroke();
   }
   if (tgt) {
     let [tx, ty] = P(tgt.x, tgt.z);
     const d = Math.hypot(tx - R, ty - R);
     if (d > R - 18) { tx = R + ((tx - R) / d) * (R - 18); ty = R + ((ty - R) / d) * (R - 18); }
-    m.fillStyle = '#1E2A44'; m.beginPath(); m.arc(tx, ty, 14 + Math.sin(now / 200) * 2, 0, Math.PI * 2); m.fill();
-    m.fillStyle = '#F2C94C'; m.beginPath(); m.arc(tx, ty, 8, 0, Math.PI * 2); m.fill();
+    // the objective: a pulsing red diamond
+    const pr = 13 + Math.sin(now / 200) * 2;
+    m.strokeStyle = 'rgba(255,0,60,0.6)'; m.lineWidth = 3; m.beginPath(); m.moveTo(tx, ty - pr); m.lineTo(tx + pr, ty); m.lineTo(tx, ty + pr); m.lineTo(tx - pr, ty); m.closePath(); m.stroke();
+    m.fillStyle = '#FF003C'; m.beginPath(); m.moveTo(tx, ty - 8); m.lineTo(tx + 8, ty); m.lineTo(tx, ty + 8); m.lineTo(tx - 8, ty); m.closePath(); m.fill();
   }
   // you
   m.translate(R, R); m.rotate(Math.PI - (me.car ? me.car.rot : me.face));
-  m.fillStyle = '#F2C94C'; m.strokeStyle = '#1E2A44'; m.lineWidth = 3;
+  m.fillStyle = '#FCEE0A'; m.strokeStyle = '#05070B'; m.lineWidth = 3;
   m.beginPath(); m.moveTo(0, -16); m.lineTo(11, 12); m.lineTo(0, 6); m.lineTo(-11, 12); m.closePath(); m.fill(); m.stroke();
   m.restore();
-  m.strokeStyle = '#1E2A44'; m.lineWidth = 10; m.beginPath(); m.arc(R, R, R - 5, 0, Math.PI * 2); m.stroke();
+  // range rings
+  m.strokeStyle = 'rgba(0,240,255,0.18)'; m.lineWidth = 1.5; for (const rr of [R * 0.33, R * 0.66]) { m.beginPath(); m.arc(R, R, rr, 0, Math.PI * 2); m.stroke(); }
   void cam;
 }
 const font = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#B9DB9A', overflow: 'hidden' },
-  card: { borderRadius: 14, borderWidth: 1, shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 4 } } as object,
-  objective: { position: 'absolute', top: 16, left: 16, width: 380, maxWidth: '46%', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingLeft: 14, paddingRight: 12, overflow: 'hidden' },
-  stripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  kicker: { fontFamily: font, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
-  head: { fontFamily: font, fontSize: 11.5, fontWeight: '600', flexShrink: 1 },
-  objTitle: { fontFamily: font, fontSize: 13, fontWeight: '500' },
-  objTarget: { fontFamily: font, fontSize: 18, fontWeight: '800', letterSpacing: -0.2 },
-  chip: { fontFamily: font, fontSize: 12.5, fontWeight: '800', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, overflow: 'hidden', fontVariant: ['tabular-nums'] },
-  urgent: { backgroundColor: '#E5533D', color: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#2A2E28', overflow: 'hidden' },
+  objective: { position: 'absolute', top: 16, left: 16, width: 400, maxWidth: '46%' },
+  objBar: { width: 4 },
+  objSide: { justifyContent: 'center', alignItems: 'flex-end', gap: 4, paddingRight: 14, paddingLeft: 6 },
+  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kicker: { fontFamily: HEAD, fontSize: 12, fontWeight: '700', letterSpacing: 2.2 },
+  kickerDim: { fontFamily: HEAD, fontSize: 10.5, fontWeight: '700', letterSpacing: 2, color: CY.muted },
+  head: { fontFamily: MONO, fontSize: 11, color: CY.muted, flexShrink: 1 },
+  objTitle: { fontFamily: HEAD, fontSize: 14, fontWeight: '600', color: CY.muted },
+  objTarget: { fontFamily: HEAD, fontSize: 20, fontWeight: '700', letterSpacing: 0.8, color: CY.text },
+  readout: { fontFamily: MONO, fontSize: 15, color: CY.cyan, fontVariant: ['tabular-nums'] },
   topRight: { position: 'absolute', top: 16, right: 16, flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  walletCard: { paddingVertical: 8, paddingHorizontal: 16, gap: 1, alignItems: 'flex-end' },
-  walletSign: { fontFamily: font, fontSize: 18, fontWeight: '800' },
-  walletAmount: { fontFamily: font, fontSize: 22, fontWeight: '800', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
-  sky: { width: 62, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  miniWrap: { position: 'absolute', left: 16, bottom: 16, width: 184, height: 184 },
-  miniRing: { width: 184, height: 184, borderRadius: 92, borderWidth: 4, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 0 }, overflow: 'hidden' },
-  miniN: { position: 'absolute', top: -6, left: 80, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  miniNText: { fontFamily: font, fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
-  where: { position: 'absolute', left: 212, bottom: 18, paddingHorizontal: 12, paddingVertical: 8, gap: 2, maxWidth: 260 },
-  whereText: { fontFamily: font, fontSize: 14, fontWeight: '700' },
-  speedo: { position: 'absolute', bottom: 18, alignSelf: 'center', alignItems: 'center', paddingHorizontal: 22, paddingVertical: 6, minWidth: 110 },
-  speed: { fontFamily: font, fontSize: 34, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'], lineHeight: 38 },
+  walletCard: { paddingVertical: 8, paddingHorizontal: 16, alignItems: 'flex-end', gap: 1 },
+  walletAmount: { fontFamily: MONO, fontSize: 24, color: CY.text, fontVariant: ['tabular-nums'] },
+  sky: { width: 66, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 1 },
+  skyIcon: { fontSize: 18, lineHeight: 22 },
+  miniWrap: { position: 'absolute', left: 22, bottom: 22, width: 180, height: 180 },
+  miniRing: { width: 180, height: 180, borderRadius: 90, borderWidth: 4, borderColor: CY.cyan, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: CY.ink,
+    shadowColor: CY.cyan, shadowOpacity: 0.55, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } },
+  miniN: { position: 'absolute', top: -8, left: 79, width: 22, height: 22, backgroundColor: CY.yellow, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '45deg' }] },
+  miniNText: { fontFamily: HEAD, fontSize: 12, fontWeight: '700', color: CY.ink, transform: [{ rotate: '-45deg' }] },
+  where: { position: 'absolute', left: 214, bottom: 22, maxWidth: 280 },
+  whereText: { fontFamily: HEAD, fontSize: 16, fontWeight: '700', color: CY.text, letterSpacing: 0.5 },
+  speedo: { position: 'absolute', bottom: 22, alignSelf: 'center', minWidth: 120 },
+  speed: { fontFamily: MONO, fontSize: 38, color: CY.yellow, lineHeight: 42, letterSpacing: 2, textShadowColor: 'rgba(252,238,10,0.6)', textShadowRadius: 10 },
   controls: { position: 'absolute', right: 16, bottom: 16, alignItems: 'flex-end', gap: 8 },
-  hint: { fontFamily: font, fontSize: 11.5, fontWeight: '600', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 4 },
-  keyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, paddingVertical: 8 },
-  keycap: { fontFamily: font, fontSize: 10.5, fontWeight: '800', borderWidth: 1, borderBottomWidth: 2, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, minWidth: 20, textAlign: 'center' },
-  keyLabel: { fontFamily: font, fontSize: 13.5, fontWeight: '700' },
-  btn: { backgroundColor: 'rgba(22,28,38,0.86)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  btnText: { fontFamily: font, fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  toast: { position: 'absolute', top: 18, alignSelf: 'center', maxWidth: 560, backgroundColor: 'rgba(22,28,38,0.9)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10 },
-  toastText: { fontFamily: font, fontSize: 14, color: '#FFFFFF', textAlign: 'center' },
-  wyrd: { position: 'absolute', top: 70, right: 18, width: 300, backgroundColor: 'rgba(30,18,60,0.92)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, gap: 3, borderWidth: 1, borderColor: 'rgba(160,120,255,0.6)' },
-  wyrdWho: { fontFamily: font, fontSize: 11, fontWeight: '800', color: '#B79CFF', letterSpacing: 1.5 },
-  wyrdText: { fontFamily: font, fontSize: 13.5, lineHeight: 19, color: '#FFFFFF' },
-  boardWrap: { position: 'absolute', inset: 0, backgroundColor: 'rgba(10,14,22,0.45)', alignItems: 'center', justifyContent: 'center' } as object,
-  board: { width: 440, maxWidth: '92%', backgroundColor: '#FFFFFF', borderRadius: 18, padding: 22, gap: 10 },
-  boardTitle: { fontFamily: font, fontSize: 24, fontWeight: '800', color: '#1E2A44' },
-  boardSub: { fontFamily: font, fontSize: 13, color: '#5B6475', marginBottom: 4 },
-  jobRow: { borderWidth: 1, borderColor: '#E3E7EE', borderRadius: 12, padding: 12, gap: 4 },
-  jobName: { fontFamily: font, fontSize: 16, fontWeight: '800', color: '#1E2A44' },
-  jobDesc: { fontFamily: font, fontSize: 13, color: '#5B6475', lineHeight: 18 },
-  loading: { position: 'absolute', inset: 0, backgroundColor: '#B9DB9A', alignItems: 'center', justifyContent: 'center' } as object,
-  loadingText: { fontFamily: font, fontSize: 20, fontWeight: '700', color: '#1E2A44' },
+  hint: { fontFamily: MONO, fontSize: 10.5, color: CY.muted, letterSpacing: 0.6, textShadowColor: '#000', textShadowRadius: 4 },
+  keyBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 7 },
+  keycap: { fontFamily: MONO, fontSize: 10.5, paddingHorizontal: 5, paddingVertical: 1, minWidth: 18, textAlign: 'center' },
+  keyLabel: { fontFamily: HEAD, fontSize: 14, fontWeight: '700', letterSpacing: 1.4, color: CY.text },
+  btn: { backgroundColor: CY.glass, borderWidth: 1, borderColor: CY.line, paddingHorizontal: 14, paddingVertical: 9 },
+  btnText: { fontFamily: HEAD, fontSize: 14, fontWeight: '700', letterSpacing: 1.2, color: CY.text },
+  toast: { position: 'absolute', top: 18, alignSelf: 'center', maxWidth: 560, backgroundColor: CY.glass2, borderLeftWidth: 3, borderLeftColor: CY.yellow, paddingHorizontal: 16, paddingVertical: 10 },
+  toastText: { fontFamily: HEAD, fontSize: 15, fontWeight: '600', color: CY.text, textAlign: 'center', letterSpacing: 0.3 },
+  wyrd: { position: 'absolute', top: 92, right: 16, width: 320, backgroundColor: 'rgba(14,6,26,0.92)', borderLeftWidth: 3, borderLeftColor: CY.magenta, paddingHorizontal: 14, paddingVertical: 10, gap: 3 },
+  wyrdWho: { fontFamily: MONO, fontSize: 11, color: CY.magenta, letterSpacing: 1.5 },
+  wyrdText: { fontFamily: HEAD, fontSize: 15, fontWeight: '500', lineHeight: 20, color: CY.text },
+  boardWrap: { position: 'absolute', inset: 0, backgroundColor: 'rgba(2,4,8,0.6)', alignItems: 'center', justifyContent: 'center' } as object,
+  board: { width: 460, maxWidth: '92%', backgroundColor: CY.glass2, borderWidth: 1, borderColor: CY.line, borderTopWidth: 3, borderTopColor: CY.yellow, padding: 22, gap: 10 },
+  boardTitle: { fontFamily: HEAD, fontSize: 26, fontWeight: '700', letterSpacing: 3, color: CY.yellow },
+  boardSub: { fontFamily: MONO, fontSize: 12, color: CY.muted, marginBottom: 4 },
+  jobRow: { borderWidth: 1, borderColor: CY.line, borderLeftWidth: 3, borderLeftColor: CY.cyan, padding: 12, gap: 4, backgroundColor: 'rgba(0,240,255,0.04)' },
+  jobName: { fontFamily: HEAD, fontSize: 18, fontWeight: '700', letterSpacing: 1.2, color: CY.text },
+  jobDesc: { fontFamily: HEAD, fontSize: 14, color: CY.muted, lineHeight: 19 },
+  loading: { position: 'absolute', inset: 0, backgroundColor: CY.ink, alignItems: 'center', justifyContent: 'center' } as object,
+  loadingText: { fontFamily: MONO, fontSize: 18, color: CY.yellow, letterSpacing: 2 },
   pcWrap: { flex: 1, backgroundColor: '#F7EFE2', alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
   pcTitle: { fontFamily: font, fontSize: 24, fontWeight: '800', color: '#24316B', textAlign: 'center' },
   pcText: { fontFamily: font, fontSize: 14, color: '#7A6656', textAlign: 'center', maxWidth: 360 },
