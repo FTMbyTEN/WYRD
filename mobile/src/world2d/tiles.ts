@@ -254,14 +254,16 @@ export class World {
    * with another road within 12 m, is carried on to meet it, so the street joins up as it does in Lagos.
    */
   private joinRoads(roads: Road[], all: Tile[], near: (x: number, z: number) => boolean = () => true) {
-    const nearest = (x: number, z: number, self: Road) => {
+    // the nearest road point to (x, z); with [ox, oz], only points ahead of that heading
+    const nearest = (x: number, z: number, self: Road, ox = 0, oz = 0) => {
       let best: { x: number; z: number; d: number } | null = null;
       for (const t of all) for (const r of t.roads) {
-        if (r === self || r.bridge || r.maxX < x - 12 || r.minX > x + 12 || r.maxZ < z - 12 || r.minZ > z + 12) continue;
+        if (r === self || r.bridge || r.maxX < x - 15 || r.minX > x + 15 || r.maxZ < z - 15 || r.minZ > z + 15) continue;
         for (let i = 2; i < r.p.length; i += 2) {
           const x0 = r.p[i - 2], z0 = r.p[i - 1], dx = r.p[i] - x0, dz = r.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1;
           const u = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2));
           const px = x0 + dx * u, pz = z0 + dz * u, d = Math.hypot(px - x, pz - z);
+          if ((ox || oz) && (px - x) * ox + (pz - z) * oz < 0) continue;
           if (!best || d < best.d) best = { x: px, z: pz, d };
         }
       }
@@ -269,15 +271,17 @@ export class World {
     };
     for (const r of roads) {
       if (r.bridge || r.kind > KIND.residential || r.p.length < 4) continue;
+      if (Math.hypot(r.p[0] - r.p[r.p.length - 2], r.p[1] - r.p[r.p.length - 1]) < 1.5) continue; // a closed ring (a roundabout): no loose end
       for (const head of [true, false]) {
         const e = head ? 0 : r.p.length - 2, x = r.p[e], z = r.p[e + 1];
         if (!near(x, z)) continue;
-        const n = nearest(x, z, r);
-        if (!n || n.d < 1.5 || n.d > 12) continue;
-        // carry on only roughly the way the street was already going (not doubling back)
+        const touch = nearest(x, z, r);
+        if (!touch || touch.d < 1.5) continue; // already meets a road
+        // carry on the way the street was going, to the nearest road ahead (the closest one may be behind:
+        // the road it came from, or the other side of a dual carriageway)
         const ix = head ? r.p[2] : r.p[r.p.length - 4], iz = head ? r.p[3] : r.p[r.p.length - 3];
-        const ox = x - ix, oz = z - iz, gx = n.x - x, gz = n.z - z;
-        if ((ox * gx + oz * gz) / ((Math.hypot(ox, oz) || 1) * n.d) < 0) continue;
+        const n = nearest(x, z, r, x - ix, z - iz);
+        if (!n || n.d > 15) continue;
         const p = new Float32Array(r.p.length + 2);
         if (head) { p[0] = n.x; p[1] = n.z; p.set(r.p, 2); } else { p.set(r.p, 0); p[r.p.length] = n.x; p[r.p.length + 1] = n.z; }
         r.p = p; r.cum = lengths(p); r.len = r.cum[r.cum.length - 1];
