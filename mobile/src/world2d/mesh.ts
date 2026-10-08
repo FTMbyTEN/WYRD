@@ -113,17 +113,66 @@ const MODELS: Record<string, () => Model> = {
     b.box(0, 66, 26, 10, 0, 4, '#BDB5A6'); // the entrance ramp
     return b.done();
   },
-  /** the Cathedral Church of Christ, Marina: a Gothic nave with a tall tower and spire at the west front */
+  /** the Cathedral Church of Christ, Marina: cream Gothic stone under blue slate -- a tall nave with lower aisles and
+   *  a transept, buttresses crowned with pinnacles, pointed windows, the west front's great window, rose and cross,
+   *  and the square bell tower with its battlements and four tall corner spires */
   cathedral: () => {
-    const b = new Builder(), stone = '#B9A88C', roof = '#5E534A', dark = '#2F2A26';
-    b.box(0, -4, 18, 46, 0, 15, stone, roof);
-    b.gable(0, -4, 18, 46, 15, 8, roof);
-    for (const s of [-1, 1]) { b.box(s * 13, -6, 8, 38, 0, 9, '#AE9D82', roof); for (let z = -22; z <= 10; z += 6) b.box(s * 9.1, z, 0.4, 2.2, 5, 7, dark); }
-    b.box(0, 24, 13, 13, 0, 36, stone, '#A49377');
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.spire(sx * 5.6, 24 + sz * 5.6, 1.6, 36, 6, '#8E7F68');
-    b.spire(0, 24, 10, 36, 24, '#6B6156');
-    b.box(0, 30.6, 3, 0.4, 2, 7, dark); b.box(0, 30.6, 4.5, 0.4, 16, 5, dark);
-    b.box(0, 30.8, 1.2, 0.4, 28, 1.2, '#00F0FF', '#00F0FF', true);
+    const b = new Builder(), stone = '#EFE3C4', stone2 = '#E2D4B0', slate = '#3E5B8C', glass = '#2D4E8A', wood = '#6B3E26';
+    // a pointed-arch window on a wall facing (nx, nz): a rectangle with a peaked top, a little proud of the wall
+    const arch = (x: number, z: number, nx: number, nz: number, w: number, y0: number, h: number, color = glass) => {
+      const tx = -nz, tz = nx, o = 0.18, cx = x + nx * o, cz = z + nz * o, s = w / 2, spring = y0 + h - w * 0.75;
+      b.face([[cx - tx * s, y0, cz - tz * s], [cx + tx * s, y0, cz + tz * s], [cx + tx * s, spring, cz + tz * s], [cx, y0 + h, cz], [cx - tx * s, spring, cz - tz * s]], color, [x - nx * 3, y0 + h / 2, z - nz * 3]);
+    };
+    // a buttress with its pinnacle
+    const buttress = (x: number, z: number, h: number) => { b.box(x, z, 1.3, 1.3, 0, h, stone2, stone2); b.spire(x, z, 1.1, h, 3.2, stone2); };
+
+    // the nave: tall walls, steep slate roof
+    b.box(0, -6, 18, 40, 0, 16, stone, stone2);
+    b.gable(0, -6, 18.6, 40.6, 16, 11, slate);
+    // the aisles either side, with lean-to roofs up to the nave wall
+    for (const s of [-1, 1]) {
+      b.box(s * 12.5, -7, 7, 34, 0, 9, stone, stone2);
+      const xo = s * 16, xi = s * 9;
+      b.face([[xo, 9, -24], [xo, 9, 10], [xi, 13, 10], [xi, 13, -24]], slate, [s * 12.5, 0, -7]);
+      for (let z = -21; z <= 7; z += 5.6) {
+        arch(s * 16, z, s, 0, 1.8, 2.2, 5.4); // aisle windows
+        arch(s * 9, z + 1.4, s, 0, 1.6, 13.4, 2.4); // clerestory windows above the aisle roof
+        buttress(s * 16.6, z + 2.8, 8);
+      }
+    }
+    // the transept, a cross wing with gable ends
+    b.box(0, -20, 44, 10, 0, 15, stone, stone2);
+    b.face([[-22, 15, -25.3], [-22, 15, -14.7], [-22, 22, -20]], stone, [0, 15, -20]);
+    b.face([[22, 15, -14.7], [22, 15, -25.3], [22, 22, -20]], stone, [0, 15, -20]);
+    b.face([[-22.3, 15, -25.3], [22.3, 15, -25.3], [22.3, 22, -20], [-22.3, 22, -20]], slate, [0, 0, -20]);
+    b.face([[22.3, 15, -14.7], [-22.3, 15, -14.7], [-22.3, 22, -20], [22.3, 22, -20]], slate, [0, 0, -20]);
+    for (const s of [-1, 1]) { arch(s * 22, -20, s, 0, 3.4, 3, 10); b.spire(s * 22, -25, 1.2, 15, 4, stone2); b.spire(s * 22, -15, 1.2, 15, 4, stone2); }
+
+    // the west front: great window, rose window, door, corner pinnacles and the cross on the gable
+    arch(0, 14, 0, 1, 5.6, 5.5, 10);
+    b.face(Array.from({ length: 8 }, (_, i): V3 => { const a = (i / 8) * Math.PI * 2; return [Math.cos(a) * 1.6, 19.4 + Math.sin(a) * 1.6, 14.25]; }), glass, [0, 19.4, 10]);
+    arch(0, 14, 0, 1, 3, 0, 5, wood);
+    for (const s of [-1, 1]) { b.box(s * 9.6, 14.4, 1.6, 1.6, 0, 18, stone2, stone2); b.spire(s * 9.6, 14.4, 1.4, 18, 5, stone2); }
+    b.box(0, 14.4, 0.5, 0.5, 27, 4.5, stone2, stone2); b.box(0, 14.4, 2.6, 0.5, 29.6, 0.5, stone2, stone2);
+    // the porch-side buttresses of the front aisles
+    for (const s of [-1, 1]) buttress(s * 16, 10.6, 8);
+
+    // the bell tower at the front corner: string courses, louvred pointed windows, battlements and spires
+    const tx = 15, tz = 10, half = 5.5, H = 36;
+    b.box(tx, tz, half * 2, half * 2, 0, H, stone, stone2);
+    for (const y of [12, 22, 30]) b.box(tx, tz, half * 2 + 0.5, half * 2 + 0.5, y, 0.6, stone2, stone2);
+    for (const [nx, nz] of [[0, 1], [1, 0], [0, -1], [-1, 0]] as const) {
+      const fx = tx + nx * half, fz = tz + nz * half, px = -nz, pz = nx;
+      arch(fx, fz, nx, nz, 1.6, 4, 5); // low window
+      arch(fx, fz, nx, nz, 1.6, 14.5, 5.5);
+      for (const k of [-1, 1]) arch(fx + px * k * 1.5, fz + pz * k * 1.5, nx, nz, 1.3, 23.5, 5.5); // the belfry's paired louvres
+      // battlements: merlons along the parapet
+      for (let t = -half + 0.6; t <= half - 0.6; t += 2.2) b.box(fx - nx * 0.3 + px * t, fz - nz * 0.3 + pz * t, Math.abs(px) * 1.1 + Math.abs(nx) * 0.6, Math.abs(pz) * 1.1 + Math.abs(nz) * 0.6, H, 1.4, stone2, stone2);
+      b.spire(fx + px * 0, fz + pz * 0, 0.9, H, 3, stone2); // the small middle pinnacles
+    }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { b.box(tx + sx * (half - 0.4), tz + sz * (half - 0.4), 1.6, 1.6, H - 2, 3, stone2, stone2); b.spire(tx + sx * (half - 0.4), tz + sz * (half - 0.4), 1.5, H + 1, 9, stone2); }
+    b.box(tx, tz, half * 2 - 1.2, half * 2 - 1.2, H - 0.2, 0.3, '#B8AD92');
+    b.box(0, 14.6, 0.6, 0.3, 27.5, 3.5, '#00F0FF', '#00F0FF', true); // the cross, lit at night
     return b.done();
   },
   /** Lagos Central Mosque: a white prayer hall under a great dome, with four minarets */

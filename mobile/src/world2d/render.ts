@@ -479,7 +479,9 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
   const wallColor = tower ? GLASS[Math.floor(b.tone * GLASS.length)] : WALLS[Math.floor(b.tone * WALLS.length)];
   // soft shadow to the lower right
   ctx.beginPath();
-  pts.forEach((q, i) => { const x = q.sx + b.h * k * 0.18, y = q.sy + b.h * k * 0.05; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+  // (cast away from the fixed sun, along the ground, so shadows stay put as the camera turns)
+  const shx = 0.75 * b.h * 0.3, shz = -0.66 * b.h * 0.3;
+  for (let i = 0; i < n; i++) { const q = toScreen(c, p[i * 2] + shx, p[i * 2 + 1] + shz); if (i) ctx.lineTo(q.sx, q.sy); else ctx.moveTo(q.sx, q.sy); }
   ctx.closePath(); ctx.fillStyle = DAY.shadow; ctx.fill();
   const detailed = k > 2.6; // windows, doors and roof details once they'd be a few pixels
   const pat = detailed ? facade(ctx, b.style, wallColor, night) : null;
@@ -519,8 +521,10 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
       if (aw) { aw.setTransform(new DOMMatrix([ux * 3 / 48, uy * 3 / 48, 0, vy * 3.2 / 48, a.sx, a.sy])); gq(0, shopTop); glow.fillStyle = aw; glow.fill(); }
     }
     // light: walls facing left are lit, facing right in shade
-    const across = (co * nx - si * nz) / (Math.hypot(nx, nz) || 1);
-    ctx.fillStyle = `rgba(20,30,55,${(0.08 + 0.16 * Math.max(0, across)).toFixed(3)})`;
+    // light from a fixed sun in the world (the same as the landmarks' models): walls facing it bright, the rest in shade,
+    // whichever way the camera turns
+    const sunward = (nx * -0.75 + nz * 0.66) / (Math.hypot(nx, nz) || 1);
+    ctx.fillStyle = `rgba(20,30,55,${(0.06 + 0.18 * (1 - Math.max(0, sunward))).toFixed(3)})`;
     quad(0, up); ctx.fill();
     // a darker plinth where the building meets the street
     ctx.fillStyle = 'rgba(30,38,52,0.22)'; quad(0, Math.min(0.7, b.h * 0.2) * k * c.rise); ctx.fill();

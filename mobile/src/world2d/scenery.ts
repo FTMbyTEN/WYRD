@@ -78,7 +78,7 @@ export class Scenery {
     const cc: Cam = { ...cam, x: mid.x, z: mid.z, w: C, h: C };
     const v0 = viewOf(cc);
     // tall buildings stand on ground further down the screen and reach up into the tile
-    const tall = 95 * cam.rise / Math.max(0.1, cam.tilt);
+    const tall = 210 * cam.rise / Math.max(0.1, cam.tilt); // (the tallest: Eko Atlantic's towers, NECOM's mast)
     const vu: View = { minX: v0.minX - tall, maxX: v0.maxX + tall, minZ: v0.minZ - tall, maxZ: v0.maxZ + tall };
     const cv = document.createElement('canvas'); cv.width = Math.ceil(C * dpr); cv.height = Math.ceil(C * dpr);
     const g = cv.getContext('2d')!;
