@@ -41,15 +41,15 @@ export const VEH_SPAN: Record<string, number> = {
 };
 const VEH_SIZE = 1.25; // a touch larger than life, like the poster
 const DAY = {
-  grass: '#4A5240', grass2: '#3F4737', pave: '#727780', kerbFace: '#2E3238', road: '#23262C', line: '#D8D3C0', yellow: '#FCEE0A',
-  water: '#0B3E4C', waterEdge: '#19D3E6', roofs: ['#3B3F47', '#454951', '#4D5058', '#363A41'], glassRoof: '#173445', wall: '#5E6168', wallGlass: '#1E3A4C', outline: 'rgba(0,0,0,0.4)',
-  rail: '#5B5E66', shadow: 'rgba(0,0,0,0.32)',
+  grass: '#A9C98A', grass2: '#98BC7A', pave: '#DADDE2', kerbFace: '#9AA2AD', road: '#3D424A', line: '#F4F6F8', yellow: '#FCEE0A',
+  water: '#1E8FC8', waterEdge: '#5FE3F2', roofs: ['#E9ECF0', '#DCE1E7', '#E6E2DA', '#D7DDE4'], glassRoof: '#6FA6D0', wall: '#C9CED6', wallGlass: '#3F78B0', outline: 'rgba(30,40,60,0.22)',
+  rail: '#8C8F96', shadow: 'rgba(20,30,50,0.2)',
 };
 // ---- facades: one small repeating tile per style (a bay 3 m wide, a storey 3.2 m tall), laid along
 // each wall with a pattern transform, so a whole wall of windows costs one fill ----
-const WALLS = ['#7B7468', '#6C6F76', '#5D6670', '#86745F', '#6A5D6E', '#787060', '#5B6965', '#8B8072'];
-const GLASS = ['#163A4D', '#1A2E46', '#23304B', '#153E45', '#2A2442'];
-const ROOFS_ZINC = ['#6E4A35', '#5A5F66', '#7A5238', '#4E5459'];
+const WALLS = ['#E8DCC4', '#D6D9DE', '#C9D6DF', '#EBD2B0', '#D9CCE0', '#E3DCC8', '#CADBD2', '#F0E6D6'];
+const GLASS = ['#2F6FA8', '#287C8E', '#3A5E9E', '#2B7F86', '#4A5FA8'];
+const ROOFS_ZINC = ['#9AA5B1', '#A0522D', '#8C6239', '#7E8B97'];
 const AWNINGS = ['#FF003C', '#00F0FF', '#FCEE0A', '#FF2BD6', '#3DFF9A', '#FF8A00'];
 /** the neon of the street: signs, crowns and edge lights */
 const NEON = ['#00F0FF', '#FF2BD6', '#FCEE0A', '#FF003C', '#3DFF9A', '#9B6BFF'];
@@ -61,22 +61,22 @@ function facade(ctx: CanvasRenderingContext2D, kind: 'house' | 'block' | 'shops'
   if (typeof document === 'undefined') return null;
   const T = 48, el = document.createElement('canvas'); el.width = T; el.height = T;
   const g = el.getContext('2d')!;
-  const lit = night ? ['#FFC46B', '#5FF3FF', '#FF7BE3'][Math.floor(Math.random() * 3)] : null;
+  const lit = null as string | null; // (windows stay dark at night: only the stripes shine)
   g.fillStyle = color; g.fillRect(0, 0, T, T);
   if (kind === 'tower') {
     // a curtain wall: glass panes between slim mullions and a floor slab line
-    g.fillStyle = lit && Math.random() < 0.6 ? lit : 'rgba(120,200,230,0.10)'; g.fillRect(2, 4, T - 4, T - 10);
+    g.fillStyle = lit && Math.random() < 0.6 ? lit : 'rgba(255,255,255,0.16)'; g.fillRect(2, 4, T - 4, T - 10);
     g.fillStyle = 'rgba(0,240,255,0.22)'; g.fillRect(0, T - 4, T, 3);
     g.fillStyle = 'rgba(10,25,50,0.35)'; g.fillRect(T / 2 - 1, 0, 2, T);
   } else if (kind === 'house') {
     // one window per bay, shuttered
-    g.fillStyle = lit ?? '#1C232C'; g.fillRect(14, 14, 20, 18);
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(12, 12, 24, 3); g.fillRect(12, 32, 24, 3);
+    g.fillStyle = lit ?? '#3E4B5A'; g.fillRect(14, 14, 20, 18);
+    g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillRect(12, 12, 24, 3); g.fillRect(12, 32, 24, 3);
   } else {
     // a walk-up: a window per bay with a sill and a balcony line every storey
-    g.fillStyle = lit ?? (Math.random() < 0.18 ? 'rgba(0,240,255,0.55)' : '#1A212B'); g.fillRect(10, 10, 28, 20);
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(8, 30, 32, 3);
-    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, T - 6, T, 6);
+    g.fillStyle = lit ?? (Math.random() < 0.15 ? 'rgba(0,200,240,0.75)' : '#34404E'); g.fillRect(10, 10, 28, 20);
+    g.fillStyle = 'rgba(255,255,255,0.75)'; g.fillRect(8, 30, 32, 3);
+    g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(0, T - 6, T, 6);
     if (kind === 'shops' && accent) { /* the shop band is drawn separately */ }
   }
   const p = g.canvas && ctx.createPattern(el, 'repeat');
@@ -90,14 +90,47 @@ function shopfront(ctx: CanvasRenderingContext2D, awning: string, night: boolean
   if (hit) return hit;
   const T = 48, el = document.createElement('canvas'); el.width = T; el.height = T;
   const g = el.getContext('2d')!;
-  g.fillStyle = '#2A2D33'; g.fillRect(0, 0, T, T);
-  g.fillStyle = night ? '#FFE3A8' : '#3A4C5C'; g.fillRect(4, 18, T - 8, T - 20);           // shop window / open front
+  g.fillStyle = '#D9DDE3'; g.fillRect(0, 0, T, T);
+  g.fillStyle = night ? '#FFE3A8' : '#4A5F75'; g.fillRect(4, 18, T - 8, T - 20);           // shop window / open front
   g.fillStyle = awning; g.fillRect(0, 6, T, 12);                                          // awning
   g.fillStyle = 'rgba(0,0,0,0.45)'; for (let x = 0; x < T; x += 12) g.fillRect(x, 6, 6, 12);
   const p = ctx.createPattern(el, 'repeat');
   if (p) patterns.set(key, p);
   return p;
 }
+/** a shop awning's coloured stripes alone, transparent elsewhere: what glows of a shopfront at night */
+function awningGlow(ctx: CanvasRenderingContext2D, awning: string): CanvasPattern | null {
+  const key = 'awn' + awning;
+  const hit = patterns.get(key);
+  if (hit) return hit;
+  if (typeof document === 'undefined') return null;
+  const T = 48, el = document.createElement('canvas'); el.width = T; el.height = T;
+  const g = el.getContext('2d')!;
+  g.fillStyle = awning; for (let x = 6; x < T; x += 12) g.fillRect(x, 6, 6, 12); // the coloured stripes between the dark ones
+  g.fillStyle = awning; g.globalAlpha = 0.5; g.fillRect(0, 17, T, 2); g.globalAlpha = 1; // and the awning's lit lower edge
+  const p = ctx.createPattern(el, 'repeat');
+  if (p) patterns.set(key, p);
+  return p;
+}
+/** a picture with its bright, colourless parts dulled: a street lamp switched off by day */
+const offs = new Map<string, HTMLCanvasElement>();
+function switchedOff(im: HTMLImageElement, name: string): CanvasImageSource {
+  const hit = offs.get(name);
+  if (hit) return hit;
+  if (!im.naturalWidth || typeof document === 'undefined') return im;
+  const el = document.createElement('canvas'); el.width = im.naturalWidth; el.height = im.naturalHeight;
+  const g = el.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(im, 0, 0);
+  const d = g.getImageData(0, 0, el.width, el.height), px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i], gg = px[i + 1], b = px[i + 2], hi = Math.max(r, gg, b), lo = Math.min(r, gg, b);
+    if (px[i + 3] > 0 && hi > 200 && hi - lo < 60) { px[i] = 150; px[i + 1] = 158; px[i + 2] = 168; } // a white bulb -> unlit glass
+  }
+  g.putImageData(d, 0, 0);
+  offs.set(name, el);
+  return el;
+}
+let nightNow = false;
 const imgs = new Map<string, HTMLImageElement>();
 export function img(name: string) {
   let i = imgs.get(name);
@@ -254,8 +287,11 @@ export function drawBridges(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
 type Item = { z: number; draw: () => void };
 /** Buildings and pictures, back to front. Returns whether anything solid stands between the camera and [focus]
  *  (the game then shows the player's silhouette through it -- buildings never turn see-through). */
-export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], sprites: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }): boolean {
+/** [glow]: at night, what gives off light (neon, lit windows, shop signs, tower crowns) is drawn here as well, in the
+ *  same order, each building first blanking out the glow behind it -- laid over the darkened scene, it shines. */
+export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], sprites: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }, glow?: CanvasRenderingContext2D): boolean {
   let hidden = false;
+  nightNow = night;
   const items: Item[] = [];
   const f = focus ? turn(c, focus.x, focus.z) : null;
   for (const t of tiles) {
@@ -269,7 +305,7 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
       }
       const hides = !!f && rz1 > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3;
       if (hides && !b.hide) hidden = true;
-      items.push({ z: rz1, draw: () => building(ctx, c, b, night) });
+      items.push({ z: rz1, draw: () => building(ctx, c, b, night, glow) });
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
@@ -302,7 +338,7 @@ export function drawGhost(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   picture(ctx, c, s);
   ctx.restore();
 }
-function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], night: boolean) {
+function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], night: boolean, glow?: CanvasRenderingContext2D) {
   if (b.hide) return;
   const k = c.scale, up = b.h * k * c.rise;
   const p = b.p, n = p.length / 2;
@@ -344,9 +380,16 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
     if (pat) { lay(pat); ctx.fillStyle = pat; } else ctx.fillStyle = wallColor;
     ctx.fill();
     if (shop) { quad(0, shopTop); lay(shop); ctx.fillStyle = shop; ctx.fill(); }
+    if (glow) {
+      const gq = (y0: number, y1: number) => { glow.beginPath(); glow.moveTo(a.sx, a.sy - y0); glow.lineTo(d.sx, d.sy - y0); glow.lineTo(d.sx, d.sy - y1); glow.lineTo(a.sx, a.sy - y1); glow.closePath(); };
+      glow.globalCompositeOperation = 'destination-out'; glow.fillStyle = '#000'; gq(0, up); glow.fill();
+      glow.globalCompositeOperation = 'source-over';
+      const aw = shop ? awningGlow(glow, AWNINGS[Math.floor(b.tone * 97) % AWNINGS.length]) : null;
+      if (aw) { aw.setTransform(new DOMMatrix([ux * 3 / 48, uy * 3 / 48, 0, vy * 3.2 / 48, a.sx, a.sy])); gq(0, shopTop); glow.fillStyle = aw; glow.fill(); }
+    }
     // light: walls facing left are lit, facing right in shade
     const across = (co * nx - si * nz) / (Math.hypot(nx, nz) || 1);
-    ctx.fillStyle = `rgba(5,8,18,${(0.12 + 0.22 * Math.max(0, across)).toFixed(3)})`;
+    ctx.fillStyle = `rgba(20,30,55,${(0.08 + 0.16 * Math.max(0, across)).toFixed(3)})`;
     quad(0, up); ctx.fill();
     // a darker plinth where the building meets the street
     ctx.fillStyle = 'rgba(30,38,52,0.22)'; quad(0, Math.min(0.7, b.h * 0.2) * k * c.rise); ctx.fill();
@@ -363,7 +406,9 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
     if (w === front && detailed && !house && len > 5) {
       const pick = (b.tone * 97) % 1, neon = NEON[Math.floor(b.tone * 53) % NEON.length];
       const at = (t: number, hgt: number) => ({ x: a.sx + (d.sx - a.sx) * t, y: a.sy + (d.sy - a.sy) * t - hgt * k * c.rise });
+      const g2 = glow ?? ctx;
       const glowLine = (p0: { x: number; y: number }, p1: { x: number; y: number }, wide: number) => {
+        const ctx = g2; // (at night the neon goes on the glow layer, where it shines)
         ctx.strokeStyle = neon; ctx.lineCap = 'round';
         ctx.globalAlpha = night ? 0.35 : 0.22; ctx.lineWidth = wide * 3.2; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
         ctx.globalAlpha = 1; ctx.lineWidth = wide; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
@@ -378,7 +423,7 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
       ctx.lineCap = 'butt';
     }
     // crisp edges: the wall's top and its corners
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(25,32,48,0.3)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(a.sx, a.sy - up); ctx.moveTo(d.sx, d.sy); ctx.lineTo(d.sx, d.sy - up); ctx.stroke();
   }
   // roof: zinc on houses (with a ridge), concrete with tanks and AC units on blocks, a lit crown on towers
@@ -387,13 +432,18 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
   ctx.closePath();
   ctx.fillStyle = house ? ROOFS_ZINC[Math.floor(b.tone * 13) % ROOFS_ZINC.length] : tower ? DAY.glassRoof : DAY.roofs[Math.floor(b.tone * DAY.roofs.length)];
   ctx.fill();
+  if (glow) {
+    glow.globalCompositeOperation = 'destination-out'; glow.fillStyle = '#000';
+    glow.beginPath(); pts.forEach((q, i) => { if (i) glow.lineTo(q.sx, q.sy - up); else glow.moveTo(q.sx, q.sy - up); }); glow.closePath(); glow.fill();
+    glow.globalCompositeOperation = 'source-over';
+  }
   ctx.strokeStyle = DAY.outline; ctx.lineWidth = 1; ctx.stroke();
   if (!house && detailed) {
     // the parapet: a low wall round the edge of a flat roof, its top lit
     const lip = 0.8 * k * c.rise;
-    ctx.strokeStyle = 'rgba(20,22,28,0.7)'; ctx.lineWidth = Math.max(1.5, 0.45 * k);
+    ctx.strokeStyle = 'rgba(120,130,145,0.55)'; ctx.lineWidth = Math.max(1.5, 0.45 * k);
     ctx.beginPath(); pts.forEach((q, i) => { if (i) ctx.lineTo(q.sx, q.sy - up - lip * 0.5); else ctx.moveTo(q.sx, q.sy - up - lip * 0.5); }); ctx.closePath(); ctx.stroke();
-    ctx.strokeStyle = tower ? 'rgba(0,240,255,0.7)' : 'rgba(150,155,165,0.6)'; ctx.lineWidth = Math.max(1, 0.22 * k);
+    ctx.strokeStyle = tower ? 'rgba(0,240,255,0.75)' : 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1, 0.22 * k);
     ctx.beginPath(); pts.forEach((q, i) => { if (i) ctx.lineTo(q.sx, q.sy - up - lip); else ctx.moveTo(q.sx, q.sy - up - lip); }); ctx.closePath(); ctx.stroke();
   }
   if (!house && detailed && b.area > 150) {
@@ -409,10 +459,10 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
       const mid = (order[e].d + order[(e + 1) % 4].d) / 2;
       if (mid < depth(c, hx, hz)) continue;
       ctx.beginPath(); ctx.moveTo(q0.sx, q0.sy); ctx.lineTo(q1.sx, q1.sy); ctx.lineTo(q1.sx, q1.sy - lift); ctx.lineTo(q0.sx, q0.sy - lift); ctx.closePath();
-      ctx.fillStyle = e % 2 ? '#40444C' : '#4D525A'; ctx.fill();
+      ctx.fillStyle = e % 2 ? '#C9CFD8' : '#DDE2E8'; ctx.fill();
     }
     ctx.beginPath(); corners.forEach((q, i) => { if (i) ctx.lineTo(q.sx, q.sy - lift); else ctx.moveTo(q.sx, q.sy - lift); }); ctx.closePath();
-    ctx.fillStyle = '#565B63'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.stroke();
+    ctx.fillStyle = '#EEF1F4'; ctx.fill(); ctx.strokeStyle = 'rgba(30,40,60,0.25)'; ctx.stroke();
   }
   const top = toScreen(c, b.cx, b.cz, b.h);
   if (house && detailed) {
@@ -439,9 +489,12 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
   if (tower && detailed) {
     // a crown band at the top
     const crown = NEON[Math.floor(b.tone * 31) % NEON.length];
-    ctx.strokeStyle = crown; ctx.globalAlpha = night ? 1 : 0.85; ctx.lineWidth = Math.max(1.5, 0.5 * k);
-    ctx.beginPath(); pts.forEach((q, i) => { const y = q.sy - up + 1.2 * k * c.rise; if (i) ctx.lineTo(q.sx, y); else ctx.moveTo(q.sx, y); }); ctx.closePath(); ctx.stroke();
-    ctx.globalAlpha = 1;
+    for (const g3 of glow ? [glow] : [ctx]) {
+      g3.strokeStyle = crown; g3.globalAlpha = glow ? 0.35 : 0.85; g3.lineWidth = Math.max(4, 1.6 * k);
+      if (glow) { g3.beginPath(); pts.forEach((q, i) => { const y = q.sy - up + 1.2 * k * c.rise; if (i) g3.lineTo(q.sx, y); else g3.moveTo(q.sx, y); }); g3.closePath(); g3.stroke(); }
+      g3.globalAlpha = 1; g3.lineWidth = Math.max(1.5, 0.5 * k);
+      g3.beginPath(); pts.forEach((q, i) => { const y = q.sy - up + 1.2 * k * c.rise; if (i) g3.lineTo(q.sx, y); else g3.moveTo(q.sx, y); }); g3.closePath(); g3.stroke();
+    }
   }
   void top;
 }
@@ -491,17 +544,25 @@ function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
     drawPerson(ctx, sx, sy, c.scale, s.look, facingOf(Math.sin(sh), Math.cos(sh)), s.walk ?? null);
     return;
   }
-  const im = img(s.s);
-  if (!im.complete || !im.naturalWidth) return;
+  const im0 = img(s.s);
+  if (!im0.complete || !im0.naturalWidth) return;
+  const im = s.s === 'lamp' && !nightNow ? switchedOff(im0, s.s) as HTMLImageElement : im0; // street lamps are lit only in the evening and at night
   const metres = (SIZE[s.s] ?? 4) * (s.scale ?? 1);
-  const k = c.scale, longest = Math.max(im.naturalWidth, im.naturalHeight), f = (metres * k) / longest;
-  const w = im.naturalWidth * f, h = im.naturalHeight * f;
+  const k = c.scale, longest = Math.max(im0.naturalWidth, im0.naturalHeight), f = (metres * k) / longest;
+  const w = im0.naturalWidth * f, h = im0.naturalHeight * f;
   if (s.up) {
     ctx.drawImage(im, sx - w / 2, sy - h * 0.92, w, h);
   } else {
     // top-down things on the water (boats): turned with the camera
+    // a boat sits up in the water: its deck seen less squashed than the flat ground (so it doesn't lie flat when the
+    // camera is low), a dark hull side showing below the deck, and a pale wake ring on the water
+    const squash = Math.min(1, c.tilt * 0.55 + 0.42), hull = 0.9 * k * c.rise;
     ctx.save(); ctx.translate(sx, sy); ctx.scale(1, c.tilt); ctx.rotate((s.rot ?? 0) + c.yaw);
-    ctx.shadowColor = 'rgba(15,22,38,0.35)'; ctx.shadowBlur = Math.max(2, 0.5 * k); ctx.shadowOffsetY = 0.5 * k;
+    ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.ellipse(0, 0, w * 0.62, h * 0.62, 0, 0, Math.PI * 2); ctx.fill(); // the wake
+    ctx.restore();
+    ctx.save(); ctx.translate(sx, sy - hull); ctx.scale(1, squash); ctx.rotate((s.rot ?? 0) + c.yaw);
+    ctx.globalAlpha = 0.85; ctx.translate(0, hull / squash); ctx.filter = 'brightness(0.35)'; ctx.drawImage(im, -w / 2, -h / 2, w, h); // the hull side: the boat's shape, darkened, just below the deck
+    ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.translate(0, -hull / squash);
     ctx.drawImage(im, -w / 2, -h / 2, w, h);
     ctx.restore();
   }

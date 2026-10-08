@@ -86,6 +86,7 @@ function Game({ onExit }: { onExit: () => void }) {
   const addWyrd = (l: WyrdLine) => setWyrdLines((p) => [...p.slice(-60), l]);
   /** what WYRD is told about the moment you speak to it */
   const situationRef = useRef<() => object>(() => ({}));
+  const hazeRef = useRef<HTMLDivElement | null>(null);
   // who you play: TEN or Ama, chosen once and kept on the server (null = not chosen yet, undefined = still asking)
   const [hero, setHero] = useState<'ten' | 'ama' | null | undefined>(undefined);
   const heroRef = useRef<'ten' | 'ama'>('ten'); if (hero) heroRef.current = hero;
@@ -123,6 +124,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const canvas = canvasRef.current!, ctx = canvas.getContext('2d')!;
     const mini = miniRef.current!, mctx = mini.getContext('2d')!;
     const layer = document.createElement('canvas'), lctx = layer.getContext('2d')!; // the night's upright layer
+    const glowC = document.createElement('canvas'), gl = glowC.getContext('2d')!; // what shines at night
     // the ground is costly (thousands of road strokes) and only changes when the camera turns, zooms or
     // travels: it is drawn to a picture with a margin all round, which is slid under the camera between redraws
     const ground = document.createElement('canvas'), gctx = ground.getContext('2d')!;
@@ -178,10 +180,14 @@ function Game({ onExit }: { onExit: () => void }) {
     let seaBoxes: number[][] = [];
     // the water stops you: the lagoon, the creeks and the Atlantic (the shapes are painted in order, so the last
     // one holding a point says whether it is land or water) -- except on a bridge, or on the beach's sand
+    /** open water: the sea and lagoon shapes are painted in order, land over sea, so the last one holding a point decides */
+    const water = (x: number, z: number) => {
+      let w = false;
+      for (let i = 0; i < sea.length; i++) { const b = seaBoxes[i]; if (b && x > b[0] && x < b[1] && z > b[2] && z < b[3] && inside(sea[i].p, x, z)) w = !sea[i].island; }
+      return w;
+    };
     const wet = (x: number, z: number) => {
-      let water = false;
-      for (let i = 0; i < sea.length; i++) { const b = seaBoxes[i]; if (b && x > b[0] && x < b[1] && z > b[2] && z < b[3] && inside(sea[i].p, x, z)) water = !sea[i].island; }
-      if (!water) return false;
+      if (!water(x, z)) return false;
       for (const t of world.tiles.values()) for (const r of t.roads) {
         if (!r.bridge || x < r.minX - 10 || x > r.maxX + 10 || z < r.minZ - 10 || z > r.maxZ + 10) continue;
         for (let i = 2; i < r.p.length; i += 2) { const x0 = r.p[i - 2], z0 = r.p[i - 1], dx = r.p[i] - x0, dz = r.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1; const u = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2)); if (Math.hypot(x0 + dx * u - x, z0 + dz * u - z) < r.w / 2 + 0.5) return false; }
@@ -189,6 +195,8 @@ function Game({ onExit }: { onExit: () => void }) {
       for (const q of sand) if (q.line) for (let i = 2; i < q.p.length; i += 2) { const x0 = q.p[i - 2], z0 = q.p[i - 1], dx = q.p[i] - x0, dz = q.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1; const u = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2)); if (Math.hypot(x0 + dx * u - x, z0 + dz * u - z) < 22) return false; }
       return true;
     };
+    // a boat needs water under it and a few metres of it all round (no grounding on the shore, no sailing over a bridge deck)
+    const afloat = (x: number, z: number) => water(x, z) && water(x + 8, z) && water(x - 8, z) && water(x, z + 8) && water(x, z - 8) && wet(x, z); // (wet: not under a bridge deck, not on the beach)
     const stop = (x: number, z: number, pad?: number) => world.blocked(x, z, pad) || (wet(x, z) && !wet(me.x, me.z)); // (already in the water somehow: free to get out)
     const beachProps: Sprite[] = [];
     fetch('world2d/water.json').then((r) => r.json()).then((j: { frame: number[]; land: number[][]; islands: number[][]; water: number[][]; lakeIslands: number[][]; sand?: number[][]; beachLines?: number[][] }) => {
@@ -253,7 +261,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, me, world, get marks() { return marks; }, snap: snapMarks, wet };
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet };
     // cars per 100 m of road, by kind: Third Mainland and the expressways are packed, side streets nearly empty
     const DENSITY = [3.2, 2.4, 0.7, 0.3, 0.1];
     let roadPool: Road[] = [], poolAt = { x: Infinity, z: 0 }, wanted = 0, poolTime = 0;
@@ -435,7 +443,7 @@ function Game({ onExit }: { onExit: () => void }) {
         if (alive) setLoading(false);
       }, 1200);
     });
-    let slowAvg = 16, quality = 2, qualityAt = performance.now();
+    let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -512,12 +520,12 @@ function Game({ onExit }: { onExit: () => void }) {
       }
       if (boats.length < 5 && sea.length) {
         const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 200, x = me.x + Math.cos(a) * d, z = me.z + Math.sin(a) * d;
-        if (sea.some((q) => !q.island && inside(q.p, x, z))) boats.push({ x, z, a: Math.random() * Math.PI * 2, v: 3 + Math.random() * 4 });
+        if (afloat(x, z)) boats.push({ x, z, a: Math.random() * Math.PI * 2, v: 3 + Math.random() * 4 });
       }
       for (let i = boats.length - 1; i >= 0; i--) {
         const b = boats[i];
         const nx = b.x + Math.cos(b.a) * b.v * dt, nz = b.z + Math.sin(b.a) * b.v * dt;
-        if (sea.some((q) => !q.island && inside(q.p, nx, nz))) { b.x = nx; b.z = nz; } else b.a += Math.PI * 0.6;
+        if (afloat(nx, nz)) { b.x = nx; b.z = nz; } else b.a += Math.PI * 0.6;
         if (Math.hypot(b.x - me.x, b.z - me.z) > 500) boats.splice(i, 1);
       }
       // the job
@@ -570,7 +578,11 @@ function Game({ onExit }: { onExit: () => void }) {
           gtiles = world.version; gsand = sand.length;
           at = { sx: W / 2, sy: H / 2 };
         }
-        if (ground.width && ground.height) ctx.drawImage(ground, at.sx - GW / 2, at.sy - GH / 2, GW, GH);
+        // copy just the part of the picture that is on screen (copying all of it costs the graphics chip dear)
+        if (ground.width && ground.height) {
+          const ox = (GW / 2 - at.sx) * dpr, oy = (GH / 2 - at.sy) * dpr;
+          ctx.drawImage(ground, ox, oy, W * dpr, H * dpr, 0, 0, W, H);
+        }
       }
       const spr: Sprite[] = [...marks];
       for (const b of beachProps) if (Math.abs(b.x - me.x) < 260 && Math.abs(b.z - me.z) < 260) spr.push(b);
@@ -595,7 +607,10 @@ function Game({ onExit }: { onExit: () => void }) {
         // the ground at night: dimmed, neon kerbs and light pools -- buildings and people then stand in front of them
         const pools: Light[] = [];
         airLights = [];
-        for (const t of tiles) for (const p of t.props) if (p.s === 'lamp') { pools.push({ x: p.x, z: p.z + 1.5, r: 7, color: 'rgba(255,214,150,0.22)' }); airLights.push({ x: p.x, z: p.z, r: 1.6, color: 'rgba(230,245,255,0.9)', y: 6 }); }
+        for (const t of tiles) for (const p of t.props) if (p.s === 'lamp') {
+          pools.push({ x: p.x, z: p.z + 1.5, r: 11, color: 'rgba(255,214,150,0.38)' });
+          airLights.push({ x: p.x, z: p.z, r: 6, color: 'rgba(255,230,190,0.28)', y: 6 }, { x: p.x, z: p.z, r: 2.2, color: 'rgba(255,250,235,1)', y: 6 });
+        }
         for (const c of cars) pools.push({ x: c.x + Math.sin(c.rot) * 4, z: c.z + Math.cos(c.rot) * 4, r: 6, color: 'rgba(200,240,255,0.5)' });
         if (me.car) pools.push({ x: me.x + Math.sin(me.car.rot) * 5, z: me.z + Math.cos(me.car.rot) * 5, r: 9, color: 'rgba(200,240,255,0.6)' });
         for (const m of marks) airLights.push({ x: m.x, z: m.z - 10, r: 40, color: 'rgba(120,80,255,0.18)', y: 20 });
@@ -604,10 +619,13 @@ function Game({ onExit }: { onExit: () => void }) {
         if (layer.width !== canvas.width || layer.height !== canvas.height) { layer.width = canvas.width; layer.height = canvas.height; }
         lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.clearRect(0, 0, layer.width, layer.height);
         lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const hidden = drawUpright(lctx, cam, tiles, spr, v, true, me);
+        if (glowC.width !== canvas.width || glowC.height !== canvas.height) { glowC.width = canvas.width; glowC.height = canvas.height; }
+        gl.setTransform(1, 0, 0, 1, 0, 0); gl.clearRect(0, 0, glowC.width, glowC.height); gl.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const hidden = drawUpright(lctx, cam, tiles, spr, v, true, me, gl);
         if (hidden && playerSprite) drawGhost(lctx, cam, playerSprite);
         nightTint(lctx, cam);
         if (layer.width && layer.height) ctx.drawImage(layer, 0, 0, W, H); // (a hidden or minimised window has no size)
+        if (glowC.width && glowC.height) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; ctx.drawImage(glowC, 0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.drawImage(glowC, 0, 0, W, H); ctx.restore(); }
         nightLights(ctx, cam, airLights, v, tiles);
       } else {
         const hidden = drawUpright(ctx, cam, tiles, spr, v, false, me);
@@ -625,7 +643,8 @@ function Game({ onExit }: { onExit: () => void }) {
         const { sx, sy } = toScreen(cam, me.x, me.z, 3.4);
         ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.moveTo(sx, sy + 6); ctx.lineTo(sx - 6, sy - 5); ctx.lineTo(sx + 6, sy - 5); ctx.closePath(); ctx.fill();
       }
-      drawHaze(ctx, cam, nightRef.current);
+      // (the distance haze is a page layer, set here from the camera's angle)
+      if (hazeRef.current) { const hz = Math.max(0, Math.min(1, (0.62 - cam.tilt) / 0.32)); if (hz !== lastHaze) { lastHaze = hz; hazeRef.current.style.opacity = String(hz); } }
       // HUD, ten times a second
       if (now - hudTick > 100) {
         hudTick = now;
@@ -671,6 +690,8 @@ function Game({ onExit }: { onExit: () => void }) {
       }
     };
     raf = requestAnimationFrame(frame);
+    // (debug: time [n] whole frames, waiting for the graphics to finish each one)
+    (window as unknown as { __naija: Record<string, unknown> }).__naija.bench = (n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) { frame(performance.now()); cancelAnimationFrame(raf); ctx.getImageData(0, 0, 1, 1); } raf = requestAnimationFrame(frame); return (performance.now() - t0) / n; };
     return () => {
       alive = false; cancelAnimationFrame(raf); clearInterval(aside);
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
@@ -683,9 +704,11 @@ function Game({ onExit }: { onExit: () => void }) {
   useEffect(() => { ['player', 'car-danfo', 'car-red', 'palm', 'lamp', 'lm-civic-centre'].forEach(img); }, []);
   return (
     <View style={s.root}>
-      {React.createElement('canvas', { ref: canvasRef, style: { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', background: '#2A2E28' } })}
+      {React.createElement('canvas', { ref: canvasRef, style: { position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', background: '#A9C98A' } })}
+      {/* the distance haze: low cameras look far up the street, and it fades into the air */}
+      {React.createElement('div', { ref: hazeRef, style: { position: 'absolute', left: 0, right: 0, top: 0, height: '55%', pointerEvents: 'none', opacity: 0, background: night ? 'linear-gradient(180deg, rgba(30,10,52,0.95), rgba(30,10,52,0.5) 45%, rgba(30,10,52,0))' : 'linear-gradient(180deg, rgba(222,232,244,0.95), rgba(222,232,244,0.45) 45%, rgba(222,232,244,0))' } })}
       {/* the colour grade: warm smog light above, cool shadow below (violet at night) -- a page layer, not canvas work */}
-      {React.createElement('div', { style: { position: 'absolute', inset: 0, pointerEvents: 'none', background: night ? 'linear-gradient(180deg, rgba(120,40,160,0.12), rgba(0,200,255,0.06))' : 'linear-gradient(180deg, rgba(255,150,40,0.12), rgba(0,160,200,0.07))' } })}
+      {React.createElement('div', { style: { position: 'absolute', inset: 0, pointerEvents: 'none', background: night ? 'linear-gradient(180deg, rgba(120,40,160,0.12), rgba(0,200,255,0.06))' : 'linear-gradient(180deg, rgba(255,170,60,0.05), rgba(0,180,220,0.03))' } })}
       {/* the objective, top left: what to do, where, how far and how long */}
       {(() => {
         const accent = !hud ? CY.muted : hud.kind === 'job' ? CY.cyan : hud.kind === 'offer' ? CY.magenta : CY.yellow;
@@ -883,7 +906,7 @@ function drawMini(m: CanvasRenderingContext2D, me: { x: number; z: number; car: 
 }
 const font = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#2A2E28', overflow: 'hidden' },
+  root: { flex: 1, backgroundColor: '#A9C98A', overflow: 'hidden' },
   objective: { position: 'absolute', top: 16, left: 16, width: 400, maxWidth: '46%' },
   objBar: { width: 4 },
   objSide: { justifyContent: 'center', alignItems: 'flex-end', gap: 4, paddingRight: 14, paddingLeft: 6 },
