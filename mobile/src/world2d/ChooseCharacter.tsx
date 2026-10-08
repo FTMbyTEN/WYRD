@@ -66,7 +66,7 @@ function Turntable({ who }: { who: 'ten' | 'ama' }) {
   useEffect(() => {
     const c = ref.current; if (!c) return;
     const g = c.getContext('2d')!;
-    const im = new Image(); im.src = `world2d/people/${who}-idle.webp`;
+    const im = new Image(); im.src = `world2d/people/${who}-idle-pc.webp`;
     let raf = 0;
     const tick = (t: number) => {
       raf = requestAnimationFrame(tick);
