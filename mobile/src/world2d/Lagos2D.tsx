@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { api } from '../api/client';
 import { DISTRICTS, LANDMARKS, toXZ } from './geo';
+import { modelFor } from './mesh';
 import { KIND, World, along, inPoly, type Bld, type Road } from './tiles';
 import { lookFor, type Look } from './person';
 import { CityMap, type Overview } from './CityMap';
@@ -143,7 +144,7 @@ function Game({ onExit }: { onExit: () => void }) {
     // WYRD keeps you company: now and then an aside, in the voice of its real diary
     const aside = setInterval(() => { if (!document.hidden) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
     // the landmarks clear their plots of the map's own small buildings
-    const marks = LANDMARKS.map((l) => { const p = toXZ(l.at); return { ...landmarkSprite(l.id, l.sprite, p.x, p.z, l.width), width: l.width, open: !!l.open, snapped: false }; });
+    const marks = LANDMARKS.map((l) => { const p = toXZ(l.at); const md = modelFor(l.id); return { ...landmarkSprite(l.id, l.sprite, p.x, p.z, l.width), width: md ? md.radius * 2 : l.width, open: !!l.open, snapped: false, model: md ? l.id : undefined, heading: 0 }; });
     // each famous building stands on its real footprint: once its tile is in, the biggest building
     // within ~80 m of the listed spot is taken as it, and the map's own blocks on that plot step aside
     const snapMarks = () => {
@@ -159,10 +160,30 @@ function Game({ onExit }: { onExit: () => void }) {
         for (const tt of world.tiles.values()) for (const b of tt.blds) {
           if (!b.hide && Math.hypot(b.cx - m.x, b.cz - m.z) < 80 && b.area > 300 && (!best || b.area > best.area)) best = b; // (a footprint another landmark took is hidden: never shared)
         }
-        if (best && !m.open) { m.x = best.cx; m.z = best.cz + (best.maxZ - best.minZ) * 0.25; }
+        if (best && !m.open) { m.x = best.cx; m.z = m.model ? best.cz : best.cz + (best.maxZ - best.minZ) * 0.25; } // (a model stands on the footprint's centre; a picture's base sits a little in front)
+        if (m.model) {
+          // turned square to its real footprint: its long side is the facade; its front to the nearest street
+          let ang = 0, len = 0;
+          if (best) for (let i = 0; i < best.p.length; i += 2) {
+            const j = (i + 2) % best.p.length, ex = best.p[j] - best.p[i], ez = best.p[j + 1] - best.p[i + 1], l = Math.hypot(ex, ez);
+            if (l > len) { len = l; ang = Math.atan2(ex, ez); }
+          }
+          let h = ang + Math.PI / 2;
+          const road = world.nearestRoad(m.x, m.z, 300, KIND.residential);
+          if (road) {
+            const tx = road.x - m.x, tz = road.z - m.z;
+            if (!best) h = Math.atan2(tx, tz);
+            else {
+              // of the four ways square to the footprint, the one facing the street most
+              let bestDot = -Infinity;
+              for (let q = 0; q < 4; q++) { const hh = ang + (q * Math.PI) / 2, dot = Math.sin(hh) * tx + Math.cos(hh) * tz; if (dot > bestDot) { bestDot = dot; h = hh; } }
+            }
+          }
+          m.heading = h;
+        }
         if (best && !m.open) best.hide = true; // the landmark's own footprint: its picture stands there instead
         // never on the carriageway: a picture whose base would cover a road steps back off it
-        if (m.id !== 'link-bridge') for (let pass = 0; pass < 3; pass++) {
+        if (m.id !== 'link-bridge' && !m.model) for (let pass = 0; pass < 3; pass++) {
           const road = world.nearestRoad(m.x, m.z, m.width * 0.4, KIND.residential);
           if (!road) break;
           const keep = m.width * 0.4 + road.r.w / 2, dx = m.x - road.x, dz = m.z - road.z, L = Math.hypot(dx, dz) || 1;
@@ -174,6 +195,7 @@ function Game({ onExit }: { onExit: () => void }) {
         for (const tt of world.tiles.values()) for (const b of tt.blds) if (Math.hypot(b.cx - m.x, b.cz - m.z) < r) b.hide = true;
         world.clearings.push({ x: m.x, z: m.z, r }); // and in tiles that load later
         world.changed(m.x - 160, m.x + 160, m.z - 160, m.z + 160); // (the cached scenery redraws round it)
+        scenery.reset();
       }
     };
     let places: Place[] = [];

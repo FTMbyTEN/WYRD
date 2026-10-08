@@ -11,6 +11,7 @@
  * No 3D engine: one 2D canvas, only what is on screen drawn.
  */
 import { SIZE } from './geo';
+import { drawModel, modelFor } from './mesh';
 import { drawPerson, facingOf, type Look } from './person';
 import { KIND, inPoly, type Road, type Tile } from './tiles';
 /** The camera: centre (x, z) in metres, zoom (px per metre), screen size, and its angles. */
@@ -18,6 +19,7 @@ export type Cam = { x: number; z: number; scale: number; w: number; h: number; d
   /** turn around the vertical axis (radians) */ yaw: number;
   /** ground squash = sin(pitch); height rise = cos(pitch) */ tilt: number; rise: number };
 export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boolean; lift?: number; scale?: number; face?: number;
+  /** a landmark drawn as its 3D model (mesh.ts), turned to [heading] */ model?: string;
   /** which way it is heading in the world, atan2(dx, dz) -- picks the right baked view */
   heading?: number;
   /** a vehicle drawn from its baked sheet (16 headings) */
@@ -131,6 +133,8 @@ function switchedOff(im: HTMLImageElement, name: string): CanvasImageSource {
   return el;
 }
 let nightNow = false;
+/** the night's glow layer for whatever is being drawn now (3D landmarks put their neon on it) */
+let glowNow: CanvasRenderingContext2D | null = null;
 const imgs = new Map<string, HTMLImageElement>();
 export function img(name: string) {
   let i = imgs.get(name);
@@ -314,6 +318,8 @@ function buildingBox(c: Cam, b: Tile['blds'][number]) {
 function pictureBox(c: Cam, s: Sprite) {
   const { sx, sy } = toScreen(c, s.x, s.z, s.lift ?? 0), k = c.scale;
   let w: number, h: number;
+  const md = s.model ? modelFor(s.model) : null;
+  if (md) { const r = md.radius * k; return { x0: sx - r - 2, x1: sx + r + 2, y0: sy - r * c.tilt - md.height * k * c.rise - 2, y1: sy + r * c.tilt + 2, z: depth(c, s.x, s.z) }; }
   if (s.veh) { const sz = (VEH_SPAN[s.s] ?? 6) * VEH_SIZE * k; w = sz; h = sz * 0.9; }
   else if (s.hero) { const sz = 2 * 1.05 * HERO_SIZE * k; w = sz * 0.7; h = sz; }
   else if (!s.up) { const sz = (SIZE[s.s] ?? 8) * k * 1.3; w = sz; h = sz * 0.8; }
@@ -331,7 +337,7 @@ function pictureBox(c: Cam, s: Sprite) {
  * beach umbrellas) -- back to front, for the scenery cache. [glow] as in drawUpright.
  */
 export function drawStill(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], fixed: Sprite[], v: View, night: boolean, glow?: CanvasRenderingContext2D) {
-  nightNow = night;
+  nightNow = night; glowNow = glow ?? null;
   const items: Item[] = [];
   for (const t of tiles) {
     // only what actually reaches into the picture (a tile is small: most of the nearby city falls outside it)
@@ -364,7 +370,7 @@ export let redrawn = 0;
 /** the screen box holding everything drawMoving drew (for drawing the night layer only there) */
 export const liveBox = { x0: 0, y0: 0, x1: 0, y1: 0 };
 export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], fixed: Sprite[], moving: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }, glow?: CanvasRenderingContext2D): boolean {
-  nightNow = night; redrawn = 0;
+  nightNow = night; glowNow = glow ?? null; redrawn = 0;
   const live: Boxed[] = [];
   for (const s of moving) {
     if (s.x < v.minX - 50 || s.x > v.maxX + 50 || s.z < v.minZ - 50 || s.z > v.maxZ + 50) continue;
@@ -416,7 +422,7 @@ export function lightPools(ctx: CanvasRenderingContext2D, c: Cam, pools: Light[]
  *  same order, each building first blanking out the glow behind it -- laid over the darkened scene, it shines. */
 export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], sprites: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }, glow?: CanvasRenderingContext2D): boolean {
   let hidden = false;
-  nightNow = night;
+  nightNow = night; glowNow = glow ?? null;
   const items: Item[] = [];
   const f = focus ? turn(c, focus.x, focus.z) : null;
   for (const t of tiles) {
@@ -626,6 +632,7 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
 /** which of [n] baked headings to show for a world heading, as this camera sees it */
 const view = (c: Cam, heading: number, n: number) => ((Math.round((screenHeading(c, heading) / (Math.PI * 2)) * n) % n) + n) % n;
 function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
+  if (s.model) { const md = modelFor(s.model); if (md) { drawModel(ctx, c, md, s.x, s.z, s.heading ?? 0, (x, z, y) => toScreen(c, x, z, y), glowNow); return; } }
   const { sx, sy } = toScreen(c, s.x, s.z, s.lift ?? 0);
   if (s.hero) {
     const pitch = Math.asin(c.tilt);

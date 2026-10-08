@@ -22,6 +22,8 @@ export class Scenery {
   private tmp = document.createElement('canvas');
   private glow = document.createElement('canvas');
   constructor(private world: World) {}
+  /** start afresh (a landmark settled on its plot: rare, and it must show at once) */
+  reset() { this.chunks.clear(); }
 
   /**
    * Lays the cached scenery on [ctx] (already scaled by dpr). Returns false while the camera is turning, tilting or
