@@ -4,7 +4,7 @@
 // that main roads join up, and that no street is lost when tiles are unloaded and others take over.
 import fs from 'node:fs';
 import path from 'node:path';
-import { KIND, World, inPoly, type Road, type Tile } from '../src/world2d/tiles';
+import { KIND, World, crosses, type Road, type Tile } from '../src/world2d/tiles';
 
 const ROOT = path.resolve('public');
 (globalThis as { fetch: unknown }).fetch = async (u: string) => {
@@ -53,11 +53,7 @@ for (let tx = x0; tx <= x1; tx++) for (let tz = z0; tz <= z1; tz++) {
       if (r.bridge || r.kind > KIND.residential) continue;
       const band = r.w / 2 + (r.kind <= KIND.tertiary ? 3.5 : 1.75);
       if (r.maxX + band < b.minX || r.minX - band > b.maxX || r.maxZ + band < b.minZ || r.minZ - band > b.maxZ) continue;
-      let through = false;
-      for (let i = 2; i < r.p.length && !through; i += 2) for (let k = 0; k <= 10; k++) {
-        const x = r.p[i - 2] + ((r.p[i] - r.p[i - 2]) * k) / 10, z = r.p[i - 1] + ((r.p[i + 1] - r.p[i - 1]) * k) / 10;
-        if (inPoly(b.p, x, z)) { through = true; break; }
-      }
+      const through = crosses(b.p, r.p);
       if (through) { onRoad++; if (examples.length < 12) examples.push(`building on ${r.name ?? 'a street'} at ${Math.round(b.cx)},${Math.round(b.cz)}`); break; }
       let worst = 0;
       for (let v = 0; v < b.p.length; v += 2) worst = Math.max(worst, band - segDist(b.p[v], b.p[v + 1], r));
@@ -67,6 +63,7 @@ for (let tx = x0; tx <= x1; tx++) for (let tz = z0; tz <= z1; tz++) {
   // 2. main roads join up (ends inside this tile; the map's outer edge and the shore aside)
   for (const r of tile.roads) {
     if (r.kind > KIND.tertiary || r.bridge) continue;
+    if (Math.hypot(r.p[0] - r.p[r.p.length - 2], r.p[1] - r.p[r.p.length - 1]) < 1) continue; // a roundabout: a closed ring
     for (const e of [0, r.p.length - 2]) {
       const x = r.p[e], z = r.p[e + 1];
       if (Math.floor(x / T) !== tx || Math.floor(z / T) !== tz) continue;
@@ -74,7 +71,7 @@ for (let tx = x0; tx <= x1; tx++) for (let tz = z0; tz <= z1; tz++) {
       let edge = false;
       for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) if (!w.have.has(`${Math.floor(x / T) + dx}_${Math.floor(z / T) + dz}`)) edge = true;
       if (edge) continue;
-      const joined = roads.some((o) => o !== r && !(o.maxX < x - 3 || o.minX > x + 3 || o.maxZ < z - 3 || o.minZ > z + 3) && segDist(x, z, o) < 3);
+      const joined = roads.some((o) => o !== r && !(o.maxX < x - 15 || o.minX > x + 15 || o.maxZ < z - 15 || o.minZ > z + 15) && segDist(x, z, o) < Math.max(3, (r.w + o.w) / 2)); // the drawn road surfaces meet
       if (!joined) { deadMain++; if (examples.length < 24) examples.push(`main road ${r.name ?? '(unnamed)'} ends at ${Math.round(x)},${Math.round(z)}`); }
     }
   }

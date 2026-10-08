@@ -53,6 +53,22 @@ export function inPoly(p: Float32Array, x: number, z: number) {
   return inside;
 }
 
+/** Whether a polyline [l] crosses, touches or lies inside the closed outline [poly]. */
+export function crosses(poly: Float32Array, l: Float32Array) {
+  const n = poly.length;
+  const hit = (ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number) => {
+    const d1 = (dx - cx) * (az - cz) - (dz - cz) * (ax - cx), d2 = (dx - cx) * (bz - cz) - (dz - cz) * (bx - cx);
+    const d3 = (bx - ax) * (cz - az) - (bz - az) * (cx - ax), d4 = (bx - ax) * (dz - az) - (bz - az) * (dx - ax);
+    return ((d1 > 0) !== (d2 > 0) || d1 === 0 || d2 === 0) && ((d3 > 0) !== (d4 > 0) || d3 === 0 || d4 === 0);
+  };
+  for (let i = 2; i < l.length; i += 2) {
+    const ax = l[i - 2], az = l[i - 1], bx = l[i], bz = l[i + 1];
+    if (inPoly(poly, ax, az)) return true;
+    for (let j = 0, k = n - 2; j < n; k = j, j += 2) if (hit(ax, az, bx, bz, poly[k], poly[k + 1], poly[j], poly[j + 1])) return true;
+  }
+  return inPoly(poly, l[l.length - 2], l[l.length - 1]);
+}
+
 export class World {
   index: { tiles: string[] } | null = null;
   have = new Set<string>();
@@ -233,23 +249,60 @@ export class World {
    * runs through is dropped (the road wins); one that only cuts into the pavement has those corners pulled
    * back to the pavement's edge. Checked both ways as each tile arrives, so roads from a neighbouring tile count.
    */
+  /**
+   * Some streets on the map stop a few metres short of the road they meet. An end that touches nothing,
+   * with another road within 12 m, is carried on to meet it, so the street joins up as it does in Lagos.
+   */
+  private joinRoads(roads: Road[], all: Tile[], near: (x: number, z: number) => boolean = () => true) {
+    const nearest = (x: number, z: number, self: Road) => {
+      let best: { x: number; z: number; d: number } | null = null;
+      for (const t of all) for (const r of t.roads) {
+        if (r === self || r.bridge || r.maxX < x - 12 || r.minX > x + 12 || r.maxZ < z - 12 || r.minZ > z + 12) continue;
+        for (let i = 2; i < r.p.length; i += 2) {
+          const x0 = r.p[i - 2], z0 = r.p[i - 1], dx = r.p[i] - x0, dz = r.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1;
+          const u = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2));
+          const px = x0 + dx * u, pz = z0 + dz * u, d = Math.hypot(px - x, pz - z);
+          if (!best || d < best.d) best = { x: px, z: pz, d };
+        }
+      }
+      return best;
+    };
+    for (const r of roads) {
+      if (r.bridge || r.kind > KIND.residential || r.p.length < 4) continue;
+      for (const head of [true, false]) {
+        const e = head ? 0 : r.p.length - 2, x = r.p[e], z = r.p[e + 1];
+        if (!near(x, z)) continue;
+        const n = nearest(x, z, r);
+        if (!n || n.d < 1.5 || n.d > 12) continue;
+        // carry on only roughly the way the street was already going (not doubling back)
+        const ix = head ? r.p[2] : r.p[r.p.length - 4], iz = head ? r.p[3] : r.p[r.p.length - 3];
+        const ox = x - ix, oz = z - iz, gx = n.x - x, gz = n.z - z;
+        if ((ox * gx + oz * gz) / ((Math.hypot(ox, oz) || 1) * n.d) < 0) continue;
+        const p = new Float32Array(r.p.length + 2);
+        if (head) { p[0] = n.x; p[1] = n.z; p.set(r.p, 2); } else { p.set(r.p, 0); p[r.p.length] = n.x; p[r.p.length + 1] = n.z; }
+        r.p = p; r.cum = lengths(p); r.len = r.cum[r.cum.length - 1];
+        r.minX = Math.min(r.minX, n.x); r.maxX = Math.max(r.maxX, n.x); r.minZ = Math.min(r.minZ, n.z); r.maxZ = Math.max(r.maxZ, n.z);
+      }
+    }
+  }
+
   private clearRoads(tile: Tile) {
     const all = [...this.tiles.values()];
-    const check = (b: Bld, roads: Road[]) => {
-      if (b.gone) return;
+    this.joinRoads(tile.roads, all);
+    // and the loose ends of streets already loaded that the new tile's roads may now meet
+    const [a0, a1, b0, b1] = [tile.tx * TILE - 15, (tile.tx + 1) * TILE + 15, tile.tz * TILE - 15, (tile.tz + 1) * TILE + 15];
+    for (const t of all) if (t !== tile) this.joinRoads(t.roads, all, (x, z) => x > a0 && x < a1 && z > b0 && z < b1);
+    // returns whether it moved a corner; a corner pulled off one road may land on another, so it is run again
+    const pass = (b: Bld, roads: Road[], trim = true) => {
+      let any = false;
       for (const r of roads) {
         if (r.bridge || r.kind > KIND.residential) continue;
         const band = r.w / 2 + (r.kind <= KIND.tertiary ? 3.5 : 1.75); // the road and its pavement, as drawn
         if (r.maxX + band < b.minX || r.minX - band > b.maxX || r.maxZ + band < b.minZ || r.minZ - band > b.maxZ) continue;
-        // through it: any point along the road's middle inside the footprint
-        for (let i = 2; i < r.p.length; i += 2) {
-          const L = Math.hypot(r.p[i] - r.p[i - 2], r.p[i + 1] - r.p[i - 1]), n = Math.max(1, Math.ceil(L / 2));
-          for (let k = 0; k <= n; k++) {
-            const x = r.p[i - 2] + ((r.p[i] - r.p[i - 2]) * k) / n, z = r.p[i - 1] + ((r.p[i + 1] - r.p[i - 1]) * k) / n;
-            if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ && inPoly(b.p, x, z)) { b.gone = true; b.hide = true; return; }
-          }
-        }
+        // through it: the road's middle line crosses the footprint's outline, or lies inside it
+        if (crosses(b.p, r.p)) { b.gone = true; b.hide = true; return false; }
         // into the pavement: pull those corners out to its edge
+        if (!trim) continue;
         let moved = false;
         for (let v = 0; v < b.p.length; v += 2) {
           for (let i = 2; i < r.p.length; i += 2) {
@@ -262,9 +315,32 @@ export class World {
         if (moved) {
           b.minX = Infinity; b.maxX = -Infinity; b.minZ = Infinity; b.maxZ = -Infinity;
           for (let v = 0; v < b.p.length; v += 2) { b.minX = Math.min(b.minX, b.p[v]); b.maxX = Math.max(b.maxX, b.p[v]); b.minZ = Math.min(b.minZ, b.p[v + 1]); b.maxZ = Math.max(b.maxZ, b.p[v + 1]); }
-          if (b.maxX - b.minX < 3 || b.maxZ - b.minZ < 3) { b.gone = true; b.hide = true; return; } // squeezed to nothing
+          if (b.maxX - b.minX < 3 || b.maxZ - b.minZ < 3) { b.gone = true; b.hide = true; return false; } // squeezed to nothing
+          any = true;
         }
       }
+      return any;
+    };
+    const check = (b: Bld, roads: Road[]) => {
+      let settled = false;
+      for (let i = 0; i < 4 && !b.gone; i++) if (!pass(b, i ? roadsNear(b) : roads)) { settled = true; break; }
+      if (!settled && !b.gone) pass(b, roadsNear(b), false); // caught between two roads' pavements: it stays, unless a road now runs through it
+    };
+    // the later passes look at every loaded road near the building, not just the ones being added
+    // roads by 100 m cell, built once per call, so a building finds its neighbours without scanning them all
+    const cells = new Map<number, Road[]>(), C = 100;
+    for (const t of all) for (const r of t.roads) {
+      if (r.bridge || r.kind > KIND.residential) continue;
+      for (let gx = Math.floor((r.minX - 20) / C); gx <= Math.floor((r.maxX + 20) / C); gx++)
+        for (let gz = Math.floor((r.minZ - 20) / C); gz <= Math.floor((r.maxZ + 20) / C); gz++) {
+          const k = gkey(gx, gz); (cells.get(k) ?? cells.set(k, []).get(k)!).push(r);
+        }
+    }
+    const roadsNear = (b: Bld) => {
+      const out = new Set<Road>();
+      for (let gx = Math.floor(b.minX / C); gx <= Math.floor(b.maxX / C); gx++)
+        for (let gz = Math.floor(b.minZ / C); gz <= Math.floor(b.maxZ / C); gz++) for (const r of cells.get(gkey(gx, gz)) ?? []) out.add(r);
+      return [...out];
     };
     // (a long street is kept by whichever tile loaded first, which may be far off: so every loaded tile is checked)
     // (a building can reach well past its own tile, so each tile's reach is taken from its buildings)

@@ -167,12 +167,28 @@ function Game({ onExit }: { onExit: () => void }) {
     let sea: { p: Float32Array; island: boolean }[] = [];
     // the water, painted in order: the frame as water, the land over it, islands, then lakes and the islands in them
     let sand: { p: Float32Array; line: boolean }[] = [];
+    let seaBoxes: number[][] = [];
+    // the water stops you: the lagoon, the creeks and the Atlantic (the shapes are painted in order, so the last
+    // one holding a point says whether it is land or water) -- except on a bridge, or on the beach's sand
+    const wet = (x: number, z: number) => {
+      let water = false;
+      for (let i = 0; i < sea.length; i++) { const b = seaBoxes[i]; if (b && x > b[0] && x < b[1] && z > b[2] && z < b[3] && inside(sea[i].p, x, z)) water = !sea[i].island; }
+      if (!water) return false;
+      for (const t of world.tiles.values()) for (const r of t.roads) {
+        if (!r.bridge || x < r.minX - 10 || x > r.maxX + 10 || z < r.minZ - 10 || z > r.maxZ + 10) continue;
+        for (let i = 2; i < r.p.length; i += 2) { const x0 = r.p[i - 2], z0 = r.p[i - 1], dx = r.p[i] - x0, dz = r.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1; const u = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2)); if (Math.hypot(x0 + dx * u - x, z0 + dz * u - z) < r.w / 2 + 0.5) return false; }
+      }
+      for (const q of sand) if (q.line) for (let i = 2; i < q.p.length; i += 2) { const x0 = q.p[i - 2], z0 = q.p[i - 1], dx = q.p[i] - x0, dz = q.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1; const u = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / L2)); if (Math.hypot(x0 + dx * u - x, z0 + dz * u - z) < 22) return false; }
+      return true;
+    };
+    const stop = (x: number, z: number, pad?: number) => world.blocked(x, z, pad) || (wet(x, z) && !wet(me.x, me.z)); // (already in the water somehow: free to get out)
     const beachProps: Sprite[] = [];
     fetch('world2d/water.json').then((r) => r.json()).then((j: { frame: number[]; land: number[][]; islands: number[][]; water: number[][]; lakeIslands: number[][]; sand?: number[][]; beachLines?: number[][] }) => {
       const f = (a: number[]) => Float32Array.from(a, (v) => v / 10);
       sea = [{ p: f(j.frame), island: false }, ...j.land.map((a) => ({ p: f(a), island: true })), ...j.islands.map((a) => ({ p: f(a), island: true })),
         ...j.water.map((a) => ({ p: f(a), island: false })), ...j.lakeIslands.map((a) => ({ p: f(a), island: true }))];
       mapData.current.sea = sea;
+      seaBoxes = sea.map((q) => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (let i = 0; i < q.p.length; i += 2) { a = Math.min(a, q.p[i]); b = Math.max(b, q.p[i]); c = Math.min(c, q.p[i + 1]); d = Math.max(d, q.p[i + 1]); } return [a, b, c, d]; });
       sand = [...(j.sand ?? []).map((a) => ({ p: f(a), line: false })), ...(j.beachLines ?? []).map((a) => ({ p: f(a), line: true }))];
       mapData.current.sand = sand;
       // beach life along the Atlantic: umbrellas and loungers on the sand, palms behind (the ocean is to the south)
@@ -220,7 +236,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, me, world, get marks() { return marks; }, snap: snapMarks };
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, me, world, get marks() { return marks; }, snap: snapMarks, wet };
     // cars per 100 m of road, by kind: Third Mainland and the expressways are packed, side streets nearly empty
     const DENSITY = [3.2, 2.4, 0.7, 0.3, 0.1];
     let roadPool: Road[] = [], poolAt = { x: Infinity, z: 0 }, wanted = 0, poolTime = 0;
@@ -424,14 +440,14 @@ function Game({ onExit }: { onExit: () => void }) {
           c.v = Math.max(-5, Math.min(24, c.v));
           c.rot -= ax * dt * 2.2 * Math.min(1, Math.abs(c.v) / 6) * Math.sign(c.v || 1);
           const nx = me.x + Math.sin(c.rot) * c.v * dt, nz = me.z + Math.cos(c.rot) * c.v * dt;
-          if (world.blocked(nx, nz, 1.2)) c.v *= -0.3; else { me.x = nx; me.z = nz; }
+          if (stop(nx, nz, 1.2)) c.v *= -0.3; else { me.x = nx; me.z = nz; }
         } else if (ax || az) {
           const sp = (keys.has('shift') ? 5.2 : 1.55) * dt, L = Math.hypot(ax, az); // a walk is ~1.5 m/s; a run is a real run
           const co = Math.cos(cam.yaw), si = Math.sin(cam.yaw);
           const wx = (co * ax + si * az) / L, wz = (-si * ax + co * az) / L;
           const nx = me.x + wx * sp, nz = me.z + wz * sp;
-          if (!world.blocked(nx, me.z)) me.x = nx;
-          if (!world.blocked(me.x, nz)) me.z = nz;
+          if (!stop(nx, me.z)) me.x = nx;
+          if (!stop(me.x, nz)) me.z = nz;
           me.step += sp / (keys.has('shift') ? 1.1 : 0.8); // one stride: ~0.8 m walking, longer running
           me.dist += sp;
           me.heading = Math.atan2(wx, wz); me.face = me.heading;
