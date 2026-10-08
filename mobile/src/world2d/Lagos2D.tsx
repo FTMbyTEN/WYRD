@@ -7,6 +7,7 @@ import { lookFor, type Look } from './person';
 import { CityMap, type Overview } from './CityMap';
 import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './story';
 import { Dialogue, Standing } from './StoryPanels';
+import { WyrdPanel, type WyrdLine } from './WyrdPanel';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
 import { type Light, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
@@ -79,6 +80,11 @@ function Game({ onExit }: { onExit: () => void }) {
   const [story, setStory] = useState<Story | null>(null);
   const [standing, setStanding] = useState<false | 'standing' | 'life'>(false);
   const [wyrd, setWyrd] = useState<string | null>(null); // WYRD speaking: city bulletins and its asides
+  const [wyrdOpen, setWyrdOpen] = useState(false); // the conversation with WYRD (T)
+  const [wyrdLines, setWyrdLines] = useState<WyrdLine[]>([]);
+  const addWyrd = (l: WyrdLine) => setWyrdLines((p) => [...p.slice(-60), l]);
+  /** what WYRD is told about the moment you speak to it */
+  const situationRef = useRef<() => object>(() => ({}));
   // who you play: TEN or Ama, chosen once and kept on the server (null = not chosen yet, undefined = still asking)
   const [hero, setHero] = useState<'ten' | 'ama' | null | undefined>(undefined);
   const heroRef = useRef<'ten' | 'ama'>('ten'); if (hero) heroRef.current = hero;
@@ -122,7 +128,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const world = new World();
     let alive = true;
     const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), Math.max(3200, t.length * 55)); };
-    const wyrdSay = (t: string) => { setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
+    const wyrdSay = (t: string) => { addWyrd({ from: t.startsWith('WYRD city bulletin') ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
     wyrdRef.current = wyrdSay;
     // WYRD keeps you company: now and then an aside, in the voice of its real diary
     const aside = setInterval(() => { if (!document.hidden) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
@@ -211,6 +217,15 @@ function Game({ onExit }: { onExit: () => void }) {
     // start on the Marina, Lagos Island, by the lagoon -- then step onto the nearest real road
     const start = toXZ([6.4497, 3.3935]);
     const me = { x: start.x, z: start.z, face: 0, step: 0, dist: 0, heading: 0, moving: false, car: null as null | { sprite: string; v: number; rot: number } };
+    situationRef.current = () => {
+      const road = world.nearestRoad(me.x, me.z, 80, KIND.residential);
+      let area = '', ad = Infinity;
+      for (const d of DISTRICTS) { const p = toXZ(d.at), q = Math.hypot(p.x - me.x, p.z - me.z); if (q < ad) { ad = q; area = d.name; } }
+      const near = LANDMARKS.map((l) => ({ name: l.name, ...toXZ(l.at) })).map((l) => ({ name: l.name, m: Math.round(Math.hypot(l.x - me.x, l.z - me.z)) })).filter((l) => l.m < 1500).sort((p, q) => p.m - q.m).slice(0, 4);
+      const doing = hudKey.current ? JSON.parse(hudKey.current) : null;
+      return { game: 'NAIJA 2099 (2D)', district: ad < 4000 ? area : 'outskirts', street: road?.r.name ?? null, landmarksNear: near,
+        travelling: me.car ? 'driving' : me.moving ? 'walking' : 'standing', time: nightRef.current ? 'night' : 'day', doing };
+    };
     mapData.current.me = me;
     fetch('world2d/overview.json').then((r) => r.json()).then((o: Overview) => { mapData.current.overview = o; }).catch(() => {});
     // a ride across town: pay the danfo fare, arrive, and step off onto the nearest street once it has loaded
@@ -279,15 +294,16 @@ function Game({ onExit }: { onExit: () => void }) {
     const down = (e: KeyboardEvent) => {
       // typing a name (or anything) in a text box is not driving
       const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) { if (e.key === 'Escape') { setWyrdOpen(false); (el as HTMLElement).blur(); } return; }
       const k = e.key.toLowerCase();
       keys.add(k);
       if (k === 'e') toggleCar();
       if (k === 'n') setNight((v) => !v);
       if (k === 'r') setStanding((v) => (v ? false : 'standing'));
       if (k === 'm') setBoard((v) => !v);
+      if (k === 't') { e.preventDefault(); setWyrdOpen((v) => !v); }
       if (k === 'tab') { e.preventDefault(); if (!e.repeat) setCityMap((v) => !v); }
-      if (k === 'escape') { if (boardRef.current) setBoard(false); }
+      if (k === 'escape') { if (boardRef.current) setBoard(false); setWyrdOpen(false); }
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
     };
     const up = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
@@ -741,6 +757,7 @@ function Game({ onExit }: { onExit: () => void }) {
             ['Tab', 'Map', () => setCityMap(true)],
             ['M', 'Jobs', () => setBoard(true)],
             ['R', 'Standing', () => { setStanding('standing'); api.cityStory().then(setStory).catch(() => {}); }],
+            ['T', 'WYRD', () => setWyrdOpen((v) => !v)],
             ['N', night ? 'Day' : 'Night', () => setNight((v) => !v)],
           ] as const).map(([key, label, go]) => (
             <Pressable key={key} onPress={go} style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [s.card, th.card, s.keyBtn, (pressed || hovered) && { borderColor: th.accent }]}>
@@ -754,7 +771,8 @@ function Game({ onExit }: { onExit: () => void }) {
         </View>
       </View>
       {toast ? <View style={s.toast}><Text style={s.toastText}>{toast}</Text></View> : null}
-      {wyrd ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
+      {wyrdOpen ? <WyrdPanel lines={wyrdLines} onLine={addWyrd} night={night} situation={() => situationRef.current()} onClose={() => setWyrdOpen(false)} /> : null}
+      {wyrd && !wyrdOpen ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
       {hero === null ? <ChooseCharacter onDone={(look) => setHero(look.base)} /> : null}
       {talk ? (
         <Dialogue who={talk.beat.who} line={talk.beat.line} choices={talk.beat.choices} busy={talkBusy}
