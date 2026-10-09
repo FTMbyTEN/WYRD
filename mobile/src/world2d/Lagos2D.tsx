@@ -32,7 +32,6 @@ type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side
 type Boat = { x: number; z: number; a: number; v: number };
 /** a flying car: where it is, how high, which way and how fast it flies */
 type Flyer = { x: number; z: number; y: number; h: number; v: number; sprite: string };
-// the 3D city's hover-car (world/hovercar.ts), baked in four paints
 /** what draws the canvas: the graphics card's name, or a software renderer (SwiftShader, llvmpipe, Microsoft Basic
  *  Render Driver) -- Chrome falls back to software on some machines and drivers, and then every frame is slow */
 function graphicsName(): { name: string; software: boolean } {
@@ -44,7 +43,8 @@ function graphicsName(): { name: string; software: boolean } {
     return { name, software: /swiftshader|llvmpipe|software|basic render/i.test(name) };
   } catch { return { name: 'unknown', software: false }; }
 }
-const FLYER_SPRITES = ['hover-navy', 'hover-pearl', 'hover-crimson', 'hover-gold'];
+// WYRD's flyers, the city's flying cars run by WYRD: four designs (cab, arrow, bubble, hauler), two paints each
+const FLYER_SPRITES = ['wyrd-cab-navy', 'wyrd-cab-pearl', 'wyrd-arrow-crimson', 'wyrd-arrow-black', 'wyrd-bubble-gold', 'wyrd-bubble-mint', 'wyrd-hauler-white', 'wyrd-hauler-orange'];
 type Place = { k: string; n: string | null; x: number; z: number };
 type Job =
   | { type: 'delivery'; id: string; pick: Place; drop: Place; carrying: boolean; limit: number; started: number; dist: number }
@@ -545,7 +545,7 @@ function Game({ onExit }: { onExit: () => void }) {
         if (alive) setLoading(false);
       }, 1200);
     });
-    let camMovedAt = -1e9, camWas = { yaw: 0, tilt: 0, scale: 0 };
+    let camMovedAt = -1e9, camWas = { yaw: 0, tilt: 0 }; // (turning and tipping only: a zoom is shown by scaling the scenery)
     let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1, lastHazeNight = false, lastLive = { x0: 0, y0: 0, x1: 99999, y1: 99999 };
     const gpu = graphicsName();
     if (gpu.software) quality = 0.75; // drawn in software: a lighter resolution from the start, so it stays smooth
@@ -576,7 +576,7 @@ function Game({ onExit }: { onExit: () => void }) {
         const next = quality > 1 ? 1 : quality > 0.85 ? 0.85 : quality > 0.72 ? 0.72 : quality;
         if (next !== quality) { quality = next; qualityAt = now; slowAvg = 20; }
       }
-      // while the camera turns, tips or zooms the whole city is drawn afresh every frame (no cached scenery fits a
+      // while the camera turns or tips the whole city is drawn afresh every frame (no cached scenery fits a
       // view that keeps changing): it's drawn at three-quarters resolution then -- in motion the eye can't tell, and
       // a quarter fewer pixels each way is nearly half the filling -- and sharp again the moment the camera rests
       const turning = now - camMovedAt < 150;
@@ -659,7 +659,7 @@ function Game({ onExit }: { onExit: () => void }) {
           if (Math.hypot(b.x - me.x, b.z - me.z) > 500) boats.splice(i, 1);
         }
         // flying cars: sky lanes across the city, 30-60 m up, each crossing near you and flying on out of sight
-        if (flyers.length < 7) {
+        if (flyers.length < 3) { // (a few at a time: the sky over Lagos is busy, not crowded)
           const a = Math.random() * Math.PI * 2, x = me.x + Math.cos(a) * 320, z = me.z + Math.sin(a) * 320;
           const tx = me.x + (Math.random() - 0.5) * 240, tz = me.z + (Math.random() - 0.5) * 240;
           flyers.push({ x, z, y: 30 + Math.floor(Math.random() * 4) * 10, h: Math.atan2(tx - x, tz - z), v: 22 + Math.random() * 16, sprite: FLYER_SPRITES[Math.floor(Math.random() * FLYER_SPRITES.length)] });
@@ -705,7 +705,7 @@ function Game({ onExit }: { onExit: () => void }) {
       if (Math.abs(want - cam.scale) < want * 0.002) cam.scale = want; // settle exactly, so the scenery cache can hold
       cam.x += (me.x - cam.x) * Math.min(1, dt * 5);
       cam.z += (me.z - cam.z) * Math.min(1, dt * 5);
-      if (cam.yaw !== camWas.yaw || cam.tilt !== camWas.tilt || cam.scale !== camWas.scale) { camMovedAt = now; camWas = { yaw: cam.yaw, tilt: cam.tilt, scale: cam.scale }; }
+      if (cam.yaw !== camWas.yaw || cam.tilt !== camWas.tilt) { camMovedAt = now; camWas = { yaw: cam.yaw, tilt: cam.tilt }; }
       // draw
       const v = viewOf(cam);
       const tiles = [...world.tiles.values()];
@@ -746,7 +746,7 @@ function Game({ onExit }: { onExit: () => void }) {
         for (const m of marks) airLights.push({ x: m.x, z: m.z - 10, r: 40, color: 'rgba(120,80,255,0.18)', y: 20 });
       }
       // the still city from the cache; while the camera turns, tilts or zooms, drawn directly instead
-      const cached = scenery.draw(ctx, cam, dpr, night, sea, sand, fixed, lampPools, now);
+      const cached = !turning && scenery.draw(ctx, cam, dpr, night, sea, sand, fixed, lampPools, now); // (not mid-turn: it would start the scenery afresh at the passing view)
       let hidden: boolean;
       const upright = (to: CanvasRenderingContext2D, glow?: CanvasRenderingContext2D) => (cached
         ? drawMoving(to, cam, tiles, fixed, spr, v, night, me, glow)

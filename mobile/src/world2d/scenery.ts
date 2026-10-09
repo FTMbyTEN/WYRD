@@ -18,34 +18,78 @@ export class Scenery {
   private pending = '';
   private ax = 0; private az = 0;
   private chunks = new Map<string, Chunk>();
+  /** the view the tiles were drawn for: its zoom, and the rest of it (turn, tilt, night, resolution) */
+  private keyScale = 0; private keyRest = '';
+  /** the previous set of tiles, kept while a zoom settles: shown scaled under the new ones until they're all in */
+  private old: { chunks: Map<string, Chunk>; scale: number; ax: number; az: number } | null = null;
   private seen = 0; // how much of the world's change list has been applied
   private tmp = document.createElement('canvas');
+  /** tile canvases no longer in use, for the next tiles (making a new canvas each time churned memory) */
+  private spare: HTMLCanvasElement[] = [];
+  private drop(k: string) { const ch = this.chunks.get(k); if (ch) { this.chunks.delete(k); if (this.spare.length < MAX) this.spare.push(ch.cv); } }
+  private dropAll() { for (const k of [...this.chunks.keys()]) this.drop(k); }
   private glow = document.createElement('canvas');
   constructor(private world: World) {}
   /** start afresh (a landmark settled on its plot: rare, and it must show at once) */
-  reset() { this.chunks.clear(); }
+  reset() { this.dropAll(); }
 
   /**
    * Lays the cached scenery on [ctx] (already scaled by dpr). Returns false while the camera is turning, tilting or
    * zooming (the caller then draws directly). [started]: when the frame began, for the time budget.
    */
   draw(ctx: CanvasRenderingContext2D, cam: Cam, dpr: number, night: boolean, sea: { p: Float32Array; island: boolean }[], sand: Sand[], fixed: Sprite[], lampPools: Light[], started: number): boolean {
-    const key = `${cam.scale.toFixed(5)}|${cam.yaw.toFixed(5)}|${cam.tilt.toFixed(5)}|${night}|${dpr}`;
+    const rest = `${cam.yaw.toFixed(5)}|${cam.tilt.toFixed(5)}|${night}|${dpr}`, key = `${cam.scale.toFixed(5)}|${rest}`;
     if (key !== this.key) {
-      // wait until the camera holds still for a frame before starting afresh
-      if (key !== this.pending) { this.pending = key; return false; }
-      this.stats.resets++; this.key = key; this.ax = cam.x; this.az = cam.z; this.chunks.clear(); this.seen = this.world.changes.length;
+      // Zooming only (same turn, tilt, light, resolution): the tiles are the same picture at another size, so they're
+      // shown scaled -- exact, and nearly free -- instead of the whole city drawn afresh every frame of the zoom
+      // (zoomed right out that's thousands of buildings a frame: a couple of frames a second)
+      const zooming = rest === this.keyRest && this.chunks.size > 0;
+      if (key !== this.pending) {
+        this.pending = key;
+        if (zooming) { this.scaled(ctx, cam, dpr, this.chunks, this.keyScale, this.ax, this.az); return true; }
+        return false;
+      }
+      // the camera has settled: start afresh -- after a zoom, the old tiles stay underneath until the new ones are in
+      if (zooming) { this.old?.chunks.forEach((ch) => this.spare.length < MAX && this.spare.push(ch.cv)); this.old = { chunks: this.chunks, scale: this.keyScale, ax: this.ax, az: this.az }; this.chunks = new Map(); }
+      else { this.dropAll(); if (this.old) { this.old.chunks.forEach((ch) => this.spare.length < MAX && this.spare.push(ch.cv)); this.old = null; } }
+      this.stats.resets++; this.key = key; this.keyScale = cam.scale; this.keyRest = rest; this.ax = cam.x; this.az = cam.z; this.seen = this.world.changes.length;
     }
     // parts of the map that changed (a tile loaded, a landmark settled): drop the tiles they touch
     while (this.seen < this.world.changes.length) {
       const [x0, x1, z0, z1] = this.world.changes[this.seen++];
-      for (const [k, ch] of this.chunks) if (ch.box[0] < x1 && ch.box[1] > x0 && ch.box[2] < z1 && ch.box[3] > z0) this.chunks.delete(k);
+      for (const [k, ch] of [...this.chunks]) if (ch.box[0] < x1 && ch.box[1] > x0 && ch.box[2] < z1 && ch.box[3] > z0) this.drop(k);
     }
     const a = toScreen(cam, this.ax, this.az);
     const i0 = Math.floor(-a.sx / C), i1 = Math.floor((cam.w - a.sx) / C), j0 = Math.floor(-a.sy / C), j1 = Math.floor((cam.h - a.sy) / C);
     const now = performance.now();
     const render = (i: number, j: number) => this.render(i, j, cam, dpr, night, sea, sand, fixed, lampPools, now);
-    // what's on screen: drawn now if missing
+    // what's on screen. A row of new tiles as the camera slides is drawn at once (cheap); after a turn, tilt or zoom,
+    // when most of the screen is new, the tiles are drawn a few a frame within a time budget and the caller draws the
+    // city directly until they're all in -- drawing the whole screen's worth in one frame stalled slower graphics for
+    // a good part of a second (the drop to a couple of frames a second after moving the camera)
+    let missing = 0, total = 0;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { total++; if (!this.chunks.has(`${i},${j}`)) missing++; }
+    if (missing > total * 0.3) {
+      let made = 0;
+      for (let j = j0; j <= j1 && missing; j++) for (let i = i0; i <= i1 && missing; i++) {
+        if (this.chunks.has(`${i},${j}`)) continue;
+        if (made && performance.now() - started > 8) break; // (always at least one, so it gets there)
+        render(i, j); made++; missing--;
+      }
+      if (missing) {
+        if (!this.old) return false;
+        // the old tiles, scaled, with the new ones laid over as they come
+        this.scaled(ctx, cam, dpr, this.old.chunks, this.old.scale, this.old.ax, this.old.az);
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const ch = this.chunks.get(`${i},${j}`);
+          if (!ch) continue;
+          ch.used = now;
+          ctx.drawImage(ch.cv, Math.round((a.sx + i * C) * dpr) / dpr, Math.round((a.sy + j * C) * dpr) / dpr, C, C);
+        }
+        return true;
+      }
+    }
+    if (this.old) { this.old.chunks.forEach((ch) => this.spare.length < MAX && this.spare.push(ch.cv)); this.old = null; } // (all in: the old set goes)
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const ch = this.chunks.get(`${i},${j}`) ?? render(i, j);
       ch.used = now;
@@ -62,11 +106,21 @@ export class Scenery {
     }
     if (this.chunks.size > MAX) {
       const old = [...this.chunks.entries()].sort((p, q) => p[1].used - q[1].used).slice(0, this.chunks.size - MAX);
-      for (const [k] of old) this.chunks.delete(k);
+      for (const [k] of old) this.drop(k);
     }
     return true;
   }
 
+  /** [chunks], drawn for zoom [scale] round the world point (ax, az), shown at the camera's zoom now (only the zoom may
+   *  differ: the picture is then the same, scaled about that point) */
+  private scaled(ctx: CanvasRenderingContext2D, cam: Cam, dpr: number, chunks: Map<string, Chunk>, scale: number, ax: number, az: number) {
+    const a = toScreen(cam, ax, az), k = cam.scale / scale, S = C * k;
+    for (const ch of chunks.values()) {
+      const x = a.sx + ch.i * S, y = a.sy + ch.j * S;
+      if (x > cam.w || y > cam.h || x + S < 0 || y + S < 0) continue;
+      ctx.drawImage(ch.cv, x, y, S + 0.5 / dpr, S + 0.5 / dpr);
+    }
+  }
   /** (debug) tiles drawn, time spent drawing them, and fresh starts */
   stats = { drawn: 0, ms: 0, resets: 0 };
   private render(i: number, j: number, cam: Cam, dpr: number, night: boolean, sea: { p: Float32Array; island: boolean }[], sand: Sand[], fixed: Sprite[], lampPools: Light[], now: number): Chunk {
@@ -80,8 +134,11 @@ export class Scenery {
     // tall buildings stand on ground further down the screen and reach up into the tile
     const tall = 210 * cam.rise / Math.max(0.1, cam.tilt); // (the tallest: Eko Atlantic's towers, NECOM's mast)
     const vu: View = { minX: v0.minX - tall, maxX: v0.maxX + tall, minZ: v0.minZ - tall, maxZ: v0.maxZ + tall };
-    const cv = document.createElement('canvas'); cv.width = Math.ceil(C * dpr); cv.height = Math.ceil(C * dpr);
+    const cv = this.spare.pop() ?? document.createElement('canvas');
+    const size = Math.ceil(C * dpr);
+    if (cv.width !== size || cv.height !== size) { cv.width = size; cv.height = size; }
     const g = cv.getContext('2d')!;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, size, size);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const tiles = [...this.world.tiles.values()];
     drawGround(g, cc, tiles, sea, v0, sand);

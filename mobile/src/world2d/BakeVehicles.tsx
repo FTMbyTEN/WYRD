@@ -115,6 +115,75 @@ function hover(color: number) {
   under.scale.set(1, 1.9, 1); under.rotation.x = -Math.PI / 2; under.position.y = 0.12; g.add(under);
   return g;
 }
+// ---- WYRD's flyers: the city's flying cars, run by WYRD -- four designs, each with WYRD's mark on top ----
+const tint = new THREE.MeshStandardMaterial({ color: 0x3a7ca5, metalness: 0.3, roughness: 0.08, transparent: true, opacity: 0.85 }); // tinted canopy glass
+const wyrdNeon = new THREE.MeshBasicMaterial({ color: 0xff2bd6 });
+/** WYRD's mark: a glowing magenta W chevron, lying on top at height [y] (towards +z), [s] metres across */
+function wyrdMark(g: THREE.Group, y: number, z: number, s: number) {
+  const w = s / 4;
+  for (const [x, a] of [[-1.5, 0.5], [-0.5, -0.5], [0.5, 0.5], [1.5, -0.5]] as const) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, w * 1.6), wyrdNeon);
+    bar.position.set(x * w * 0.75, y, z); bar.rotation.y = a; g.add(bar);
+  }
+}
+/** a thruster's glow underneath */
+function liftGlow(g: THREE.Group, w: number, l: number, color = 0x38e8ff) {
+  const under = new THREE.Mesh(new THREE.CircleGeometry(1, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55 }));
+  under.scale.set(w, l, 1); under.rotation.x = -Math.PI / 2; under.position.y = 0.12; g.add(under);
+}
+/** WYRD Arrow: a low wedge, a long canopy strip, twin tail fins, neon along its sills */
+function arrow(color: number) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color, metalness: 0.8, roughness: 0.25 });
+  const shape = new THREE.Shape(); shape.moveTo(-1.05, -2.4); shape.lineTo(1.05, -2.4); shape.lineTo(0.3, 2.6); shape.lineTo(-0.3, 2.6); shape.closePath();
+  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.55, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.1, bevelSegments: 3 }), shell);
+  body.rotation.x = -Math.PI / 2; body.position.y = 0.45; g.add(body);
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), tint); canopy.scale.set(0.5, 0.32, 1.1); canopy.position.set(0, 1.1, -0.1); g.add(canopy);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.05, 0.06), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); nose.position.set(0, 0.8, 2.66); g.add(nose);
+  for (const side of [-1, 1]) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.8), shell); fin.position.set(side * 0.7, 1.2, -2.1); fin.rotation.z = side * 0.3; g.add(fin);
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 4.4), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); sill.position.set(side * 1.02, 0.55, 0); g.add(sill);
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 0.05), lamp); h.position.set(side * 0.45, 0.8, 2.6); g.add(h);
+    const t = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.06, 0.05), new THREE.MeshBasicMaterial({ color: 0xff2a48 })); t.position.set(side * 0.55, 0.85, -2.5); g.add(t);
+  }
+  wyrdMark(g, 1.36, -0.9, 0.9);
+  liftGlow(g, 1.3, 2.6);
+  return g;
+}
+/** WYRD Bubble: a round two-seat pod under a glass dome, a neon halo round its waist, three lift pads */
+function bubble(color: number) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color, metalness: 0.7, roughness: 0.3 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 0.95, 0.75, 28), shell); base.scale.set(1, 1, 1.18); base.position.y = 0.62; g.add(base);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.32, 0.12, 28), shell); rim.scale.set(1, 1, 1.18); rim.position.y = 1.02; g.add(rim);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), tint); dome.scale.set(1, 0.85, 1.1); dome.position.y = 1.06; g.add(dome);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(1.27, 0.07, 8, 32), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); halo.rotation.x = Math.PI / 2; halo.scale.set(1, 1.2, 1); halo.position.y = 0.88; g.add(halo);
+  for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI * 2; const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.2, 12), shell); pad.position.set(Math.sin(a) * 0.8, 0.3, Math.cos(a) * 0.9); g.add(pad); }
+  wyrdMark(g, 1.12, -0.95, 0.55); // (on the rim, behind the dome)
+  liftGlow(g, 1.4, 1.6, 0xff2bd6);
+  return g;
+}
+/** WYRD Hauler: a long cargo flyer, a cab up front and a box behind, a ducted fan at each corner */
+function hauler(color: number) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color, metalness: 0.6, roughness: 0.35 });
+  const box = new THREE.Mesh(new RoundedBoxGeometry(1.9, 1.5, 3.4, 3, 0.15), shell); box.position.set(0, 1.25, -0.9); g.add(box);
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(1.8, 1.1, 1.6, 3, 0.3), shell); cab.position.set(0, 1.05, 1.6); g.add(cab);
+  const screen = new THREE.Mesh(new RoundedBoxGeometry(1.6, 0.55, 0.1, 2, 0.04), glass); screen.position.set(0, 1.35, 2.38); screen.rotation.x = -0.3; g.add(screen);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.12, 3.2), new THREE.MeshBasicMaterial({ color: 0x00e5ff })); stripe.position.set(0, 1.05, -0.9); g.add(stripe);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const duct = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.1, 8, 20), new THREE.MeshStandardMaterial({ color: 0x2b313b, metalness: 0.7, roughness: 0.4 }));
+    duct.rotation.x = Math.PI / 2; duct.scale.set(1.25, 1.25, 1); duct.position.set(sx * 1.55, 2.15, sz * 1.75 - 0.3); g.add(duct);
+    const fan = new THREE.Mesh(new THREE.CircleGeometry(0.6, 16), new THREE.MeshBasicMaterial({ color: 0x38e8ff, transparent: true, opacity: 0.7 }));
+    fan.rotation.x = -Math.PI / 2; fan.position.set(sx * 1.55, 2.14, sz * 1.75 - 0.3); g.add(fan);
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.12, 0.16), shell); strut.position.set(sx * 1.1, 1.95, sz * 1.75 - 0.3); g.add(strut);
+  }
+  wyrdMark(g, 2.02, -0.9, 1.1);
+  liftGlow(g, 1.6, 3.0);
+  return g;
+}
+/** WYRD Cab: the 3D city's hover-car, with WYRD's mark on its canopy */
+function cab(color: number) { const g = hover(color); wyrdMark(g, 1.58, -0.3, 0.8); return g; }
 /** front towards +x in the 3D city's models: turn them to face +z like the rest */
 const turned = (o: THREE.Object3D) => { const g = new THREE.Group(); o.rotation.y = -Math.PI / 2; g.add(o); return g; };
 
@@ -130,10 +199,15 @@ const LIST: { name: string; make: () => THREE.Object3D; span: number }[] = [
   { name: 'okada', make: () => turned(makeOkada(false).group), span: 3.2 },
   { name: 'keke', make: () => turned(makeKeke(false).group), span: 3.8 },
   { name: 'boat-taxi', make: () => boat(), span: 10.5 },
-  { name: 'hover-navy', make: () => hover(0x1b2440), span: 6.4 },
-  { name: 'hover-pearl', make: () => hover(0xe6eaf0), span: 6.4 },
-  { name: 'hover-crimson', make: () => hover(0xb3122e), span: 6.4 },
-  { name: 'hover-gold', make: () => hover(0xc9a227), span: 6.4 },
+  // WYRD's flyers: four designs, two paints each
+  { name: 'wyrd-cab-navy', make: () => cab(0x1b2440), span: 6.4 },
+  { name: 'wyrd-cab-pearl', make: () => cab(0xe6eaf0), span: 6.4 },
+  { name: 'wyrd-arrow-crimson', make: () => arrow(0xb3122e), span: 6.4 },
+  { name: 'wyrd-arrow-black', make: () => arrow(0x15181f), span: 6.4 },
+  { name: 'wyrd-bubble-gold', make: () => bubble(0xc9a227), span: 4.6 },
+  { name: 'wyrd-bubble-mint', make: () => bubble(0x3fb8a0), span: 4.6 },
+  { name: 'wyrd-hauler-white', make: () => hauler(0xeef1f5), span: 7.4 },
+  { name: 'wyrd-hauler-orange', make: () => hauler(0xe0742c), span: 7.4 },
 ];
 
 export function BakeVehicles() {

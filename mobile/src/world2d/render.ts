@@ -41,7 +41,8 @@ const vehGround = (span: number, pitch: number) => 0.5 + (0.06 * span * Math.cos
 export const VEH_SPAN: Record<string, number> = {
   'car-red': 6.2, 'car-blue': 6.2, 'car-white': 6.2, 'car-purple': 6.2, 'car-grey': 6.2, 'car-taxi': 6.2,
   'car-danfo': 6.8, 'bus-brt': 14.5, okada: 3.2, keke: 3.8, 'boat-taxi': 10.5,
-  'hover-navy': 6.4, 'hover-pearl': 6.4, 'hover-crimson': 6.4, 'hover-gold': 6.4,
+  'wyrd-cab-navy': 6.4, 'wyrd-cab-pearl': 6.4, 'wyrd-arrow-crimson': 6.4, 'wyrd-arrow-black': 6.4,
+  'wyrd-bubble-gold': 4.6, 'wyrd-bubble-mint': 4.6, 'wyrd-hauler-white': 7.4, 'wyrd-hauler-orange': 7.4,
 };
 const VEH_SIZE = 1.25; // a touch larger than life, like the poster
 const DAY = {
@@ -504,28 +505,39 @@ export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
   // a still thing is drawn again over a moving one only if it overlaps it on screen and stands in front of it
   const covers = (o: Boxed) => live.some((m) => o.x1 > m.x0 && o.x0 < m.x1 && o.y1 > m.y0 && o.y0 < m.y1 && inFront(c, o, m));
   const still: Boxed[] = [];
+  // Zoomed right out, people and cars are a few pixels: they're simply drawn over the city (checking thousands of
+  // buildings against them every frame was what made zooming out crawl). Closer in, only what stands near something
+  // moving is considered at all: inside the box round all of them, with room for a tall building's height.
+  const occlude = c.scale >= 7;
+  const near = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  for (const m of live) { near.x0 = Math.min(near.x0, m.x0); near.y0 = Math.min(near.y0, m.y0); near.x1 = Math.max(near.x1, m.x1); near.y1 = Math.max(near.y1, m.y1); }
+  const pad = 140 * c.scale * c.rise / 10; // (how far up the screen a tall block reaches)
+  near.x0 -= pad; near.x1 += pad; near.y0 -= pad; near.y1 += pad * 2;
+  const nearby = (o: { x0: number; x1: number; y0: number; y1: number }) => o.x1 > near.x0 && o.x0 < near.x1 && o.y1 > near.y0 && o.y0 < near.y1;
   for (const t of tiles) {
     for (const b of t.blds) {
       if (b.hide || !inView(v, b.minX, b.maxX, b.minZ, b.maxZ)) continue;
+      if (!occlude && !f) continue;
       const bx = buildingBox(c, b);
       if (f) {
         let rx0 = Infinity, rx1 = -Infinity, rz0 = Infinity;
         for (let i = 0; i < b.p.length; i += 2) { const q = turn(c, b.p[i], b.p[i + 1]); if (q.rx < rx0) rx0 = q.rx; if (q.rx > rx1) rx1 = q.rx; if (q.rz < rz0) rz0 = q.rz; }
         if (bx.z > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3) hidden = true;
       }
-      still.push({ ...bx, foot: b.p, draw: () => buildingAgain(ctx, c, b, bx, night, glow) });
+      if (occlude && nearby(bx)) still.push({ ...bx, foot: b.p, draw: () => buildingAgain(ctx, c, b, bx, night, glow) });
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
-      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face };
-      still.push({ ...pictureBox(c, sp), foot: [p.x, p.z], draw: () => picture(ctx, c, sp) });
+      if (!occlude) continue;
+      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, pb = pictureBox(c, sp);
+      if (nearby(pb)) still.push({ ...pb, foot: [p.x, p.z], draw: () => picture(ctx, c, sp) });
     }
   }
   for (const s of fixed) {
     if (s.x < v.minX - 200 || s.x > v.maxX + 200 || s.z < v.minZ - 200 || s.z > v.maxZ + 200) continue;
     const bx = pictureBox(c, s);
     if (f && s.scale && s.up && bx.z > f.rz) { const q = turn(c, focus!.x, focus!.z), fy = q.rz * c.scale * c.tilt + c.h / 2, fx = q.rx * c.scale + c.w / 2; if (fx > bx.x0 && fx < bx.x1 && fy > bx.y0 && fy < bx.y1) hidden = true; }
-    still.push({ ...bx, foot: footOf(s), draw: () => picture(ctx, c, s) });
+    if (occlude && nearby(bx)) still.push({ ...bx, foot: footOf(s), draw: () => picture(ctx, c, s) });
   }
   // what must be drawn again: every still thing standing in front of something moving -- and then everything standing
   // in front of *those* too, or a building drawn again over a passer-by would paint over the building in front of it
@@ -557,6 +569,7 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   let hidden = false;
   nightNow = night; glowNow = glow ?? null;
   const items: Boxed[] = [];
+  const quick = c.scale < 9; // (this draws the whole city each frame -- zoomed out, the light version)
   const f = focus ? turn(c, focus.x, focus.z) : null;
   for (const t of tiles) {
     for (const b of t.blds) {
@@ -569,10 +582,10 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
       }
       const hides = !!f && rz1 > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3;
       if (hides && !b.hide) hidden = true;
-      items.push({ ...buildingBox(c, b), foot: b.p, draw: () => building(ctx, c, b, night, glow) });
+      items.push({ ...buildingBox(c, b), foot: b.p, draw: () => building(ctx, c, b, night, glow, quick) });
     }
     for (const p of t.props) {
-      if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
+      if (quick || p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue; // (zoomed out in motion: no street furniture)
       const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face };
       items.push({ ...pictureBox(c, sp), foot: [p.x, p.z], draw: () => picture(ctx, c, sp) });
     }
@@ -680,7 +693,10 @@ function outsides(b: Tile['blds'][number]) {
   outsideOf.set(b, ws);
   return ws;
 }
-function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], night: boolean, glow?: CanvasRenderingContext2D) {
+/** [quick]: the light version, for a city drawn afresh every frame while the camera turns zoomed out -- shape, colour,
+ *  light and shade and roof, without the detail that's too small to see from there (windows, shopfronts, doors, the
+ *  shadow, the roof's clutter) */
+function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], night: boolean, glow?: CanvasRenderingContext2D, quick = false) {
   if (b.hide) return;
   const k = c.scale, up = b.h * k * c.rise;
   const p = b.p, n = p.length / 2;
@@ -689,12 +705,14 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
   const tower = b.style === 'tower', house = b.style === 'house';
   const wallColor = tower ? GLASS[Math.floor(b.tone * GLASS.length)] : WALLS[Math.floor(b.tone * WALLS.length)];
   // soft shadow to the lower right
-  ctx.beginPath();
-  // (cast away from the fixed sun, along the ground, so shadows stay put as the camera turns)
-  const shx = 0.75 * b.h * 0.3, shz = -0.66 * b.h * 0.3;
-  for (let i = 0; i < n; i++) { const q = toScreen(c, p[i * 2] + shx, p[i * 2 + 1] + shz); if (i) ctx.lineTo(q.sx, q.sy); else ctx.moveTo(q.sx, q.sy); }
-  ctx.closePath(); ctx.fillStyle = DAY.shadow; ctx.fill();
-  const detailed = k > 2.6; // windows, doors and roof details once they'd be a few pixels
+  if (!quick) {
+    ctx.beginPath();
+    // (cast away from the fixed sun, along the ground, so shadows stay put as the camera turns)
+    const shx = 0.75 * b.h * 0.3, shz = -0.66 * b.h * 0.3;
+    for (let i = 0; i < n; i++) { const q = toScreen(c, p[i * 2] + shx, p[i * 2 + 1] + shz); if (i) ctx.lineTo(q.sx, q.sy); else ctx.moveTo(q.sx, q.sy); }
+    ctx.closePath(); ctx.fillStyle = DAY.shadow; ctx.fill();
+  }
+  const detailed = k > 2.6 && !quick; // windows, doors and roof details once they'd be a few pixels
   const pat = detailed ? facade(ctx, b.style, wallColor, night) : null;
   const shop = detailed && b.style === 'shops' ? shopfront(ctx, AWNINGS[Math.floor(b.tone * 97) % AWNINGS.length], night) : null;
   // walls whose outside faces the camera, painted far to near so a building never covers itself
