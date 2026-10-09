@@ -327,38 +327,55 @@ function spanAt(rx: Float64Array, rz: Float64Array, m: number): [number, number]
  * long building and a landmark beside it swap places as the camera turns. Where footprints can't say (they overlap,
  * or don't share a line of sight), the depth key decides.
  */
-function inOrder<T extends Boxed>(c: Cam, items: T[]): T[] {
-  const n = items.length;
-  if (n < 2) return items;
-  const co = Math.cos(c.yaw), si = Math.sin(c.yaw);
-  const RX: (Float64Array | null)[] = [], RZ: (Float64Array | null)[] = [], lo: number[] = [], hi: number[] = [];
-  for (const it of items) {
-    const f = it.foot;
-    if (!f || f.length < 2) { RX.push(null); RZ.push(null); lo.push(0); hi.push(0); continue; }
-    const k = f.length >> 1, rx = new Float64Array(k), rz = new Float64Array(k);
+/** a thing's footprint as the camera sees it (turned), worked out once per thing per frame (things are made afresh
+ *  each frame, so keying by the thing itself keeps it to that frame) */
+type Seen = { rx: Float64Array; rz: Float64Array; lo: number; hi: number } | null;
+const seenOf = new WeakMap<Boxed, Seen>();
+function seen(c: Cam, it: Boxed): Seen {
+  let v = seenOf.get(it);
+  if (v !== undefined) return v;
+  const f = it.foot;
+  if (!f || f.length < 2) v = null;
+  else {
+    const co = Math.cos(c.yaw), si = Math.sin(c.yaw), k = f.length >> 1, rx = new Float64Array(k), rz = new Float64Array(k);
     let a = Infinity, b = -Infinity;
     for (let i = 0; i < k; i++) {
       const dx = f[i * 2] - c.x, dz = f[i * 2 + 1] - c.z;
       rx[i] = co * dx - si * dz; rz[i] = si * dx + co * dz;
       if (rx[i] < a) a = rx[i]; if (rx[i] > b) b = rx[i];
     }
-    RX.push(rx); RZ.push(rz); lo.push(a); hi.push(b);
+    v = { rx, rz, lo: a, hi: b };
   }
-  /** -1: i is behind j; 1: j is behind i; 0: the footprints can't tell */
-  const rel = (i: number, j: number) => {
-    const ai = RX[i], aj = RX[j];
-    if (!ai || !aj) return 0;
-    let m: number;
-    const l = Math.max(lo[i], lo[j]), h = Math.min(hi[i], hi[j]);
-    if (l <= h) m = (l + h) / 2;
-    else if (ai.length === 1) m = Math.min(hi[j], Math.max(lo[j], lo[i])); // a point beside a footprint: the footprint's nearest side
-    else if (aj.length === 1) m = Math.min(hi[i], Math.max(lo[i], lo[j]));
-    else return 0;
-    const [i0, i1] = spanAt(ai, RZ[i]!, m), [j0, j1] = spanAt(aj, RZ[j]!, m);
-    if (i1 <= j0 + 0.05) return -1;
-    if (j1 <= i0 + 0.05) return 1;
-    return 0;
-  };
+  seenOf.set(it, v);
+  return v;
+}
+/** -1: [A] is behind [B]; 1: [B] is behind [A]; 0: their footprints can't tell */
+function relate(A: Seen, B: Seen): number {
+  if (!A || !B) return 0;
+  const ai = A.rx, aj = B.rx, RZi = A.rz, RZj = B.rz;
+  let ms: number[];
+  const l = Math.max(A.lo, B.lo), h = Math.min(A.hi, B.hi);
+  if (l <= h) ms = [l + (h - l) * 0.2, (l + h) / 2, l + (h - l) * 0.8]; // three lines of sight through both (an L or U-shaped block
+  // can wrap round its neighbour along any one of them)
+  else if (ai.length === 1) ms = [Math.min(B.hi, Math.max(B.lo, A.lo))]; // a point beside a footprint: the footprint's nearest side
+  else if (aj.length === 1) ms = [Math.min(A.hi, Math.max(A.lo, B.lo))];
+  else return 0;
+  // along each line, which one is met first from the camera: by where most of each lies there, so two blocks sharing a
+  // wall (their spans touching, or overlapping by a hair in the map data) still come out the same way every frame
+  let vote = 0;
+  for (const m of ms) {
+    const [i0, i1] = spanAt(ai, RZi, m), [j0, j1] = spanAt(aj, RZj, m);
+    const ov = Math.min(i1, j1) - Math.max(i0, j0), short = Math.min(i1 - i0, j1 - j0);
+    if (ov > 0.5 && ov > short * 0.5) continue; // really standing in each other here: this line can't tell
+    vote += (i0 + i1) / 2 < (j0 + j1) / 2 ? -1 : 1;
+  }
+  return vote < 0 ? -1 : vote > 0 ? 1 : 0;
+}
+function inOrder<T extends Boxed>(c: Cam, items: T[]): T[] {
+  const n = items.length;
+  if (n < 2) return items;
+  const S = items.map((it) => seen(c, it));
+  const rel = (i: number, j: number) => relate(S[i], S[j]);
   // which must be painted before which, among things that overlap on screen
   const after: number[][] = items.map(() => []), need = new Int32Array(n);
   const byX = items.map((_, i) => i).sort((p, q) => items[p].x0 - items[q].x0);
@@ -395,8 +412,8 @@ function inOrder<T extends Boxed>(c: Cam, items: T[]): T[] {
 }
 /** whether [a] stands in front of [b] (by footprints, else by depth key) */
 function inFront(c: Cam, a: Boxed, b: Boxed) {
-  const o = inOrder(c, [b, a]);
-  return o[1] === a;
+  const r = relate(seen(c, a), seen(c, b));
+  return r !== 0 ? r > 0 : a.z > b.z;
 }
 /** a model's footprint on the ground: its plan rectangle, turned to [heading] and stood at (x, z) */
 function modelFoot(md: Model, x: number, z: number, heading: number, size: number) {
@@ -485,6 +502,7 @@ export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
   let hidden = false;
   // a still thing is drawn again over a moving one only if it overlaps it on screen and stands in front of it
   const covers = (o: Boxed) => live.some((m) => o.x1 > m.x0 && o.x0 < m.x1 && o.y1 > m.y0 && o.y0 < m.y1 && inFront(c, o, m));
+  const still: Boxed[] = [];
   for (const t of tiles) {
     for (const b of t.blds) {
       if (b.hide || !inView(v, b.minX, b.maxX, b.minZ, b.maxZ)) continue;
@@ -494,22 +512,32 @@ export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
         for (let i = 0; i < b.p.length; i += 2) { const q = turn(c, b.p[i], b.p[i + 1]); if (q.rx < rx0) rx0 = q.rx; if (q.rx > rx1) rx1 = q.rx; if (q.rz < rz0) rz0 = q.rz; }
         if (bx.z > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3) hidden = true;
       }
-      const it: Boxed = { ...bx, foot: b.p, draw: () => building(ctx, c, b, night, glow) };
-      if (covers(it)) { redrawn++; items.push(it); }
+      still.push({ ...bx, foot: b.p, draw: () => buildingAgain(ctx, c, b, bx, night, glow) });
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
-      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, it: Boxed = { ...pictureBox(c, sp), foot: [p.x, p.z], draw: () => picture(ctx, c, sp) };
-      if (covers(it)) items.push(it);
+      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face };
+      still.push({ ...pictureBox(c, sp), foot: [p.x, p.z], draw: () => picture(ctx, c, sp) });
     }
   }
   for (const s of fixed) {
     if (s.x < v.minX - 200 || s.x > v.maxX + 200 || s.z < v.minZ - 200 || s.z > v.maxZ + 200) continue;
     const bx = pictureBox(c, s);
     if (f && s.scale && s.up && bx.z > f.rz) { const q = turn(c, focus!.x, focus!.z), fy = q.rz * c.scale * c.tilt + c.h / 2, fx = q.rx * c.scale + c.w / 2; if (fx > bx.x0 && fx < bx.x1 && fy > bx.y0 && fy < bx.y1) hidden = true; }
-    const it: Boxed = { ...bx, foot: footOf(s), draw: () => picture(ctx, c, s) };
-    if (covers(it)) items.push(it);
+    still.push({ ...bx, foot: footOf(s), draw: () => picture(ctx, c, s) });
   }
+  // what must be drawn again: every still thing standing in front of something moving -- and then everything standing
+  // in front of *those* too, or a building drawn again over a passer-by would paint over the building in front of it
+  // (that's what made blocks seem to jump in and out as people and cars went by)
+  const overlap = (a: Boxed, b: Boxed) => a.x1 > b.x0 && a.x0 < b.x1 && a.y1 > b.y0 && a.y0 < b.y1;
+  const picked = new Set<Boxed>(), queue: Boxed[] = [];
+  for (const o of still) if (covers(o)) { picked.add(o); queue.push(o); }
+  while (queue.length) {
+    const q = queue.pop()!;
+    for (const o of still) if (!picked.has(o) && overlap(o, q) && inFront(c, o, q)) { picked.add(o); queue.push(o); }
+  }
+  for (const o of picked) items.push(o);
+  redrawn = picked.size;
   liveBox.x0 = Infinity; liveBox.y0 = Infinity; liveBox.x1 = -Infinity; liveBox.y1 = -Infinity;
   for (const it of items) { liveBox.x0 = Math.min(liveBox.x0, it.x0); liveBox.y0 = Math.min(liveBox.y0, it.y0); liveBox.x1 = Math.max(liveBox.x1, it.x1); liveBox.y1 = Math.max(liveBox.y1, it.y1); }
   for (const it of inOrder(c, items)) it.draw();
@@ -567,11 +595,67 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   return hidden;
 }
 /** The player seen through whatever hides them: a soft silhouette drawn over everything. */
+/**
+ * A flying car: its soft shadow on the ground far below, a thruster glow under it (cyan by day, bright at night),
+ * then the car itself, held [s.lift] metres up. Flying cars are drawn over the city (they fly above the roofs).
+ */
+export function drawFlyer(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite, night: boolean) {
+  const k = c.scale, lift = s.lift ?? 30;
+  const g = toScreen(c, s.x, s.z, 0), a = toScreen(c, s.x, s.z, lift);
+  if (a.sx < -80 || a.sx > c.w + 80 || a.sy < -80 || a.sy > c.h + 80) return;
+  // the shadow: smaller and fainter the higher it flies
+  const sw = 3.2 * k * (1 - Math.min(0.5, lift / 140));
+  ctx.fillStyle = `rgba(10,16,30,${(0.28 - Math.min(0.18, lift / 400)).toFixed(3)})`;
+  ctx.beginPath(); ctx.ellipse(g.sx, g.sy, sw, sw * c.tilt * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+  // the thrusters
+  const glow = glowSprite(night ? 'rgba(0,240,255,0.9)' : 'rgba(0,240,255,0.45)'), r = 4.5 * k;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(glow, a.sx - r, a.sy - r * c.tilt * 0.8 + 0.6 * k, r * 2, r * 2 * c.tilt * 0.8);
+  ctx.restore();
+  picture(ctx, c, s);
+}
 export function drawGhost(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   ctx.save();
   ctx.globalAlpha = 0.55;
   picture(ctx, c, s);
   ctx.restore();
+}
+/**
+ * A building drawn again over something passing behind it, from a picture of it kept for this view: the same pixels
+ * as drawing it, at a fraction of the cost -- with the camera at rest the same few buildings are drawn again every
+ * frame as people and cars go by. The picture holds for the camera's turn, tilt and zoom (not its position: it's
+ * placed relative to the building), so walking past keeps it; a new view makes it anew.
+ */
+const buildingPics = new Map<object, { key: string; img: HTMLCanvasElement; glow: HTMLCanvasElement | null; dx: number; dy: number; w: number; h: number; used: number }>();
+function buildingAgain(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], bx: { x0: number; x1: number; y0: number; y1: number }, night: boolean, glow?: CanvasRenderingContext2D) {
+  const t = ctx.getTransform(), pr = Math.hypot(t.a, t.b) || 1;
+  const key = `${c.yaw}|${c.tilt}|${c.scale}|${pr}|${night ? 1 : 0}|${glow ? 1 : 0}`;
+  const at = toScreen(c, b.cx, b.cz);
+  // its box, with the shadow it casts (away from the sun, along the ground)
+  const sh = toScreen(c, b.cx + 0.75 * b.h * 0.3, b.cz - 0.66 * b.h * 0.3), sx = sh.sx - at.sx, sy = sh.sy - at.sy;
+  const x0 = Math.min(bx.x0, bx.x0 + sx) - 4, x1 = Math.max(bx.x1, bx.x1 + sx) + 4, y0 = Math.min(bx.y0, bx.y0 + sy) - 4, y1 = Math.max(bx.y1, bx.y1 + sy) + 4;
+  const w = x1 - x0, h = y1 - y0;
+  if (w * h * pr * pr > 1.5e6) { building(ctx, c, b, night, glow); return; } // (huge on screen: just draw it)
+  let p = buildingPics.get(b);
+  if (!p || p.key !== key) {
+    const make = (old?: HTMLCanvasElement | null) => { const cv = old ?? document.createElement('canvas'); cv.width = Math.ceil(w * pr); cv.height = Math.ceil(h * pr); return cv; };
+    const img = make(p?.img), gl = glow ? make(p?.glow) : null;
+    const g = img.getContext('2d')!, gg = gl ? gl.getContext('2d')! : null;
+    for (const q of [g, gg]) if (q) { q.setTransform(pr, 0, 0, pr, -x0 * pr, -y0 * pr); }
+    building(g, c, b, night, gg ?? undefined);
+    p = { key, img, glow: gl, dx: x0 - at.sx, dy: y0 - at.sy, w, h, used: 0 };
+    buildingPics.set(b, p);
+    if (buildingPics.size > 60) { // keep the most recently used
+      const old = [...buildingPics.entries()].sort((a, z) => a[1].used - z[1].used).slice(0, buildingPics.size - 60);
+      for (const [k] of old) buildingPics.delete(k);
+    }
+  }
+  p.used = performance.now();
+  ctx.drawImage(p.img, at.sx + p.dx, at.sy + p.dy, p.w, p.h);
+  if (glow && p.glow) {
+    glow.globalCompositeOperation = 'destination-out'; glow.drawImage(p.img, at.sx + p.dx, at.sy + p.dy, p.w, p.h);
+    glow.globalCompositeOperation = 'source-over'; glow.drawImage(p.glow, at.sx + p.dx, at.sy + p.dy, p.w, p.h);
+  }
 }
 /** a building's walls with the way each faces out -- worked out once (it never changes; finding it each frame, for
  *  every wall of every building, was a good part of the cost of turning the camera) */

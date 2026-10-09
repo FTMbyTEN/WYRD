@@ -444,6 +444,8 @@ export const api = {
     callEndpoint<string>('city', 'address', { channel, text, situation: JSON.stringify(situation) }).then((j) => JSON.parse(j) as CityDecree),
   cityStatus: () => callEndpoint<string>('city', 'status', {}).then((j) => JSON.parse(j) as CityDecree),
   cityPulse: () => callEndpoint<void>('city', 'pulse', {}),
+  /** WYRD's live wire to every player: what's happened in the city since item [since] (0: the latest few) */
+  cityWire: (since: number) => callEndpoint<string>('city', 'wire', { since }).then((j) => JSON.parse(j) as { items: { id: number; at: string; kind: 'deed' | 'event' | 'pulse'; text: string }[]; online: number; last: number }),
   cityWallet: () => callEndpoint<string>('city', 'wallet', {}).then((j) => JSON.parse(j) as CityWallet),
   cityHomes: () => callEndpoint<string>('city', 'homes', {}).then((j) => JSON.parse(j) as CityHome[]),
   cityTakeHome: (slug: string, mode: 'rent' | 'own') => callEndpoint<string>('city', 'takeHome', { slug, mode }).then((j) => JSON.parse(j) as CityWallet | { error: string }),

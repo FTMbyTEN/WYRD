@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { DISTRICTS, LANDMARKS, toXZ } from './geo';
 import { modelFor } from './mesh';
 import { place, planRect } from './place';
-import { KIND, World, along, inPoly, type Bld, type Road } from './tiles';
+import { KIND, World, along, crosses, inPoly, type Bld, type Road } from './tiles';
 import { lookFor, type Look } from './person';
 import { CityMap, type Overview } from './CityMap';
 import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './story';
@@ -16,7 +16,7 @@ import { Radio, STATIONS, type Station } from './radio';
 import { Scenery } from './scenery';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
-import { type Light, drawMoving, redrawn, liveBox, lightPools, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
+import { type Light, depth, drawFlyer, drawMoving, redrawn, liveBox, lightPools, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
 /**
  * NAIJA 2099 in 2D: the real Lagos from OpenStreetMap, seen from a tilted bird's-eye view in the
  * clean-minimal look, by day and as a neon city by night.
@@ -30,6 +30,9 @@ const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.
 type Car = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; lane: number; x: number; z: number; rot: number };
 type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side: number; x: number; z: number; left: boolean; look: Look; heading: number };
 type Boat = { x: number; z: number; a: number; v: number };
+/** a flying car: where it is, how high, which way and how fast it flies */
+type Flyer = { x: number; z: number; y: number; h: number; v: number; sprite: string };
+const FLYER_SPRITES = ['car-red', 'car-blue', 'car-white', 'car-purple', 'car-grey', 'car-taxi'];
 type Place = { k: string; n: string | null; x: number; z: number };
 type Job =
   | { type: 'delivery'; id: string; pick: Place; drop: Place; carrying: boolean; limit: number; started: number; dist: number }
@@ -89,6 +92,8 @@ function Game({ onExit }: { onExit: () => void }) {
   const [story, setStory] = useState<Story | null>(null);
   const [standing, setStanding] = useState<false | 'standing' | 'life'>(false);
   const [wyrd, setWyrd] = useState<string | null>(null); // WYRD speaking: city bulletins and its asides
+  const [wyrdLive, setWyrdLive] = useState(false); // ...off the live wire
+  const [online, setOnline] = useState(0); // citizens on the streets now (from the wire)
   const [wyrdOpen, setWyrdOpen] = useState(false); // the conversation with WYRD (T)
   const radio = useRef<Radio | null>(null); // FM (Q)
   const [onAir, setOnAir] = useState<Station | null>(null);
@@ -145,10 +150,27 @@ function Game({ onExit }: { onExit: () => void }) {
     const scenery = new Scenery(world);
     let alive = true;
     const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), Math.max(3200, t.length * 55)); };
-    const wyrdSay = (t: string) => { if (t.startsWith('WYRD city bulletin')) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
+    const wyrdSay = (t: string, live = false) => { if (t.startsWith('WYRD city bulletin') || live) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') || live ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setWyrdLive(live); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
     wyrdRef.current = wyrdSay;
-    // WYRD keeps you company: now and then an aside, in the voice of its real diary
-    const aside = setInterval(() => { if (!document.hidden) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
+    // WYRD's live wire, the same for everyone in the city: what's happening now (citizens settling missions, city
+    // events, WYRD checking in with the hour and who's out), asked for every 20 s
+    let wireAt = 0, wireUp = false;
+    const pollWire = () => {
+      if (document.hidden) return;
+      api.cityWire(wireAt).then((r) => {
+        const first = !wireUp; wireUp = true;
+        const fresh = r.items.filter((i) => i.id > wireAt);
+        if (r.last) wireAt = Math.max(wireAt, r.last);
+        setOnline(r.online);
+        // on joining, only the latest is said aloud; anything newer comes in as it happens
+        if (first) { for (const i of fresh.slice(0, -1)) addWyrd({ from: 'bulletin', text: i.text, at: Date.parse(i.at) || Date.now() }); const l = fresh[fresh.length - 1]; if (l) wyrdSay(l.text, true); }
+        else fresh.forEach((i, k) => setTimeout(() => { if (alive) wyrdSay(i.text, true); }, k * 7000));
+      }).catch(() => {});
+    };
+    pollWire();
+    const wire = setInterval(pollWire, 20000);
+    // and, off the wire (offline), an aside now and then in the voice of its real diary
+    const aside = setInterval(() => { if (!document.hidden && !wireUp) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
     // the landmarks clear their plots of the map's own small buildings
     const marks = LANDMARKS.map((l) => { const p = toXZ(l.at); const md = modelFor(l.id); return { ...landmarkSprite(l.id, l.sprite, p.x, p.z, l.width), width: md ? md.radius * 2 : l.width, open: !!l.open, snapped: false, model: md ? l.id : undefined, heading: 0, size: 1 }; });
     // each famous building stands on its real footprint: once its tile is in, the biggest building
@@ -209,6 +231,7 @@ function Game({ onExit }: { onExit: () => void }) {
             let on = inPoly(plan, b.cx, b.cz);
             for (let i = 0; !on && i < b.p.length; i += 2) on = inPoly(plan, b.p[i], b.p[i + 1]);
             for (let i = 0; !on && i < plan.length; i += 2) on = inPoly(b.p, plan[i], plan[i + 1]);
+            if (!on) on = crosses(plan, Float32Array.from([...b.p, b.p[0], b.p[1]])); // (or only edges crossing)
             if (on) b.hide = true;
           }
           // and the street furniture on it (a kiosk on the cathedral's steps)
@@ -312,7 +335,7 @@ function Game({ onExit }: { onExit: () => void }) {
     let pitch = Math.asin(0.6);
     const cam: Cam = { x: me.x, z: me.z, scale: 16, w: 0, h: 0, dpr: 1, yaw: 0, tilt: Math.sin(pitch), rise: Math.cos(pitch) };
     let zoom = 16; // px per metre: framed like the poster, close on the street
-    const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [];
+    const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [], flyers: Flyer[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
     (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery, cam,
@@ -324,11 +347,12 @@ function Game({ onExit }: { onExit: () => void }) {
         if (zm != null) { zoom = zm; cam.scale = zm; }
       } };
     // cars per 100 m of road, by kind: Third Mainland and the expressways are packed, side streets nearly empty
-    const DENSITY = [3.2, 2.4, 0.7, 0.3, 0.1];
+    // (half what it was: the roads of 2099 are lighter -- much of the traffic has taken to the air)
+    const DENSITY = [1.6, 1.2, 0.35, 0.15, 0.05];
     let roadPool: Road[] = [], poolAt = { x: Infinity, z: 0 }, wanted = 0, poolTime = 0;
     const refreshPool = () => {
       roadPool = world.roadsNear(me.x, me.z, 170, KIND.tertiary).filter((r) => r.kind !== KIND.link);
-      wanted = Math.min(48, Math.round(roadPool.reduce((n, r) => n + (r.len * (DENSITY[r.kind] ?? 0)) / 100, 0) * 0.55));
+      wanted = Math.min(24, Math.round(roadPool.reduce((n, r) => n + (r.len * (DENSITY[r.kind] ?? 0)) / 100, 0) * 0.55));
       poolAt = { x: me.x, z: me.z }; poolTime = performance.now();
     };
     const spawnCar = (_near: { x: number; z: number }) => {
@@ -509,10 +533,14 @@ function Game({ onExit }: { onExit: () => void }) {
     let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1, lastHazeNight = false, lastLive = { x0: 0, y0: 0, x1: 99999, y1: 99999 };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      // the world runs on real time, however long a frame takes to draw (turning the camera redraws the whole city):
+      // a slow frame advances it in several small steps instead of slowing it down -- up to a quarter-second at once
+      const realDt = Math.min(0.25, (now - last) / 1000); last = now;
+      const steps = Math.max(1, Math.ceil(realDt / 0.05));
+      let dt = realDt / steps;
       // sharpness that keeps up: full device resolution while frames are quick; standard resolution on
       // slower graphics (a 1.25x screen draws half again as many pixels), judged over the last couple of seconds
-      slowAvg = slowAvg * 0.97 + Math.min(100, dt * 1000) * 0.03;
+      slowAvg = slowAvg * 0.97 + Math.min(100, realDt * 1000) * 0.03;
       if (slowAvg > 24 && quality > 1 && now - qualityAt > 3000) { quality = 1; qualityAt = now; }
       // while the camera turns, tips or zooms the whole city is drawn afresh every frame (no cached scenery fits a
       // view that keeps changing): it's drawn at three-quarters resolution then -- in motion the eye can't tell, and
@@ -522,106 +550,120 @@ function Game({ onExit }: { onExit: () => void }) {
       const W = canvas.clientWidth, H = canvas.clientHeight;
       if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // move
-      const ax = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
-      const az = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
-      if (!boardRef.current) {
-        if (me.car) {
-          const c = me.car;
-          c.v += (-az) * (az < 0 ? 9 : 14) * dt;
-          if (!az) c.v *= 1 - 0.8 * dt;
-          c.v = Math.max(-5, Math.min(24, c.v));
-          c.rot -= ax * dt * 2.2 * Math.min(1, Math.abs(c.v) / 6) * Math.sign(c.v || 1);
-          const nx = me.x + Math.sin(c.rot) * c.v * dt, nz = me.z + Math.cos(c.rot) * c.v * dt;
-          if (stop(nx, nz, 1.2)) c.v *= -0.3; else { me.x = nx; me.z = nz; }
-        } else if (ax || az) {
-          const sp = (keys.has('shift') ? 5.2 : 1.55) * dt, L = Math.hypot(ax, az); // a walk is ~1.5 m/s; a run is a real run
-          const co = Math.cos(cam.yaw), si = Math.sin(cam.yaw);
-          const wx = (co * ax + si * az) / L, wz = (-si * ax + co * az) / L;
-          const nx = me.x + wx * sp, nz = me.z + wz * sp;
-          if (!stop(nx, me.z)) me.x = nx;
-          if (!stop(me.x, nz)) me.z = nz;
-          me.step += sp / (keys.has('shift') ? 1.1 : 0.8); // one stride: ~0.8 m walking, longer running
-          me.dist += sp;
-          me.heading = Math.atan2(wx, wz); me.face = me.heading;
-        }
-        me.moving = !me.car && !!(ax || az);
-      }
-      world.around(me.x, me.z, 800);
-      if (arriving && world.tiles.has(`${Math.floor(me.x / 500)}_${Math.floor(me.z / 500)}`)) {
-        const n = world.nearestRoad(me.x, me.z, 400, KIND.residential);
-        if (n) { const side = n.r.w / 2 + 1.5; const a = along(n.r.p, n.r.cum, n.s); me.x = n.x - a.dz * side; me.z = n.z + a.dx * side; cam.x = me.x; cam.z = me.z; }
-        arriving = false;
-      }
-      snapMarks();
-      // the city around: traffic, people, boats
-      if (Math.hypot(me.x - poolAt.x, me.z - poolAt.z) > 40 || now - poolTime > 2000) refreshPool();
-      for (let n = 0; n < 3 && cars.length < wanted; n++) spawnCar(me);
-      while (walkers.length < 40) { const before = walkers.length; spawnWalker(me); if (walkers.length === before) break; }
-      for (let i = cars.length - 1; i >= 0; i--) {
-        const c = cars[i];
-        if (!c.r) continue;
-        const ahead = cars.some((o) => o !== c && o.r === c.r && o.dir === c.dir && o.lane === c.lane && ((o.s - c.s) > 0 && (o.s - c.s) < 9));
-        const nearMe = Math.hypot(c.x - me.x, c.z - me.z) < 5 && !me.car;
-        const tv = ahead || nearMe ? 0 : (job?.type === 'chase' && job.thief === c ? 8.5 : c.v || 11);
-        c.s += tv * dt;
-        if (c.s >= c.r.len) {
-          // carry on along a road that starts where this one ends, else turn round
-          const end = along(c.r.p, c.r.cum, c.dir === 1 ? c.r.len : 0);
-          const next = world.roadsNear(end.x, end.z, 30, KIND.tertiary).find((r) => r !== c.r && (Math.hypot(r.p[0] - end.x, r.p[1] - end.z) < 4 || Math.hypot(r.p[r.p.length - 2] - end.x, r.p[r.p.length - 1] - end.z) < 4));
-          if (next) { c.dir = Math.hypot(next.p[0] - end.x, next.p[1] - end.z) < 4 ? 1 : -1; if (next.oneway && c.dir === -1) c.dir = 1; c.r = next; c.s = 0; }
-          else { c.dir = (c.r.oneway ? 1 : -c.dir) as 1 | -1; c.s = 0; }
-        }
-        placeCar(c);
-        if (Math.hypot(c.x - me.x, c.z - me.z) > 280 && !(job?.type === 'chase' && job.thief === c)) cars.splice(i, 1);
-      }
-      for (let i = walkers.length - 1; i >= 0; i--) {
-        const w = walkers[i];
-        w.s += w.v * dt;
-        if (w.s >= w.r.len) { w.dir = (-w.dir) as 1 | -1; w.s = 0; }
-        const a = along(w.r.p, w.r.cum, w.dir === 1 ? w.s : w.r.len - w.s), off = pavementOffset(w.r) * w.side;
-        const nx = a.x - a.dz * off, nz = a.z + a.dx * off;
-        if (Math.hypot(nx - w.x, nz - w.z) > 0.001) w.heading = Math.atan2(nx - w.x, nz - w.z);
-        w.x = nx; w.z = nz;
-        if (Math.hypot(w.x - me.x, w.z - me.z) > 180) walkers.splice(i, 1);
-      }
-      if (boats.length < 5 && sea.length) {
-        const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 200, x = me.x + Math.cos(a) * d, z = me.z + Math.sin(a) * d;
-        if (afloat(x, z)) boats.push({ x, z, a: Math.random() * Math.PI * 2, v: 3 + Math.random() * 4 });
-      }
-      for (let i = boats.length - 1; i >= 0; i--) {
-        const b = boats[i];
-        const nx = b.x + Math.cos(b.a) * b.v * dt, nz = b.z + Math.sin(b.a) * b.v * dt;
-        if (afloat(nx, nz)) { b.x = nx; b.z = nz; } else b.a += Math.PI * 0.6;
-        if (Math.hypot(b.x - me.x, b.z - me.z) > 500) boats.splice(i, 1);
-      }
-      // the job
-      if (job) {
-        const t = (now - job.started) / 1000;
-        if (job.type === 'delivery') {
-          const tgt = job.carrying ? job.drop : job.pick;
-          if (Math.hypot(tgt.x - me.x, tgt.z - me.z) < 14) {
-            if (!job.carrying) { job.carrying = true; say(`Parcel collected. Take it to ${job.drop.n}.`); }
-            else { void finish(job.dist, 0, job.limit); }
-          } else if (job.carrying && t > job.limit + 15) { say('Too late — the customer gave up.'); job = null; setHud(null); }
-        } else if (job.type === 'danfo') {
-          const stop = job.stops[job.at];
-          if (!me.car || me.car.sprite !== 'car-danfo') { /* waits for you to get back in */ }
-          else if (Math.hypot(stop.x - me.x, stop.z - me.z) < 18 && Math.abs(me.car.v) < 1.5) {
-            job.wait += dt;
-            if (job.wait > 2) {
-              const n = 2 + Math.floor(Math.random() * 4);
-              job.passengers = Math.min(18, job.passengers + n); job.wait = 0; job.at++;
-              say(`${stop.name}: ${n} passengers on. "Wetin be the fare, driver?"`);
-              if (job.at >= job.stops.length) void finish(0, job.passengers, 0);
-            }
+      for (let step = 0; step < steps; step++) {
+        // move
+        const ax = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
+        const az = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
+        if (!boardRef.current) {
+          if (me.car) {
+            const c = me.car;
+            c.v += (-az) * (az < 0 ? 9 : 14) * dt;
+            if (!az) c.v *= 1 - 0.8 * dt;
+            c.v = Math.max(-5, Math.min(24, c.v));
+            c.rot -= ax * dt * 2.2 * Math.min(1, Math.abs(c.v) / 6) * Math.sign(c.v || 1);
+            const nx = me.x + Math.sin(c.rot) * c.v * dt, nz = me.z + Math.cos(c.rot) * c.v * dt;
+            if (stop(nx, nz, 1.2)) c.v *= -0.3; else { me.x = nx; me.z = nz; }
+          } else if (ax || az) {
+            const sp = (keys.has('shift') ? 5.2 : 1.55) * dt, L = Math.hypot(ax, az); // a walk is ~1.5 m/s; a run is a real run
+            const co = Math.cos(cam.yaw), si = Math.sin(cam.yaw);
+            const wx = (co * ax + si * az) / L, wz = (-si * ax + co * az) / L;
+            const nx = me.x + wx * sp, nz = me.z + wz * sp;
+            if (!stop(nx, me.z)) me.x = nx;
+            if (!stop(me.x, nz)) me.z = nz;
+            me.step += sp / (keys.has('shift') ? 1.1 : 0.8); // one stride: ~0.8 m walking, longer running
+            me.dist += sp;
+            me.heading = Math.atan2(wx, wz); me.face = me.heading;
           }
-        } else {
-          const th = job.thief;
-          if (Math.hypot(th.x - me.x, th.z - me.z) < (me.car ? 5 : 3)) { cars.splice(cars.indexOf(th), 1); void finish(0, 0, 0); }
-          else if (t > 90) { cars.splice(cars.indexOf(th), 1); job = null; setHud(null); say('The thief got away this time.'); }
+          me.moving = !me.car && !!(ax || az);
+        }
+        world.around(me.x, me.z, 800);
+        if (arriving && world.tiles.has(`${Math.floor(me.x / 500)}_${Math.floor(me.z / 500)}`)) {
+          const n = world.nearestRoad(me.x, me.z, 400, KIND.residential);
+          if (n) { const side = n.r.w / 2 + 1.5; const a = along(n.r.p, n.r.cum, n.s); me.x = n.x - a.dz * side; me.z = n.z + a.dx * side; cam.x = me.x; cam.z = me.z; }
+          arriving = false;
+        }
+        snapMarks();
+        // the city around: traffic, people, boats
+        if (Math.hypot(me.x - poolAt.x, me.z - poolAt.z) > 40 || now - poolTime > 2000) refreshPool();
+        for (let n = 0; n < 3 && cars.length < wanted; n++) spawnCar(me);
+        while (walkers.length < 40) { const before = walkers.length; spawnWalker(me); if (walkers.length === before) break; }
+        for (let i = cars.length - 1; i >= 0; i--) {
+          const c = cars[i];
+          if (!c.r) continue;
+          const ahead = cars.some((o) => o !== c && o.r === c.r && o.dir === c.dir && o.lane === c.lane && ((o.s - c.s) > 0 && (o.s - c.s) < 9));
+          const nearMe = Math.hypot(c.x - me.x, c.z - me.z) < 5 && !me.car;
+          const tv = ahead || nearMe ? 0 : (job?.type === 'chase' && job.thief === c ? 8.5 : c.v || 11);
+          c.s += tv * dt;
+          if (c.s >= c.r.len) {
+            // carry on along a road that starts where this one ends, else turn round
+            const end = along(c.r.p, c.r.cum, c.dir === 1 ? c.r.len : 0);
+            const next = world.roadsNear(end.x, end.z, 30, KIND.tertiary).find((r) => r !== c.r && (Math.hypot(r.p[0] - end.x, r.p[1] - end.z) < 4 || Math.hypot(r.p[r.p.length - 2] - end.x, r.p[r.p.length - 1] - end.z) < 4));
+            if (next) { c.dir = Math.hypot(next.p[0] - end.x, next.p[1] - end.z) < 4 ? 1 : -1; if (next.oneway && c.dir === -1) c.dir = 1; c.r = next; c.s = 0; }
+            else { c.dir = (c.r.oneway ? 1 : -c.dir) as 1 | -1; c.s = 0; }
+          }
+          placeCar(c);
+          if (Math.hypot(c.x - me.x, c.z - me.z) > 280 && !(job?.type === 'chase' && job.thief === c)) cars.splice(i, 1);
+        }
+        for (let i = walkers.length - 1; i >= 0; i--) {
+          const w = walkers[i];
+          w.s += w.v * dt;
+          if (w.s >= w.r.len) { w.dir = (-w.dir) as 1 | -1; w.s = 0; }
+          const a = along(w.r.p, w.r.cum, w.dir === 1 ? w.s : w.r.len - w.s), off = pavementOffset(w.r) * w.side;
+          const nx = a.x - a.dz * off, nz = a.z + a.dx * off;
+          if (Math.hypot(nx - w.x, nz - w.z) > 0.001) w.heading = Math.atan2(nx - w.x, nz - w.z);
+          w.x = nx; w.z = nz;
+          if (Math.hypot(w.x - me.x, w.z - me.z) > 180) walkers.splice(i, 1);
+        }
+        if (boats.length < 5 && sea.length) {
+          const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 200, x = me.x + Math.cos(a) * d, z = me.z + Math.sin(a) * d;
+          if (afloat(x, z)) boats.push({ x, z, a: Math.random() * Math.PI * 2, v: 3 + Math.random() * 4 });
+        }
+        for (let i = boats.length - 1; i >= 0; i--) {
+          const b = boats[i];
+          const nx = b.x + Math.cos(b.a) * b.v * dt, nz = b.z + Math.sin(b.a) * b.v * dt;
+          if (afloat(nx, nz)) { b.x = nx; b.z = nz; } else b.a += Math.PI * 0.6;
+          if (Math.hypot(b.x - me.x, b.z - me.z) > 500) boats.splice(i, 1);
+        }
+        // flying cars: sky lanes across the city, 30-60 m up, each crossing near you and flying on out of sight
+        if (flyers.length < 7) {
+          const a = Math.random() * Math.PI * 2, x = me.x + Math.cos(a) * 320, z = me.z + Math.sin(a) * 320;
+          const tx = me.x + (Math.random() - 0.5) * 240, tz = me.z + (Math.random() - 0.5) * 240;
+          flyers.push({ x, z, y: 30 + Math.floor(Math.random() * 4) * 10, h: Math.atan2(tx - x, tz - z), v: 22 + Math.random() * 16, sprite: FLYER_SPRITES[Math.floor(Math.random() * FLYER_SPRITES.length)] });
+        }
+        for (let i = flyers.length - 1; i >= 0; i--) {
+          const f = flyers[i];
+          f.x += Math.sin(f.h) * f.v * dt; f.z += Math.cos(f.h) * f.v * dt;
+          if (Math.hypot(f.x - me.x, f.z - me.z) > 420) flyers.splice(i, 1);
+        }
+        // the job
+        if (job) {
+          const t = (now - job.started) / 1000;
+          if (job.type === 'delivery') {
+            const tgt = job.carrying ? job.drop : job.pick;
+            if (Math.hypot(tgt.x - me.x, tgt.z - me.z) < 14) {
+              if (!job.carrying) { job.carrying = true; say(`Parcel collected. Take it to ${job.drop.n}.`); }
+              else { void finish(job.dist, 0, job.limit); }
+            } else if (job.carrying && t > job.limit + 15) { say('Too late — the customer gave up.'); job = null; setHud(null); }
+          } else if (job.type === 'danfo') {
+            const stop = job.stops[job.at];
+            if (!me.car || me.car.sprite !== 'car-danfo') { /* waits for you to get back in */ }
+            else if (Math.hypot(stop.x - me.x, stop.z - me.z) < 18 && Math.abs(me.car.v) < 1.5) {
+              job.wait += dt;
+              if (job.wait > 2) {
+                const n = 2 + Math.floor(Math.random() * 4);
+                job.passengers = Math.min(18, job.passengers + n); job.wait = 0; job.at++;
+                say(`${stop.name}: ${n} passengers on. "Wetin be the fare, driver?"`);
+                if (job.at >= job.stops.length) void finish(0, job.passengers, 0);
+              }
+            }
+          } else {
+            const th = job.thief;
+            if (Math.hypot(th.x - me.x, th.z - me.z) < (me.car ? 5 : 3)) { cars.splice(cars.indexOf(th), 1); void finish(0, 0, 0); }
+            else if (t > 90) { cars.splice(cars.indexOf(th), 1); job = null; setHud(null); say('The thief got away this time.'); }
+          }
         }
       }
+      dt = realDt;
       // camera
       const want = me.car ? Math.min(zoom, 11) : zoom; // pull back a little at the wheel, to see the road ahead
       cam.w = W; cam.h = H; cam.dpr = dpr;
@@ -700,6 +742,8 @@ function Game({ onExit }: { onExit: () => void }) {
         hidden = upright(ctx);
         if (hidden && playerSprite) drawGhost(ctx, cam, playerSprite);
       }
+      // flying cars, over the roofs, far ones first
+      for (const f of [...flyers].sort((p, q) => depth(cam, p.x, p.z) - depth(cam, q.x, q.z))) drawFlyer(ctx, cam, { s: f.sprite, x: f.x, z: f.z, veh: true, heading: f.h, lift: f.y }, night);
       // the job's target: a bouncing marker
       const tgt = !job ? storyTarget : job.type === 'delivery' ? (job.carrying ? job.drop : job.pick) : job.type === 'danfo' ? job.stops[job.at] : job.thief;
       if (tgt) {
@@ -762,7 +806,7 @@ function Game({ onExit }: { onExit: () => void }) {
     // (debug: time [n] whole frames, waiting for the graphics to finish each one)
     (window as unknown as { __naija: Record<string, unknown> }).__naija.bench = (n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) { frame(performance.now()); cancelAnimationFrame(raf); ctx.getImageData(0, 0, 1, 1); } raf = requestAnimationFrame(frame); return (performance.now() - t0) / n; };
     return () => {
-      alive = false; cancelAnimationFrame(raf); clearInterval(aside); radio.current?.off();
+      alive = false; cancelAnimationFrame(raf); clearInterval(aside); clearInterval(wire); radio.current?.off();
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       canvas.removeEventListener('wheel', wheel);
       canvas.removeEventListener('pointerdown', pdown); canvas.removeEventListener('pointermove', pmove);
@@ -899,7 +943,7 @@ function Game({ onExit }: { onExit: () => void }) {
 
       {toast ? <View style={s.toast}><Text style={s.toastText}>{toast}</Text></View> : null}
       {wyrdOpen ? <WyrdPanel lines={wyrdLines} onLine={addWyrd} night={night} situation={() => situationRef.current()} onClose={() => setWyrdOpen(false)} /> : null}
-      {wyrd && !wyrdOpen ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD://CITY.MIND</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
+      {wyrd && !wyrdOpen ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD://CITY.MIND{wyrdLive ? <Text style={{ color: CY.red }}>  ● LIVE{online > 1 ? `  ·  ${online} ON THE STREETS` : ''}</Text> : null}</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}
       {hero === null ? <ChooseCharacter onDone={(look) => setHero(look.base)} /> : null}
       {talk ? (
         <Dialogue who={talk.beat.who} line={talk.beat.line} choices={talk.beat.choices} busy={talkBusy}
