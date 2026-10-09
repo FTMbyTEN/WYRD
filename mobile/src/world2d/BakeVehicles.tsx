@@ -90,6 +90,31 @@ function boat() {
   return g;
 }
 
+/** The 3D city's hover-car (world/hovercar.ts), nose towards +z, in a [color] paint: a flattened capsule hull under a
+ *  glass canopy, thruster pods either side with cyan neon rings, a neon line down each flank, white lights at the nose
+ *  and red at the tail -- and, under it, the glow of its lift field. */
+function hover(color: number) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color, metalness: 0.85, roughness: 0.28 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0xd9dde4, metalness: 0.9, roughness: 0.2 });
+  const canopyGlass = new THREE.MeshStandardMaterial({ color: 0x0a1a24, metalness: 0.4, roughness: 0.05 });
+  const neon = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+  const red = new THREE.MeshBasicMaterial({ color: 0xff2a48 });
+  const hull = new THREE.Mesh(new THREE.CapsuleGeometry(0.85, 2.9, 6, 16).rotateX(Math.PI / 2), shell);
+  hull.scale.set(1.15, 0.62, 1); hull.position.y = 0.7; g.add(hull);
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), canopyGlass);
+  canopy.scale.set(0.82, 0.55, 1.5); canopy.position.set(0, 1.0, -0.15); g.add(canopy);
+  for (const side of [-1, 1]) {
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.42, 1.5, 12).rotateX(Math.PI / 2), trim); pod.position.set(1.25 * side, 0.55, -0.6); g.add(pod);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.06, 6, 16), neon); ring.position.set(1.25 * side, 0.55, -1.36); g.add(ring);
+    const flank = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 3.6), neon); flank.position.set(0.99 * side, 0.62, 0.05); g.add(flank);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 0.05), lamp); head.position.set(0.5 * side, 0.68, 2.25); g.add(head);
+    const rear = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.05), red); rear.position.set(0.5 * side, 0.72, -2.2); g.add(rear);
+  }
+  const under = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), new THREE.MeshBasicMaterial({ color: 0x38e8ff, transparent: true, opacity: 0.55 }));
+  under.scale.set(1, 1.9, 1); under.rotation.x = -Math.PI / 2; under.position.y = 0.12; g.add(under);
+  return g;
+}
 /** front towards +x in the 3D city's models: turn them to face +z like the rest */
 const turned = (o: THREE.Object3D) => { const g = new THREE.Group(); o.rotation.y = -Math.PI / 2; g.add(o); return g; };
 
@@ -105,6 +130,10 @@ const LIST: { name: string; make: () => THREE.Object3D; span: number }[] = [
   { name: 'okada', make: () => turned(makeOkada(false).group), span: 3.2 },
   { name: 'keke', make: () => turned(makeKeke(false).group), span: 3.8 },
   { name: 'boat-taxi', make: () => boat(), span: 10.5 },
+  { name: 'hover-navy', make: () => hover(0x1b2440), span: 6.4 },
+  { name: 'hover-pearl', make: () => hover(0xe6eaf0), span: 6.4 },
+  { name: 'hover-crimson', make: () => hover(0xb3122e), span: 6.4 },
+  { name: 'hover-gold', make: () => hover(0xc9a227), span: 6.4 },
 ];
 
 export function BakeVehicles() {
@@ -117,7 +146,7 @@ export function BakeVehicles() {
       const meta: Record<string, { span: number; ground: number[] }> = {};
       const only = new URLSearchParams(location.hash.split('?')[1] ?? '').get('only');
       if (only) Object.assign(meta, await fetch('world2d/vehicles/vehicles.json').then((r) => r.json()).catch(() => ({})));
-      for (const v of LIST.filter((x) => !only || x.name === only)) {
+      for (const v of LIST.filter((x) => !only || x.name === only || x.name.startsWith(`${only}-`))) { // (?only=hover: every hover-*)
         const scene = new THREE.Scene();
         scene.add(new THREE.HemisphereLight(0xffffff, 0xb8c4d6, 2.4));
         const sun = new THREE.DirectionalLight(0xffffff, 2.4); sun.position.set(-4, 8, 5); scene.add(sun);

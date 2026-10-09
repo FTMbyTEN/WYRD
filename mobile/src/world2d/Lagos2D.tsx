@@ -32,7 +32,8 @@ type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side
 type Boat = { x: number; z: number; a: number; v: number };
 /** a flying car: where it is, how high, which way and how fast it flies */
 type Flyer = { x: number; z: number; y: number; h: number; v: number; sprite: string };
-const FLYER_SPRITES = ['car-red', 'car-blue', 'car-white', 'car-purple', 'car-grey', 'car-taxi'];
+// the 3D city's hover-car (world/hovercar.ts), baked in four paints
+const FLYER_SPRITES = ['hover-navy', 'hover-pearl', 'hover-crimson', 'hover-gold'];
 type Place = { k: string; n: string | null; x: number; z: number };
 type Job =
   | { type: 'delivery'; id: string; pick: Place; drop: Place; carrying: boolean; limit: number; started: number; dist: number }

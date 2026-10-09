@@ -19,6 +19,8 @@ function Loading() {
 
 // a direct link to the game: wryd00.serverpod.space/#play opens NAIJA 2099 full screen, no tabs on the way
 const DirectGame = lazy(() => import('./world2d/Lagos2D').then((m) => ({ default: m.Lagos2D })));
+// development only: #bake-cars renders the 2D game's vehicle sheets (see world2d/BakeVehicles.tsx)
+const BakeVehicles = lazy(() => import('./world2d/BakeVehicles').then((m) => ({ default: m.BakeVehicles })));
 function Root() {
   const { status } = useAuth();
   const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));
@@ -29,6 +31,7 @@ function Root() {
     const t = setTimeout(() => { void loadShell().catch(() => {}); }, 1500);
     return () => clearTimeout(t);
   }, [status]);
+  if (__DEV__ && typeof location !== 'undefined' && location.hash.startsWith('#bake-cars')) return <Suspense fallback={<Loading />}><BakeVehicles /></Suspense>;
   if (play) {
     return (
       <View style={styles.game}>

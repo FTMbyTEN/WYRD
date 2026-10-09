@@ -41,6 +41,7 @@ const vehGround = (span: number, pitch: number) => 0.5 + (0.06 * span * Math.cos
 export const VEH_SPAN: Record<string, number> = {
   'car-red': 6.2, 'car-blue': 6.2, 'car-white': 6.2, 'car-purple': 6.2, 'car-grey': 6.2, 'car-taxi': 6.2,
   'car-danfo': 6.8, 'bus-brt': 14.5, okada: 3.2, keke: 3.8, 'boat-taxi': 10.5,
+  'hover-navy': 6.4, 'hover-pearl': 6.4, 'hover-crimson': 6.4, 'hover-gold': 6.4,
 };
 const VEH_SIZE = 1.25; // a touch larger than life, like the poster
 const DAY = {
