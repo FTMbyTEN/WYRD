@@ -4,8 +4,10 @@
  * skipped, the rest painted far to near and shaded by a fixed sun -- so a landmark lines up with its streets at every
  * camera angle and stays sharp at any zoom. Neon faces ([glow]) also shine on the night's glow layer.
  */
-export type Face = { p: number[]; n: [number, number, number]; color: string; glow?: boolean };
-export type Model = { faces: Face[]; height: number; radius: number };
+/** a flat face; [part]: the solid it belongs to (a box, a drum, a spire...) -- solids are put in order whole */
+export type Face = { p: number[]; n: [number, number, number]; color: string; glow?: boolean; part: number };
+/** [parts]: each solid's bounds, [x0, x1, y0, y1, z0, z1]; [box]: the plan, [x0, x1, z0, z1] */
+export type Model = { faces: Face[]; height: number; radius: number; parts: number[][]; box: [number, number, number, number] };
 
 type V3 = [number, number, number];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -16,25 +18,36 @@ const norm = (a: V3): V3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; retur
 class Builder {
   faces: Face[] = [];
   private top = 0; private far = 0;
+  /** the solid being built: each primitive is one; a face added on its own is a solid of its own */
+  private part = -1; private inside = 0;
+  private open() { if (this.inside++ === 0) this.part++; }
+  private close() { this.inside--; }
+  /** several faces (or primitives) as one solid */
+  group(make: () => void) { this.open(); make(); this.close(); }
   face(pts: V3[], color: string, centre: V3, glow = false) {
+    if (this.inside === 0) this.part++;
     let n = norm(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
     const c: V3 = [0, 0, 0]; for (const q of pts) { c[0] += q[0] / pts.length; c[1] += q[1] / pts.length; c[2] += q[2] / pts.length; }
     const out = sub(c, centre);
     if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0) n = [-n[0], -n[1], -n[2]];
-    this.faces.push({ p: pts.flat(), n, color, glow });
+    this.faces.push({ p: pts.flat(), n, color, glow, part: this.part });
     for (const q of pts) { this.top = Math.max(this.top, q[1]); this.far = Math.max(this.far, Math.hypot(q[0], q[2])); }
   }
   /** a box: centre (x, z), size w (x) by d (z), from y0 up h; [roof] colour for its top */
   box(x: number, z: number, w: number, d: number, y0: number, h: number, color: string, roof = color, glow = false) {
+    this.open();
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2, y1 = y0 + h, c: V3 = [x, y0 + h / 2, z];
     this.face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], color, c, glow);
     this.face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], color, c, glow);
     this.face([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], color, c, glow);
     this.face([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], color, c, glow);
-    this.face([[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]], roof, c, glow);
+    // (a neon box is a band of light round its sides: its top would light the whole roof it rings)
+    if (!glow) this.face([[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]], roof, c, glow);
+    this.close();
   }
   /** a cylinder or a frustum (r0 at the bottom, r1 at the top), with an optional lid */
   drum(x: number, z: number, r0: number, y0: number, h: number, color: string, opts: { r1?: number; seg?: number; lid?: string; glow?: boolean } = {}) {
+    this.open();
     const seg = opts.seg ?? 24, r1 = opts.r1 ?? r0, y1 = y0 + h, c: V3 = [x, y0 + h / 2, z];
     for (let i = 0; i < seg; i++) {
       const a0 = (i / seg) * Math.PI * 2, a1 = ((i + 1) / seg) * Math.PI * 2;
@@ -42,9 +55,11 @@ class Builder {
     }
     if (opts.lid && r1 > 0.01) this.face(Array.from({ length: seg }, (_, i): V3 => { const a = (i / seg) * Math.PI * 2; return [x + Math.cos(a) * r1, y1, z + Math.sin(a) * r1]; }), opts.lid, [x, y1 - 1, z]);
     void c;
+    this.close();
   }
   /** a dome (half sphere) of radius r sitting at y0 */
   dome(x: number, z: number, r: number, y0: number, color: string, seg = 20, rings = 6) {
+    this.open();
     for (let j = 0; j < rings; j++) {
       const t0 = (j / rings) * Math.PI / 2, t1 = ((j + 1) / rings) * Math.PI / 2;
       for (let i = 0; i < seg; i++) {
@@ -53,26 +68,42 @@ class Builder {
         this.face(j === rings - 1 ? [P(t0, a0), P(t0, a1), P(t1, a0)] : [P(t0, a0), P(t0, a1), P(t1, a1), P(t1, a0)], color, [x, y0, z]);
       }
     }
+    this.close();
   }
   /** a pyramid or spire: square base w at y0, point h above */
   spire(x: number, z: number, w: number, y0: number, h: number, color: string) {
+    this.open();
     const s = w / 2, top: V3 = [x, y0 + h, z], c: V3 = [x, y0 + h / 4, z];
     const b: V3[] = [[x - s, y0, z - s], [x + s, y0, z - s], [x + s, y0, z + s], [x - s, y0, z + s]];
     for (let i = 0; i < 4; i++) this.face([b[i], b[(i + 1) % 4], top], color, c);
+    this.close();
   }
   /** a gabled roof along z: base w by d at y0, ridge h above */
   gable(x: number, z: number, w: number, d: number, y0: number, h: number, color: string) {
+    this.open();
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2, y1 = y0 + h, c: V3 = [x, y0, z];
     this.face([[x0, y0, z0], [x0, y0, z1], [x, y1, z1], [x, y1, z0]], color, c);
     this.face([[x1, y0, z1], [x1, y0, z0], [x, y1, z0], [x, y1, z1]], color, c);
     this.face([[x0, y0, z1], [x1, y0, z1], [x, y1, z1]], color, c);
     this.face([[x1, y0, z0], [x0, y0, z0], [x, y1, z0]], color, c);
+    this.close();
   }
   /** floor bands round a box: a slightly proud dark strip every [every] m (windows), from y0 to y1 */
   bands(x: number, z: number, w: number, d: number, y0: number, y1: number, every: number, tall: number, color: string) {
     for (let y = y0 + every * 0.4; y + tall < y1; y += every) this.box(x, z, w + 0.3, d + 0.3, y, tall, color, color);
   }
-  done(): Model { return { faces: this.faces, height: this.top, radius: this.far }; }
+  done(): Model {
+    const parts: number[][] = [], box: [number, number, number, number] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const f of this.faces) {
+      const b = parts[f.part] ?? (parts[f.part] = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity]);
+      for (let i = 0; i < f.p.length; i += 3) {
+        const x = f.p[i], y = f.p[i + 1], z = f.p[i + 2];
+        if (x < b[0]) b[0] = x; if (x > b[1]) b[1] = x; if (y < b[2]) b[2] = y; if (y > b[3]) b[3] = y; if (z < b[4]) b[4] = z; if (z > b[5]) b[5] = z;
+        if (x < box[0]) box[0] = x; if (x > box[1]) box[1] = x; if (z < box[2]) box[2] = z; if (z > box[3]) box[3] = z;
+      }
+    }
+    return { faces: this.faces, height: this.top, radius: this.far, parts, box };
+  }
 }
 
 /** a Lagos market: rows of stalls under coloured canopies, a little different each time ([seed]), [half] m from the middle */
@@ -113,66 +144,107 @@ const MODELS: Record<string, () => Model> = {
     b.box(0, 66, 26, 10, 0, 4, '#BDB5A6'); // the entrance ramp
     return b.done();
   },
-  /** the Cathedral Church of Christ, Marina: cream Gothic stone under blue slate -- a tall nave with lower aisles and
-   *  a transept, buttresses crowned with pinnacles, pointed windows, the west front's great window, rose and cross,
-   *  and the square bell tower with its battlements and four tall corner spires */
+  /** the Cathedral Church of Christ, Marina, after its painting: cream Gothic stone under blue slate -- a long nave
+   *  with lower aisles, every bay buttressed and crowned with a pinnacle, framed lancet windows, the west front's
+   *  great traceried window, rose and cross between corner turrets, a transept and chancel behind, and the tall
+   *  square bell tower at the front corner: four stages, stepped corner buttresses, paired belfry lancets,
+   *  battlements and tall pinnacles */
   cathedral: () => {
-    const b = new Builder(), stone = '#EFE3C4', stone2 = '#E2D4B0', slate = '#3E5B8C', glass = '#2D4E8A', wood = '#6B3E26';
-    // a pointed-arch window on a wall facing (nx, nz): a rectangle with a peaked top, a little proud of the wall
-    const arch = (x: number, z: number, nx: number, nz: number, w: number, y0: number, h: number, color = glass) => {
-      const tx = -nz, tz = nx, o = 0.18, cx = x + nx * o, cz = z + nz * o, s = w / 2, spring = y0 + h - w * 0.75;
-      b.face([[cx - tx * s, y0, cz - tz * s], [cx + tx * s, y0, cz + tz * s], [cx + tx * s, spring, cz + tz * s], [cx, y0 + h, cz], [cx - tx * s, spring, cz - tz * s]], color, [x - nx * 3, y0 + h / 2, z - nz * 3]);
+    const b = new Builder();
+    const stone = '#F1E6CC', trim = '#FAF3E1', deep = '#E2D3B2', slate = '#4D6FA6', ridge = '#3D5C92', glass = '#2E5596', wood = '#6E4128';
+    /** a framed lancet on a wall facing (nx, nz): a cream surround, the blue glass a little proud of it */
+    const lancet = (x: number, z: number, nx: number, nz: number, w: number, y0: number, h: number, fill = glass) => {
+      const tx = -nz, tz = nx;
+      const shape = (o: number, s: number, lift: number, color: string) => {
+        const cx = x + nx * o, cz = z + nz * o, top = y0 + h + lift, spring = top - s * 1.5;
+        b.face([[cx - tx * s, y0 - lift, cz - tz * s], [cx + tx * s, y0 - lift, cz + tz * s], [cx + tx * s, spring, cz + tz * s], [cx, top, cz], [cx - tx * s, spring, cz - tz * s]], color, [x - nx * 3, y0 + h / 2, z - nz * 3]);
+      };
+      shape(0.1, w / 2 + 0.35, 0.35, trim);
+      shape(0.2, w / 2, 0, fill);
     };
-    // a buttress with its pinnacle
-    const buttress = (x: number, z: number, h: number) => { b.box(x, z, 1.3, 1.3, 0, h, stone2, stone2); b.spire(x, z, 1.1, h, 3.2, stone2); };
+    /** a buttress (two set-offs, narrowing) crowned with a pinnacle */
+    const buttress = (x: number, z: number, h: number, w = 1.3) => {
+      b.box(x, z, w, w, 0, h * 0.6, deep, trim);
+      b.box(x, z, w * 0.8, w * 0.8, h * 0.6, h * 0.4, deep, trim);
+      b.box(x, z, w * 0.9, w * 0.9, h, 0.5, trim);
+      b.spire(x, z, w * 0.75, h + 0.5, w * 2.6, deep);
+    };
+    /** a gabled roof running along x (the builder's gable runs along z) */
+    const gableX = (x: number, z: number, w: number, d: number, y0: number, h: number, color: string) => b.group(() => {
+      const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2, y1 = y0 + h, c: V3 = [x, y0, z];
+      b.face([[x0, y0, z1], [x1, y0, z1], [x1, y1, z], [x0, y1, z]], color, c);
+      b.face([[x1, y0, z0], [x0, y0, z0], [x0, y1, z], [x1, y1, z]], color, c);
+      b.face([[x1, y0, z0], [x1, y0, z1], [x1, y1, z]], stone, c);
+      b.face([[x0, y0, z1], [x0, y0, z0], [x0, y1, z]], stone, c);
+    });
 
-    // the nave: tall walls, steep slate roof
-    b.box(0, -6, 18, 40, 0, 16, stone, stone2);
-    b.gable(0, -6, 18.6, 40.6, 16, 11, slate);
-    // the aisles either side, with lean-to roofs up to the nave wall
+    // a plinth the whole church stands on
+    b.box(0, -5, 27, 48, 0, 0.8, deep, deep);
+    // the nave: tall walls under a steep slate roof with a darker ridge
+    const NL = 40, NZ = -2, NF = NZ + NL / 2; // length, middle, the west front's z
+    b.box(0, NZ, 12, NL, 0.8, 14.2, stone, stone);
+    b.gable(0, NZ, 12.8, NL + 0.6, 15, 9.5, slate);
+    b.box(0, NZ, 0.6, NL + 0.6, 24.4, 0.35, ridge);
+    // the aisles, with lean-to roofs up to the nave
     for (const s of [-1, 1]) {
-      b.box(s * 12.5, -7, 7, 34, 0, 9, stone, stone2);
-      const xo = s * 16, xi = s * 9;
-      b.face([[xo, 9, -24], [xo, 9, 10], [xi, 13, 10], [xi, 13, -24]], slate, [s * 12.5, 0, -7]);
-      for (let z = -21; z <= 7; z += 5.6) {
-        arch(s * 16, z, s, 0, 1.8, 2.2, 5.4); // aisle windows
-        arch(s * 9, z + 1.4, s, 0, 1.6, 13.4, 2.4); // clerestory windows above the aisle roof
-        buttress(s * 16.6, z + 2.8, 8);
+      b.box(s * 8.25, NZ - 1, 4.5, NL - 2, 0.8, 8.2, stone, stone);
+      b.face([[s * 10.8, 9, NZ - NL / 2], [s * 10.8, 9, NF - 1], [s * 6, 12.6, NF - 1], [s * 6, 12.6, NZ - NL / 2]], slate, [s * 8.25, 0, NZ - 1]);
+      for (let z = NZ - NL / 2 + 4; z < NF - 3; z += 5.5) {
+        lancet(s * 10.5, z, s, 0, 1.5, 2.6, 4.4); // aisle windows
+        lancet(s * 6, z, s, 0, 1.2, 13.2, 1.6); // clerestory, above the aisle roof
+        buttress(s * 11.1, z + 2.75, 8.6);
+        b.spire(s * 6.3, z + 2.75, 0.9, 15, 3, deep); // pinnacles along the nave's eaves
       }
     }
-    // the transept, a cross wing with gable ends
-    b.box(0, -20, 44, 10, 0, 15, stone, stone2);
-    b.face([[-22, 15, -25.3], [-22, 15, -14.7], [-22, 22, -20]], stone, [0, 15, -20]);
-    b.face([[22, 15, -14.7], [22, 15, -25.3], [22, 22, -20]], stone, [0, 15, -20]);
-    b.face([[-22.3, 15, -25.3], [22.3, 15, -25.3], [22.3, 22, -20], [-22.3, 22, -20]], slate, [0, 0, -20]);
-    b.face([[22.3, 15, -14.7], [-22.3, 15, -14.7], [-22.3, 22, -20], [22.3, 22, -20]], slate, [0, 0, -20]);
-    for (const s of [-1, 1]) { arch(s * 22, -20, s, 0, 3.4, 3, 10); b.spire(s * 22, -25, 1.2, 15, 4, stone2); b.spire(s * 22, -15, 1.2, 15, 4, stone2); }
+    // the transept, a cross wing with gable ends, and the chancel beyond it
+    b.box(0, NZ - NL / 2 + 6, 26, 9, 0.8, 12.2, stone, stone);
+    gableX(0, NZ - NL / 2 + 6, 26.6, 9.6, 13, 6, slate);
+    for (const s of [-1, 1]) { lancet(s * 13, NZ - NL / 2 + 6, s, 0, 2.6, 3, 7.5); buttress(s * 13.4, NZ - NL / 2 + 1.9, 12); buttress(s * 13.4, NZ - NL / 2 + 10.1, 12); }
+    b.box(0, NZ - NL / 2 - 3, 9, 7, 0.8, 11.2, stone, stone);
+    b.gable(0, NZ - NL / 2 - 3, 9.6, 7.4, 12, 5, slate);
+    lancet(0, NZ - NL / 2 - 6.5, 0, -1, 2.6, 3.5, 6.5);
 
-    // the west front: great window, rose window, door, corner pinnacles and the cross on the gable
-    arch(0, 14, 0, 1, 5.6, 5.5, 10);
-    b.face(Array.from({ length: 8 }, (_, i): V3 => { const a = (i / 8) * Math.PI * 2; return [Math.cos(a) * 1.6, 19.4 + Math.sin(a) * 1.6, 14.25]; }), glass, [0, 19.4, 10]);
-    arch(0, 14, 0, 1, 3, 0, 5, wood);
-    for (const s of [-1, 1]) { b.box(s * 9.6, 14.4, 1.6, 1.6, 0, 18, stone2, stone2); b.spire(s * 9.6, 14.4, 1.4, 18, 5, stone2); }
-    b.box(0, 14.4, 0.5, 0.5, 27, 4.5, stone2, stone2); b.box(0, 14.4, 2.6, 0.5, 29.6, 0.5, stone2, stone2);
-    // the porch-side buttresses of the front aisles
-    for (const s of [-1, 1]) buttress(s * 16, 10.6, 8);
-
-    // the bell tower at the front corner: string courses, louvred pointed windows, battlements and spires
-    const tx = 15, tz = 10, half = 5.5, H = 36;
-    b.box(tx, tz, half * 2, half * 2, 0, H, stone, stone2);
-    for (const y of [12, 22, 30]) b.box(tx, tz, half * 2 + 0.5, half * 2 + 0.5, y, 0.6, stone2, stone2);
-    for (const [nx, nz] of [[0, 1], [1, 0], [0, -1], [-1, 0]] as const) {
-      const fx = tx + nx * half, fz = tz + nz * half, px = -nz, pz = nx;
-      arch(fx, fz, nx, nz, 1.6, 4, 5); // low window
-      arch(fx, fz, nx, nz, 1.6, 14.5, 5.5);
-      for (const k of [-1, 1]) arch(fx + px * k * 1.5, fz + pz * k * 1.5, nx, nz, 1.3, 23.5, 5.5); // the belfry's paired louvres
-      // battlements: merlons along the parapet
-      for (let t = -half + 0.6; t <= half - 0.6; t += 2.2) b.box(fx - nx * 0.3 + px * t, fz - nz * 0.3 + pz * t, Math.abs(px) * 1.1 + Math.abs(nx) * 0.6, Math.abs(pz) * 1.1 + Math.abs(nz) * 0.6, H, 1.4, stone2, stone2);
-      b.spire(fx + px * 0, fz + pz * 0, 0.9, H, 3, stone2); // the small middle pinnacles
+    // the west front: door, great window, rose in the gable, cross on top, turrets at the corners
+    lancet(0, NF, 0, 1, 3.4, 0.8, 5.6, wood);
+    lancet(0, NF, 0, 1, 4.4, 7.6, 6.8);
+    b.box(0, NF + 0.12, 0.25, 0.1, 7.6, 5.8, trim); // the window's tracery mullion
+    b.face(Array.from({ length: 10 }, (_, i): V3 => { const a = (i / 10) * Math.PI * 2; return [Math.cos(a) * 1.8, 19 + Math.sin(a) * 1.8, NF + 0.1]; }), trim, [0, 19, NF - 3]);
+    b.face(Array.from({ length: 10 }, (_, i): V3 => { const a = (i / 10) * Math.PI * 2; return [Math.cos(a) * 1.35, 19 + Math.sin(a) * 1.35, NF + 0.2]; }), glass, [0, 19, NF - 3]);
+    b.box(0, NF - 0.2, 0.5, 0.5, 24.4, 4.4, trim); b.box(0, NF - 0.2, 2.4, 0.5, 27, 0.5, trim); // the cross
+    for (const s of [-1, 1]) {
+      b.box(s * 6.6, NF + 0.3, 1.8, 1.8, 0.8, 20, deep, trim); b.box(s * 6.6, NF + 0.3, 2.1, 2.1, 20.8, 0.6, trim);
+      b.spire(s * 6.6, NF + 0.3, 1.6, 21.4, 6, deep);
+      buttress(s * 10.8, NF + 0.3, 9.5, 1.4);
+      lancet(s * 8.25, NF, 0, 1, 1.6, 2.6, 4.4); // the aisles' west windows
     }
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { b.box(tx + sx * (half - 0.4), tz + sz * (half - 0.4), 1.6, 1.6, H - 2, 3, stone2, stone2); b.spire(tx + sx * (half - 0.4), tz + sz * (half - 0.4), 1.5, H + 1, 9, stone2); }
-    b.box(tx, tz, half * 2 - 1.2, half * 2 - 1.2, H - 0.2, 0.3, '#B8AD92');
-    b.box(0, 14.6, 0.6, 0.3, 27.5, 3.5, '#00F0FF', '#00F0FF', true); // the cross, lit at night
+
+    // the bell tower at the front corner
+    const tx = 14.6, tz = NF - 4.3, h = 4.3, H = 44;
+    b.box(tx, tz, h * 2 + 1, h * 2 + 1, 0, 1.6, deep, deep);
+    b.box(tx, tz, h * 2, h * 2, 1.6, H - 1.6, stone, stone);
+    for (const y of [11, 22, 32]) b.box(tx, tz, h * 2 + 0.5, h * 2 + 0.5, y, 0.6, trim);
+    for (const [nx, nz] of [[0, 1], [1, 0], [0, -1], [-1, 0]] as const) {
+      const fx = tx + nx * h, fz = tz + nz * h, px = -nz, pz = nx;
+      if (nz === 1) lancet(fx, fz, nx, nz, 2.2, 1.6, 5.4, wood); else lancet(fx, fz, nx, nz, 1.4, 4, 4.5);
+      lancet(fx, fz, nx, nz, 1.6, 13.5, 6.5);
+      for (const k of [-1, 1]) lancet(fx + px * k * 1.3, fz + pz * k * 1.3, nx, nz, 1.2, 23.8, 6.6); // the belfry's pairs
+      for (const k of [-1, 1]) lancet(fx + px * k * 1.3, fz + pz * k * 1.3, nx, nz, 1.1, 34, 6.5, '#41618F');
+      // battlements: merlons along the parapet
+      for (let t = -h + 1.5; t <= h - 1.4; t += 1.75) b.box(fx - nx * 0.25 + px * t, fz - nz * 0.25 + pz * t, Math.abs(px) * 1 + Math.abs(nx) * 0.5, Math.abs(pz) * 1 + Math.abs(nz) * 0.5, H + 0.6, 1.4, trim);
+      b.spire(fx - nx * 0.25, fz - nz * 0.25, 0.9, H + 2, 3.4, deep); // the small middle pinnacles
+    }
+    b.box(tx, tz, h * 2 + 0.6, h * 2 + 0.6, H, 0.6, trim); // the parapet's cornice
+    b.box(tx, tz, h * 2 - 1, h * 2 - 1, H, 0.3, '#C9BB9A');
+    // stepped corner buttresses up to tall pinnacles
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const cx = tx + sx * (h + 0.2), cz = tz + sz * (h + 0.2);
+      b.box(cx, cz, 1.9, 1.9, 0, 22, deep, trim);
+      b.box(cx, cz, 1.5, 1.5, 22, 18, deep, trim);
+      b.box(cx, cz, 1.2, 1.2, 40, H + 1.4 - 40, deep, trim);
+      b.box(cx, cz, 1.5, 1.5, H + 1.4, 0.5, trim);
+      b.spire(cx, cz, 1.3, H + 1.9, 9, deep);
+    }
+    b.box(0, NF - 0.2, 0.6, 0.3, 24.6, 3.8, '#00F0FF', '#00F0FF', true); // the cross, lit at night
     return b.done();
   },
   /** Lagos Central Mosque: a white prayer hall under a great dome, with four minarets */
@@ -543,42 +615,128 @@ function shade(color: string, k: number) {
 const SUN = norm([-0.45, 0.8, 0.4]);
 
 /**
+ * The order to paint a model's solids in, seen from [vx, vy, vz] (towards the camera, in the model's own axes) with
+ * the screen's sideways axis [sx, sz]. Two solids that overlap on screen are ordered by their boxes: if they lie apart
+ * along an axis, the one on the camera's side of it is in front -- true from every angle, unlike sorting faces by
+ * their middles, which let a roof or a buttress jump over a wall as the camera turned. Boxes that pass through each
+ * other go by which reaches nearer the camera. The order only depends on the view direction, so it's kept per direction.
+ */
+const orders = new WeakMap<Model, Map<string, Int32Array>>();
+function partOrder(model: Model, vx: number, vy: number, vz: number, sx: number, sz: number, plan: number, key: string): Int32Array {
+  let m = orders.get(model);
+  if (!m) { m = new Map(); orders.set(model, m); }
+  const hit = m.get(key);
+  if (hit) return hit;
+  const P = model.parts, n = P.length;
+  // each solid's box on a unit screen: across (sx, sz), up the screen by depth (v) and height
+  const bx0 = new Float64Array(n), bx1 = new Float64Array(n), by0 = new Float64Array(n), by1 = new Float64Array(n), mid = new Float64Array(n), reach = new Float64Array(n);
+  const gx = Math.hypot(vx, vz) || 1, fx = vx / gx, fz = vz / gx; // ground direction towards the camera
+  const tilt = vy, rise = gx;
+  for (let i = 0; i < n; i++) {
+    const q = P[i];
+    if (!q) { bx0[i] = 1; bx1[i] = 0; continue; }
+    const b = [q[0] * plan, q[1] * plan, q[2], q[3], q[4] * plan, q[5] * plan]; // (scaled in plan only)
+    let a0 = Infinity, a1 = -Infinity, c0 = Infinity, c1 = -Infinity;
+    for (const x of [b[0], b[1]]) for (const y of [b[2], b[3]]) for (const z of [b[4], b[5]]) {
+      const across = x * sx + z * sz, toward = x * fx + z * fz, up = toward * tilt - y * rise; // screen y grows downwards
+      if (across < a0) a0 = across; if (across > a1) a1 = across; if (-up < c0) c0 = -up; if (-up > c1) c1 = -up;
+    }
+    bx0[i] = a0; bx1[i] = a1; by0[i] = c0; by1[i] = c1;
+    mid[i] = ((b[0] + b[1]) / 2) * vx + ((b[2] + b[3]) / 2) * vy + ((b[4] + b[5]) / 2) * vz;
+    reach[i] = (vx > 0 ? b[1] : b[0]) * vx + (vz > 0 ? b[5] : b[4]) * vz; // how far across the ground it reaches towards the camera
+  }
+  const e = 1e-3;
+  /** -1: i behind j, 1: j behind i */
+  const rel = (i: number, j: number) => {
+    const A = P[i], B = P[j];
+    if (A[1] <= B[0] + e && Math.abs(vx) > e) return vx > 0 ? -1 : 1;
+    if (B[1] <= A[0] + e && Math.abs(vx) > e) return vx > 0 ? 1 : -1;
+    if (A[5] <= B[4] + e && Math.abs(vz) > e) return vz > 0 ? -1 : 1;
+    if (B[5] <= A[4] + e && Math.abs(vz) > e) return vz > 0 ? 1 : -1;
+    if (A[3] <= B[2] + e) return -1; // below, seen from above
+    if (B[3] <= A[2] + e) return 1;
+    // they pass through each other (a band round a tower, a buttress in a wall): the one reaching further out towards
+    // the camera across the ground is in front -- the band wraps the tower all the way down, the buttress stands proud
+    if (Math.abs(reach[i] - reach[j]) > e) return reach[i] < reach[j] ? -1 : 1;
+    return mid[i] < mid[j] ? -1 : mid[i] > mid[j] ? 1 : 0;
+  };
+  const after: number[][] = Array.from({ length: n }, () => []), need = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!P[i]) continue;
+    for (let j = i + 1; j < n; j++) {
+      if (!P[j] || bx1[i] <= bx0[j] || bx1[j] <= bx0[i] || by1[i] <= by0[j] || by1[j] <= by0[i]) continue;
+      const r = rel(i, j);
+      if (r < 0) { after[i].push(j); need[j]++; } else if (r > 0) { after[j].push(i); need[i]++; }
+    }
+  }
+  // farthest-first among the free; a loop (rare) is broken at its farthest
+  const byMid = Array.from({ length: n }, (_, i) => i).sort((p, q) => mid[p] - mid[q]);
+  const ready = byMid.filter((i) => need[i] === 0).reverse(), done = new Uint8Array(n), out: number[] = [];
+  let k = 0;
+  while (out.length < n) {
+    let i: number;
+    if (ready.length) i = ready.pop()!;
+    else { while (done[byMid[k]]) k++; i = byMid[k]; }
+    if (done[i]) continue;
+    done[i] = 1; out.push(i);
+    for (const j of after[i]) if (!done[j] && --need[j] === 0) {
+      let q = ready.length;
+      while (q > 0 && mid[ready[q - 1]] < mid[j]) q--;
+      ready.splice(q, 0, j);
+    }
+  }
+  const res = Int32Array.from(out);
+  if (m.size > 64) m.clear();
+  m.set(key, res);
+  return res;
+}
+
+/**
  * Draws [model] standing at (x, z), its front turned to [heading] (a world angle, like the vehicles'), with the
  * camera [c]. [project] is the renderer's world-to-screen. [glow]: the night's glow layer, for the neon faces.
+ * [size]: its plan's scale, fitting it to its real plot (its height stays true).
  */
 export function drawModel(ctx: CanvasRenderingContext2D, c: { yaw: number; tilt: number; rise: number }, model: Model, x: number, z: number, heading: number,
-  project: (x: number, z: number, y: number) => { sx: number; sy: number }, glow?: CanvasRenderingContext2D | null) {
-  const co = Math.cos(heading), si = Math.sin(heading);
-  // the model's +z front faces along (sin h, cos h): world = (lx cos h + lz sin h, lz cos h - lx sin h)
+  project: (x: number, z: number, y: number) => { sx: number; sy: number }, glow?: CanvasRenderingContext2D | null, size = 1) {
+  const co = Math.cos(heading) * size, si = Math.sin(heading) * size;
+  // the model's +z front faces along (sin h, cos h): world = (lx cos h + lz sin h, lz cos h - lx sin h), its plan times its size
   const toW = (lx: number, lz: number) => [x + lx * co + lz * si, z - lx * si + lz * co];
   const cs = Math.sin(c.yaw), cc = Math.cos(c.yaw);
-  const toCam: V3 = [cs * c.rise, c.tilt, cc * c.rise];
-  const list: { d: number; f: Face; pts: { sx: number; sy: number }[]; light: number }[] = [];
+  // towards the camera and the screen's sideways axis, in the model's own axes
+  const hc = Math.cos(heading), hs = Math.sin(heading);
+  const vx = (cs * hc - cc * hs) * c.rise, vz = (cs * hs + cc * hc) * c.rise, vy = c.tilt;
+  const sx = Math.cos(c.yaw) * hc + Math.sin(c.yaw) * hs, sz = Math.cos(c.yaw) * hs - Math.sin(c.yaw) * hc;
+  const key = `${Math.round(Math.atan2(vx, vz) * 400)}|${Math.round(c.tilt * 400)}|${size.toFixed(2)}`;
+  const order = partOrder(model, vx, vy, vz, sx, sz, size, key);
+  // the faces of each solid that face the camera
+  const byPart = new Map<number, Face[]>();
+  // a plan scaled on its own tips sloped faces (roofs, spires): their normals go as (nx / size, ny, nz / size)
+  const tip = (f: Face) => { const a = f.n[0] / size, b = f.n[1], d = f.n[2] / size, l = Math.hypot(a, b, d) || 1; return [a / l, b / l, d / l]; };
   for (const f of model.faces) {
-    const nx = f.n[0] * co + f.n[2] * si, nz = -f.n[0] * si + f.n[2] * co, ny = f.n[1];
-    if (nx * toCam[0] + ny * toCam[1] + nz * toCam[2] <= 0.001) continue; // turned away
-    const pts: { sx: number; sy: number }[] = [];
-    let d = 0;
-    for (let i = 0; i < f.p.length; i += 3) {
-      const [wx, wz] = toW(f.p[i], f.p[i + 2]), wy = f.p[i + 1];
-      pts.push(project(wx, wz, wy));
-      d += (cs * (wx - x) + cc * (wz - z)) * c.rise + wy * c.tilt;
-    }
-    const light = 0.62 + 0.42 * Math.max(0, nx * SUN[0] + ny * SUN[1] + nz * SUN[2]);
-    list.push({ d: d / pts.length, f, pts, light });
+    const n = size === 1 ? f.n : tip(f);
+    if (n[0] * vx + n[1] * vy + n[2] * vz <= 0.001) continue; // turned away
+    const l = byPart.get(f.part);
+    if (l) l.push(f); else byPart.set(f.part, [f]);
   }
-  list.sort((a, b) => a.d - b.d);
-  for (const it of list) {
-    const p = it.pts;
-    ctx.beginPath(); ctx.moveTo(p[0].sx, p[0].sy); for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].sx, p[i].sy); ctx.closePath();
-    ctx.fillStyle = it.f.glow ? it.f.color : shade(it.f.color, it.light);
-    ctx.fill();
-    if (!it.f.glow) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke(); } // (closes hairline gaps between faces)
-    if (glow) {
-      // the glow layer: everything of the model blanks what's behind; its neon shines
-      glow.beginPath(); glow.moveTo(p[0].sx, p[0].sy); for (let i = 1; i < p.length; i++) glow.lineTo(p[i].sx, p[i].sy); glow.closePath();
-      if (it.f.glow) { glow.globalCompositeOperation = 'source-over'; glow.fillStyle = it.f.color; glow.fill(); }
-      else { glow.globalCompositeOperation = 'destination-out'; glow.fillStyle = '#000'; glow.fill(); glow.globalCompositeOperation = 'source-over'; }
+  for (const part of order) {
+    const fs = byPart.get(part);
+    if (!fs) continue;
+    for (const f of fs) {
+      const p: { sx: number; sy: number }[] = [];
+      for (let i = 0; i < f.p.length; i += 3) { const [wx, wz] = toW(f.p[i], f.p[i + 2]); p.push(project(wx, wz, f.p[i + 1])); }
+      const n = size === 1 ? f.n : tip(f), nx = n[0] * hc + n[2] * hs, nz = -n[0] * hs + n[2] * hc, ny = n[1];
+      const light = 0.74 + 0.34 * Math.max(0, nx * SUN[0] + ny * SUN[1] + nz * SUN[2]);
+      ctx.beginPath(); ctx.moveTo(p[0].sx, p[0].sy); for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].sx, p[i].sy); ctx.closePath();
+      ctx.fillStyle = f.glow ? f.color : shade(f.color, light);
+      ctx.fill();
+      // a lighter edge, like the paintings' bevelled stone (it also closes hairline gaps between faces)
+      if (!f.glow) { ctx.strokeStyle = shade(f.color, light * 1.1 + 0.05); ctx.lineWidth = 0.8; ctx.stroke(); }
+      if (glow) {
+        // the glow layer: everything of the model blanks what's behind; its neon shines
+        glow.beginPath(); glow.moveTo(p[0].sx, p[0].sy); for (let i = 1; i < p.length; i++) glow.lineTo(p[i].sx, p[i].sy); glow.closePath();
+        if (f.glow) { glow.globalCompositeOperation = 'source-over'; glow.fillStyle = f.color; glow.fill(); }
+        else { glow.globalCompositeOperation = 'destination-out'; glow.fillStyle = '#000'; glow.fill(); glow.globalCompositeOperation = 'source-over'; }
+      }
     }
   }
 }

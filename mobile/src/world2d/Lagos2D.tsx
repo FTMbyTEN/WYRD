@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { api } from '../api/client';
 import { DISTRICTS, LANDMARKS, toXZ } from './geo';
 import { modelFor } from './mesh';
+import { place, planRect } from './place';
 import { KIND, World, along, inPoly, type Bld, type Road } from './tiles';
 import { lookFor, type Look } from './person';
 import { CityMap, type Overview } from './CityMap';
@@ -144,7 +145,7 @@ function Game({ onExit }: { onExit: () => void }) {
     // WYRD keeps you company: now and then an aside, in the voice of its real diary
     const aside = setInterval(() => { if (!document.hidden) wyrdSay(WYRD_ASIDES[Math.floor(Math.random() * WYRD_ASIDES.length)]); }, 240000);
     // the landmarks clear their plots of the map's own small buildings
-    const marks = LANDMARKS.map((l) => { const p = toXZ(l.at); const md = modelFor(l.id); return { ...landmarkSprite(l.id, l.sprite, p.x, p.z, l.width), width: md ? md.radius * 2 : l.width, open: !!l.open, snapped: false, model: md ? l.id : undefined, heading: 0 }; });
+    const marks = LANDMARKS.map((l) => { const p = toXZ(l.at); const md = modelFor(l.id); return { ...landmarkSprite(l.id, l.sprite, p.x, p.z, l.width), width: md ? md.radius * 2 : l.width, open: !!l.open, snapped: false, model: md ? l.id : undefined, heading: 0, size: 1 }; });
     // each famous building stands on its real footprint: once its tile is in, the biggest building
     // within ~80 m of the listed spot is taken as it, and the map's own blocks on that plot step aside
     const snapMarks = () => {
@@ -156,30 +157,33 @@ function Game({ onExit }: { onExit: () => void }) {
         if (!all) continue;
         if (!world.have.size) continue; // (the tile index itself not in yet)
         m.snapped = true;
+        const md = m.model ? modelFor(m.model) : null;
         let best: Bld | null = null;
-        for (const tt of world.tiles.values()) for (const b of tt.blds) {
-          if (!b.hide && Math.hypot(b.cx - m.x, b.cz - m.z) < 80 && b.area > 300 && (!best || b.area > best.area)) best = b; // (a footprint another landmark took is hidden: never shared)
-        }
-        if (best && !m.open) { m.x = best.cx; m.z = m.model ? best.cz : best.cz + (best.maxZ - best.minZ) * 0.25; } // (a model stands on the footprint's centre; a picture's base sits a little in front)
-        if (m.model) {
-          // turned square to its real footprint: its long side is the facade; its front to the nearest street
-          let ang = 0, len = 0;
-          if (best) for (let i = 0; i < best.p.length; i += 2) {
-            const j = (i + 2) % best.p.length, ex = best.p[j] - best.p[i], ez = best.p[j + 1] - best.p[i + 1], l = Math.hypot(ex, ez);
-            if (l > len) { len = l; ang = Math.atan2(ex, ez); }
-          }
-          let h = ang + Math.PI / 2;
-          const road = world.nearestRoad(m.x, m.z, 300, KIND.residential);
-          if (road) {
-            const tx = road.x - m.x, tz = road.z - m.z;
-            if (!best) h = Math.atan2(tx, tz);
-            else {
-              // of the four ways square to the footprint, the one facing the street most
-              let bestDot = -Infinity;
-              for (let q = 0; q < 4; q++) { const hh = ang + (q * Math.PI) / 2, dot = Math.sin(hh) * tx + Math.cos(hh) * tz; if (dot > bestDot) { bestDot = dot; h = hh; } }
+        if (md) {
+          // its own footprint (the one its true spot stands in), filled, square to it, its front to the street; or,
+          // with none, the nearest spot and biggest size that cover no street (see place.ts)
+          if (m.id === 'link-bridge') {
+            // the bridge is the bridge: on the mapped bridge road nearest its spot, running along it
+            let bd = 150;
+            for (const tt of world.tiles.values()) for (const rd of tt.roads) {
+              if (!rd.bridge) continue;
+              for (let i = 2; i < rd.p.length; i += 2) {
+                const x0 = rd.p[i - 2], z0 = rd.p[i - 1], dx = rd.p[i] - x0, dz = rd.p[i + 1] - z0, L2 = dx * dx + dz * dz || 1;
+                const u = Math.max(0, Math.min(1, ((m.x - x0) * dx + (m.z - z0) * dz) / L2)), px = x0 + dx * u, pz = z0 + dz * u, d = Math.hypot(px - m.x, pz - m.z);
+                if (d < bd) { bd = d; m.x = px; m.z = pz; m.heading = Math.atan2(dx, dz); }
+              }
             }
+            m.size = 1;
+          } else {
+            const pl = place(world, md, m.x, m.z, m.open, (x, z) => wet(x, z));
+            m.x = pl.x; m.z = pl.z; m.heading = pl.heading; m.size = pl.size; best = pl.foot;
           }
-          m.heading = h;
+          m.width = md.radius * 2 * m.size;
+        } else {
+          for (const tt of world.tiles.values()) for (const b of tt.blds) {
+            if (!b.hide && Math.hypot(b.cx - m.x, b.cz - m.z) < 80 && b.area > 300 && (!best || b.area > best.area)) best = b;
+          }
+          if (best && !m.open) { m.x = best.cx; m.z = best.cz + (best.maxZ - best.minZ) * 0.25; } // (a picture's base sits a little in front)
         }
         if (best && !m.open) best.hide = true; // the landmark's own footprint: its picture stands there instead
         // never on the carriageway: a picture whose base would cover a road steps back off it
@@ -191,8 +195,24 @@ function Game({ onExit }: { onExit: () => void }) {
         }
         // and any block whose footprint the picture's base stands on
         for (const tt of world.tiles.values()) for (const b of tt.blds) if (!b.hide && inPoly(b.p, m.x, m.z)) b.hide = true;
-        const r = m.id === 'link-bridge' ? 0 : m.open ? m.width * 0.4 : Math.max(16, m.width * 0.56); // the picture's whole ground: nothing of the map's own pokes through or over it (open places clear less; the bridge stands over water)
-        for (const tt of world.tiles.values()) for (const b of tt.blds) if (Math.hypot(b.cx - m.x, b.cz - m.z) < r) b.hide = true;
+        let r: number;
+        if (md && m.id !== 'link-bridge') {
+          // a model clears exactly the ground it stands on: every building with a corner or its middle on its plan
+          const plan = planRect(md, m.x, m.z, m.heading, m.size, 1);
+          for (const tt of world.tiles.values()) for (const b of tt.blds) {
+            if (b.hide) continue;
+            let on = inPoly(plan, b.cx, b.cz);
+            for (let i = 0; !on && i < b.p.length; i += 2) on = inPoly(plan, b.p[i], b.p[i + 1]);
+            for (let i = 0; !on && i < plan.length; i += 2) on = inPoly(b.p, plan[i], plan[i + 1]);
+            if (on) b.hide = true;
+          }
+          // and the street furniture on it (a kiosk on the cathedral's steps)
+          for (const tt of world.tiles.values()) tt.props = tt.props.filter((p) => !inPoly(plan, p.x, p.z));
+          r = Math.min(md.box[1] - md.box[0], md.box[3] - md.box[2]) * m.size * 0.5; // (tiles loading later: the circle inside the plan)
+        } else {
+          r = m.id === 'link-bridge' ? 0 : m.open ? m.width * 0.4 : Math.max(16, m.width * 0.56); // the picture's whole ground: nothing of the map's own pokes through or over it (open places clear less; the bridge stands over water)
+          for (const tt of world.tiles.values()) for (const b of tt.blds) if (Math.hypot(b.cx - m.x, b.cz - m.z) < r) b.hide = true;
+        }
         world.clearings.push({ x: m.x, z: m.z, r }); // and in tiles that load later
         world.changed(m.x - 160, m.x + 160, m.z - 160, m.z + 160); // (the cached scenery redraws round it)
         scenery.reset();
@@ -290,7 +310,14 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery };
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery, cam,
+      /** debugging: stand at (x, z) and look from [yaw], tipped to [p] (radians), at [zm] px per metre */
+      view: (x: number, z: number, yaw?: number, p?: number, zm?: number) => {
+        me.x = x; me.z = z; cam.x = x; cam.z = z;
+        if (yaw != null) cam.yaw = yaw;
+        if (p != null) { pitch = p; cam.tilt = Math.sin(p); cam.rise = Math.cos(p); }
+        if (zm != null) { zoom = zm; cam.scale = zm; }
+      } };
     // cars per 100 m of road, by kind: Third Mainland and the expressways are packed, side streets nearly empty
     const DENSITY = [3.2, 2.4, 0.7, 0.3, 0.1];
     let roadPool: Road[] = [], poolAt = { x: Infinity, z: 0 }, wanted = 0, poolTime = 0;

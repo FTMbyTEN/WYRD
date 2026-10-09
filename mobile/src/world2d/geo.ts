@@ -13,7 +13,7 @@ export type Landmark = { id: string; name: string; at: LatLon; sprite: string; w
   /** open places (squares, parks, beaches, bridges, parks of buses) stand where they are, not on a building */ open?: boolean };
 export const LANDMARKS: Landmark[] = [
   { id: 'civic', name: 'Lagos Civic Centre', at: [6.44012, 3.43087], sprite: 'lm-civic-centre', width: 70 },
-  { id: 'theatre', name: 'National Theatre', at: [6.47468, 3.36877], sprite: 'lm-national-theatre', width: 150 },
+  { id: 'theatre', name: 'National Theatre', at: [6.47649, 3.36947], sprite: 'lm-national-theatre', width: 150 },
   { id: 'cathedral', name: 'Cathedral Church of Christ', at: [6.45089, 3.39020], sprite: 'lm-cathedral', width: 70 },
   { id: 'lekki-toll', name: 'Lekki Toll Gate', at: [6.43593, 3.44721], sprite: 'lm-lekki-toll', width: 160 },
   { id: 'eko-hotel', name: 'Eko Hotel', at: [6.42661, 3.43030], sprite: 'lm-eko-hotel', width: 140 },
@@ -37,7 +37,7 @@ export const LANDMARKS: Landmark[] = [
   { id: 'falomo', name: 'Falomo Shopping Centre', at: [6.44481, 3.42821], sprite: 'lm-falomo', width: 90 }, // ~
   { id: 'link-bridge', name: 'Lekki-Ikoyi Link Bridge', at: [6.4400, 3.4436], sprite: 'lm-link-bridge', width: 260, open: true }, // ~
   { id: 'bar-beach', name: 'Bar Beach', at: [6.4084, 3.4300], sprite: 'lm-bar-beach', width: 160, open: true }, // on the Atlantic shore, from the coastline data
-  { id: 'federal-palace', name: 'Federal Palace Hotel', at: [6.43056, 3.40737], sprite: 'lm-federal-palace', width: 130 },
+  { id: 'federal-palace', name: 'Federal Palace Hotel', at: [6.43118, 3.40690], sprite: 'lm-federal-palace', width: 130 },
   { id: 'muri-okunola', name: 'Muri Okunola Park', at: [6.43782, 3.42508], sprite: 'lm-muri-okunola', width: 140, open: true },
   { id: 'unilag-senate', name: 'UNILAG Senate Building', at: [6.5197, 3.39876], sprite: 'lm-unilag-senate', width: 60 },
   { id: 'unilag-gate', name: 'UNILAG Main Gate', at: [6.5150, 3.3880], sprite: 'lm-unilag-gate', width: 60, open: true }, // ~
@@ -46,7 +46,7 @@ export const LANDMARKS: Landmark[] = [
   { id: 'oshodi', name: 'Oshodi Interchange', at: [6.55581, 3.35083], sprite: 'lm-oshodi', width: 150 },
   { id: 'computer-village', name: 'Computer Village', at: [6.59425, 3.34022], sprite: 'lm-computer-village', width: 110 },
   { id: 'alausa', name: 'Lagos State Secretariat, Alausa', at: [6.61562, 3.36074], sprite: 'lm-alausa', width: 220 },
-  { id: 'rail-terminal', name: 'Mobolaji Johnson Railway Station', at: [6.50177, 3.37368], sprite: 'lm-rail-terminal', width: 220 },
+  { id: 'rail-terminal', name: 'Mobolaji Johnson Railway Station', at: [6.49978, 3.37304], sprite: 'lm-rail-terminal', width: 220 },
   { id: 'shrine', name: 'New Afrika Shrine', at: [6.62284, 3.35689], sprite: 'lm-shrine', width: 70 },
   { id: 'nike-gallery', name: 'Nike Art Gallery', at: [6.43152, 3.48189], sprite: 'lm-nike-gallery', width: 45 },
 ];

@@ -11,7 +11,7 @@
  * No 3D engine: one 2D canvas, only what is on screen drawn.
  */
 import { SIZE } from './geo';
-import { drawModel, modelFor } from './mesh';
+import { drawModel, modelFor, type Model } from './mesh';
 import { drawPerson, facingOf, type Look } from './person';
 import { KIND, inPoly, type Road, type Tile } from './tiles';
 /** The camera: centre (x, z) in metres, zoom (px per metre), screen size, and its angles. */
@@ -19,7 +19,7 @@ export type Cam = { x: number; z: number; scale: number; w: number; h: number; d
   /** turn around the vertical axis (radians) */ yaw: number;
   /** ground squash = sin(pitch); height rise = cos(pitch) */ tilt: number; rise: number };
 export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boolean; lift?: number; scale?: number; face?: number;
-  /** a landmark drawn as its 3D model (mesh.ts), turned to [heading] */ model?: string;
+  /** a landmark drawn as its 3D model (mesh.ts), turned to [heading], its plan scaled by [size] to its real plot */ model?: string; size?: number;
   /** which way it is heading in the world, atan2(dx, dz) -- picks the right baked view */
   heading?: number;
   /** a vehicle drawn from its baked sheet (16 headings) */
@@ -299,8 +299,110 @@ export function drawBridges(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
   }
   ctx.restore();
 }
-type Item = { z: number; draw: () => void };
+/** something to paint: its depth key (larger is nearer) and, for putting it in order, where it stands on the ground --
+ *  a footprint (x, z pairs, world) or a single point (one pair) */
+type Item = { z: number; draw: () => void; foot?: ArrayLike<number> };
 type Boxed = Item & { x0: number; x1: number; y0: number; y1: number };
+
+/** where [foot] stands across the camera's view at turned-x [m]: its nearest and farthest turned-z there */
+function spanAt(rx: Float64Array, rz: Float64Array, m: number): [number, number] {
+  const n = rx.length;
+  if (n === 1) return [rz[0], rz[0]];
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, a = rx[i], b = rx[j];
+    if ((a <= m && b >= m) || (b <= m && a >= m)) {
+      const t = b === a ? 0 : (m - a) / (b - a), z = rz[i] + (rz[j] - rz[i]) * t;
+      if (z < lo) lo = z; if (z > hi) hi = z;
+    }
+  }
+  if (lo === Infinity) { let best = 0; for (let i = 1; i < n; i++) if (Math.abs(rx[i] - m) < Math.abs(rx[best] - m)) best = i; lo = hi = rz[best]; }
+  return [lo, hi];
+}
+/**
+ * Back to front by where things stand, not by one depth number each. Two things that overlap on screen are put in
+ * order by their footprints: along the camera's line of sight through both, the one met first from the camera is in
+ * front. That holds from every camera angle -- a single depth per thing (its centre, its nearest corner) doesn't: a
+ * long building and a landmark beside it swap places as the camera turns. Where footprints can't say (they overlap,
+ * or don't share a line of sight), the depth key decides.
+ */
+function inOrder<T extends Boxed>(c: Cam, items: T[]): T[] {
+  const n = items.length;
+  if (n < 2) return items;
+  const co = Math.cos(c.yaw), si = Math.sin(c.yaw);
+  const RX: (Float64Array | null)[] = [], RZ: (Float64Array | null)[] = [], lo: number[] = [], hi: number[] = [];
+  for (const it of items) {
+    const f = it.foot;
+    if (!f || f.length < 2) { RX.push(null); RZ.push(null); lo.push(0); hi.push(0); continue; }
+    const k = f.length >> 1, rx = new Float64Array(k), rz = new Float64Array(k);
+    let a = Infinity, b = -Infinity;
+    for (let i = 0; i < k; i++) {
+      const dx = f[i * 2] - c.x, dz = f[i * 2 + 1] - c.z;
+      rx[i] = co * dx - si * dz; rz[i] = si * dx + co * dz;
+      if (rx[i] < a) a = rx[i]; if (rx[i] > b) b = rx[i];
+    }
+    RX.push(rx); RZ.push(rz); lo.push(a); hi.push(b);
+  }
+  /** -1: i is behind j; 1: j is behind i; 0: the footprints can't tell */
+  const rel = (i: number, j: number) => {
+    const ai = RX[i], aj = RX[j];
+    if (!ai || !aj) return 0;
+    let m: number;
+    const l = Math.max(lo[i], lo[j]), h = Math.min(hi[i], hi[j]);
+    if (l <= h) m = (l + h) / 2;
+    else if (ai.length === 1) m = Math.min(hi[j], Math.max(lo[j], lo[i])); // a point beside a footprint: the footprint's nearest side
+    else if (aj.length === 1) m = Math.min(hi[i], Math.max(lo[i], lo[j]));
+    else return 0;
+    const [i0, i1] = spanAt(ai, RZ[i]!, m), [j0, j1] = spanAt(aj, RZ[j]!, m);
+    if (i1 <= j0 + 0.05) return -1;
+    if (j1 <= i0 + 0.05) return 1;
+    return 0;
+  };
+  // which must be painted before which, among things that overlap on screen
+  const after: number[][] = items.map(() => []), need = new Int32Array(n);
+  const byX = items.map((_, i) => i).sort((p, q) => items[p].x0 - items[q].x0);
+  for (let a = 0; a < n; a++) {
+    const i = byX[a], A = items[i];
+    for (let b = a + 1; b < n; b++) {
+      const j = byX[b], B = items[j];
+      if (B.x0 >= A.x1) break;
+      if (B.y0 >= A.y1 || B.y1 <= A.y0) continue;
+      let r = rel(i, j);
+      if (r === 0) r = A.z < B.z ? -1 : A.z > B.z ? 1 : 0;
+      if (r < 0) { after[i].push(j); need[j]++; } else if (r > 0) { after[j].push(i); need[i]++; }
+    }
+  }
+  // paint whatever has nothing left behind it, farthest (by depth key) first; a rare loop is broken at its farthest
+  const out: T[] = [], done = new Uint8Array(n);
+  const ready = items.map((_, i) => i).filter((i) => need[i] === 0).sort((p, q) => items[q].z - items[p].z);
+  const byZ = items.map((_, i) => i).sort((p, q) => items[p].z - items[q].z);
+  let zi = 0;
+  while (out.length < n) {
+    let i: number;
+    if (ready.length) i = ready.pop()!;
+    else { while (done[byZ[zi]]) zi++; i = byZ[zi]; }
+    if (done[i]) continue;
+    done[i] = 1; out.push(items[i]);
+    for (const j of after[i]) if (!done[j] && --need[j] === 0) {
+      // keep [ready] sorted nearest-first so pop() takes the farthest
+      const z = items[j].z; let k = ready.length;
+      while (k > 0 && items[ready[k - 1]].z < z) k--;
+      ready.splice(k, 0, j);
+    }
+  }
+  return out;
+}
+/** whether [a] stands in front of [b] (by footprints, else by depth key) */
+function inFront(c: Cam, a: Boxed, b: Boxed) {
+  const o = inOrder(c, [b, a]);
+  return o[1] === a;
+}
+/** a model's footprint on the ground: its plan rectangle, turned to [heading] and stood at (x, z) */
+function modelFoot(md: Model, x: number, z: number, heading: number, size: number) {
+  const co = Math.cos(heading), si = Math.sin(heading), [a, b, d, e] = md.box;
+  return [[a, d], [b, d], [b, e], [a, e]].flatMap(([lx, lz]) => [x + (lx * co + lz * si) * size, z + (-lx * si + lz * co) * size]);
+}
+const footOf = (s: Sprite) => { const md = s.model ? modelFor(s.model) : null; return md ? modelFoot(md, s.x, s.z, s.heading ?? 0, s.size ?? 1) : [s.x, s.z]; };
 
 const onCanvas = (c: Cam, b: { x0: number; x1: number; y0: number; y1: number }) => b.x1 > 0 && b.x0 < c.w && b.y1 > 0 && b.y0 < c.h;
 /** a building's box on screen, and its painting depth */
@@ -319,7 +421,7 @@ function pictureBox(c: Cam, s: Sprite) {
   const { sx, sy } = toScreen(c, s.x, s.z, s.lift ?? 0), k = c.scale;
   let w: number, h: number;
   const md = s.model ? modelFor(s.model) : null;
-  if (md) { const r = md.radius * k; return { x0: sx - r - 2, x1: sx + r + 2, y0: sy - r * c.tilt - md.height * k * c.rise - 2, y1: sy + r * c.tilt + 2, z: depth(c, s.x, s.z) }; }
+  if (md) { const m = s.size ?? 1, r = md.radius * k * m; return { x0: sx - r - 2, x1: sx + r + 2, y0: sy - r * c.tilt - md.height * k * c.rise - 2, y1: sy + r * c.tilt + 2, z: depth(c, s.x, s.z) }; }
   if (s.veh) { const sz = (VEH_SPAN[s.s] ?? 6) * VEH_SIZE * k; w = sz; h = sz * 0.9; }
   else if (s.hero) { const sz = 2 * 1.05 * HERO_SIZE * k; w = sz * 0.7; h = sz; }
   else if (!s.up) { const sz = (SIZE[s.s] ?? 8) * k * 1.3; w = sz; h = sz * 0.8; }
@@ -338,27 +440,26 @@ function pictureBox(c: Cam, s: Sprite) {
  */
 export function drawStill(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], fixed: Sprite[], v: View, night: boolean, glow?: CanvasRenderingContext2D) {
   nightNow = night; glowNow = glow ?? null;
-  const items: Item[] = [];
+  const items: Boxed[] = [];
   for (const t of tiles) {
     // only what actually reaches into the picture (a tile is small: most of the nearby city falls outside it)
     for (const b of t.blds) {
       if (b.hide || !inView(v, b.minX, b.maxX, b.minZ, b.maxZ)) continue;
       const bx = buildingBox(c, b);
-      if (onCanvas(c, bx)) items.push({ z: bx.z, draw: () => building(ctx, c, b, night, glow) });
+      if (onCanvas(c, bx)) items.push({ ...bx, foot: b.p, draw: () => building(ctx, c, b, night, glow) });
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
       const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, bx = pictureBox(c, sp);
-      if (onCanvas(c, bx)) items.push({ z: bx.z, draw: () => picture(ctx, c, sp) });
+      if (onCanvas(c, bx)) items.push({ ...bx, foot: [p.x, p.z], draw: () => picture(ctx, c, sp) });
     }
   }
   for (const s of fixed) {
     if (s.x < v.minX - 200 || s.x > v.maxX + 200 || s.z < v.minZ - 200 || s.z > v.maxZ + 200) continue;
     const bx = pictureBox(c, s);
-    if (onCanvas(c, bx)) items.push({ z: bx.z, draw: () => picture(ctx, c, s) });
+    if (onCanvas(c, bx)) items.push({ ...bx, foot: footOf(s), draw: () => picture(ctx, c, s) });
   }
-  items.sort((a, b) => a.z - b.z);
-  for (const it of items) it.draw();
+  for (const it of inOrder(c, items)) it.draw();
 }
 
 /**
@@ -376,12 +477,13 @@ export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
     if (s.x < v.minX - 50 || s.x > v.maxX + 50 || s.z < v.minZ - 50 || s.z > v.maxZ + 50) continue;
     const bx = pictureBox(c, s);
     if (bx.x1 < 0 || bx.x0 > c.w || bx.y1 < 0 || bx.y0 > c.h) continue;
-    live.push({ ...bx, draw: () => picture(ctx, c, s) });
+    live.push({ ...bx, foot: [s.x, s.z], draw: () => picture(ctx, c, s) });
   }
-  const items: Item[] = [...live];
+  const items: Boxed[] = [...live];
   const f = focus ? turn(c, focus.x, focus.z) : null;
   let hidden = false;
-  const covers = (o: { x0: number; x1: number; y0: number; y1: number; z: number }) => live.some((m) => o.z > m.z && o.x1 > m.x0 && o.x0 < m.x1 && o.y1 > m.y0 && o.y0 < m.y1);
+  // a still thing is drawn again over a moving one only if it overlaps it on screen and stands in front of it
+  const covers = (o: Boxed) => live.some((m) => o.x1 > m.x0 && o.x0 < m.x1 && o.y1 > m.y0 && o.y0 < m.y1 && inFront(c, o, m));
   for (const t of tiles) {
     for (const b of t.blds) {
       if (b.hide || !inView(v, b.minX, b.maxX, b.minZ, b.maxZ)) continue;
@@ -391,24 +493,25 @@ export function drawMoving(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[],
         for (let i = 0; i < b.p.length; i += 2) { const q = turn(c, b.p[i], b.p[i + 1]); if (q.rx < rx0) rx0 = q.rx; if (q.rx > rx1) rx1 = q.rx; if (q.rz < rz0) rz0 = q.rz; }
         if (bx.z > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3) hidden = true;
       }
-      if (covers(bx)) { redrawn++; items.push({ ...bx, draw: () => building(ctx, c, b, night, glow) } as Boxed); }
+      const it: Boxed = { ...bx, foot: b.p, draw: () => building(ctx, c, b, night, glow) };
+      if (covers(it)) { redrawn++; items.push(it); }
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
-      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, bx = pictureBox(c, sp);
-      if (covers(bx)) items.push({ ...bx, draw: () => picture(ctx, c, sp) } as Boxed);
+      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face }, it: Boxed = { ...pictureBox(c, sp), foot: [p.x, p.z], draw: () => picture(ctx, c, sp) };
+      if (covers(it)) items.push(it);
     }
   }
   for (const s of fixed) {
     if (s.x < v.minX - 200 || s.x > v.maxX + 200 || s.z < v.minZ - 200 || s.z > v.maxZ + 200) continue;
     const bx = pictureBox(c, s);
     if (f && s.scale && s.up && bx.z > f.rz) { const q = turn(c, focus!.x, focus!.z), fy = q.rz * c.scale * c.tilt + c.h / 2, fx = q.rx * c.scale + c.w / 2; if (fx > bx.x0 && fx < bx.x1 && fy > bx.y0 && fy < bx.y1) hidden = true; }
-    if (covers(bx)) items.push({ ...bx, draw: () => picture(ctx, c, s) } as Boxed);
+    const it: Boxed = { ...bx, foot: footOf(s), draw: () => picture(ctx, c, s) };
+    if (covers(it)) items.push(it);
   }
   liveBox.x0 = Infinity; liveBox.y0 = Infinity; liveBox.x1 = -Infinity; liveBox.y1 = -Infinity;
-  for (const it of items as Boxed[]) if ('x0' in it) { liveBox.x0 = Math.min(liveBox.x0, it.x0); liveBox.y0 = Math.min(liveBox.y0, it.y0); liveBox.x1 = Math.max(liveBox.x1, it.x1); liveBox.y1 = Math.max(liveBox.y1, it.y1); }
-  items.sort((a, b) => a.z - b.z);
-  for (const it of items) it.draw();
+  for (const it of items) { liveBox.x0 = Math.min(liveBox.x0, it.x0); liveBox.y0 = Math.min(liveBox.y0, it.y0); liveBox.x1 = Math.max(liveBox.x1, it.x1); liveBox.y1 = Math.max(liveBox.y1, it.y1); }
+  for (const it of inOrder(c, items)) it.draw();
   return hidden;
 }
 
@@ -423,7 +526,7 @@ export function lightPools(ctx: CanvasRenderingContext2D, c: Cam, pools: Light[]
 export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[], sprites: Sprite[], v: View, night: boolean, focus?: { x: number; z: number }, glow?: CanvasRenderingContext2D): boolean {
   let hidden = false;
   nightNow = night; glowNow = glow ?? null;
-  const items: Item[] = [];
+  const items: Boxed[] = [];
   const f = focus ? turn(c, focus.x, focus.z) : null;
   for (const t of tiles) {
     for (const b of t.blds) {
@@ -436,11 +539,12 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
       }
       const hides = !!f && rz1 > f.rz && rx0 - 2 < f.rx && rx1 + 2 > f.rx && (rz0 - f.rz) * c.tilt < b.h * c.rise + 3;
       if (hides && !b.hide) hidden = true;
-      items.push({ z: rz1, draw: () => building(ctx, c, b, night, glow) });
+      items.push({ ...buildingBox(c, b), foot: b.p, draw: () => building(ctx, c, b, night, glow) });
     }
     for (const p of t.props) {
       if (p.x < v.minX || p.x > v.maxX || p.z < v.minZ || p.z > v.maxZ) continue;
-      items.push({ z: depth(c, p.x, p.z), draw: () => picture(ctx, c, { s: p.s, x: p.x, z: p.z, up: true, face: p.face }) });
+      const sp: Sprite = { s: p.s, x: p.x, z: p.z, up: true, face: p.face };
+      items.push({ ...pictureBox(c, sp), foot: [p.x, p.z], draw: () => picture(ctx, c, sp) });
     }
   }
   for (const s of sprites) {
@@ -456,10 +560,9 @@ export function drawUpright(ctx: CanvasRenderingContext2D, c: Cam, tiles: Tile[]
       }
     }
     if (fade) hidden = true;
-    items.push({ z: depth(c, s.x, s.z), draw: () => picture(ctx, c, s) });
+    items.push({ ...pictureBox(c, s), foot: footOf(s), draw: () => picture(ctx, c, s) });
   }
-  items.sort((a, b) => a.z - b.z);
-  for (const it of items) it.draw();
+  for (const it of inOrder(c, items)) it.draw();
   return hidden;
 }
 /** The player seen through whatever hides them: a soft silhouette drawn over everything. */
@@ -636,7 +739,7 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
 /** which of [n] baked headings to show for a world heading, as this camera sees it */
 const view = (c: Cam, heading: number, n: number) => ((Math.round((screenHeading(c, heading) / (Math.PI * 2)) * n) % n) + n) % n;
 function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
-  if (s.model) { const md = modelFor(s.model); if (md) { drawModel(ctx, c, md, s.x, s.z, s.heading ?? 0, (x, z, y) => toScreen(c, x, z, y), glowNow); return; } }
+  if (s.model) { const md = modelFor(s.model); if (md) { drawModel(ctx, c, md, s.x, s.z, s.heading ?? 0, (x, z, y) => toScreen(c, x, z, y), glowNow, s.size ?? 1); return; } }
   const { sx, sy } = toScreen(c, s.x, s.z, s.lift ?? 0);
   if (s.hero) {
     const pitch = Math.asin(c.tilt);

@@ -204,7 +204,7 @@ export class World {
     const rail = d.rail.map((r) => { const p = new Float32Array(r.length); for (let i = 0; i < r.length; i += 2) { p[i] = r[i] / 10 + ox; p[i + 1] = r[i + 1] / 10 + oz; } return p; });
 
     const tile: Tile = { key, tx: d.x, tz: d.z, roads, blds, water, rail, props: [], grid, used: performance.now(), all };
-    tile.props = this.furnish(tile, rnd);
+    tile.props = this.furnish(tile, rnd).filter((q) => !this.clearings.some((c) => Math.hypot(c.x - q.x, c.z - q.z) < c.r)); // (nothing on a landmark's ground)
     return tile;
   }
 
