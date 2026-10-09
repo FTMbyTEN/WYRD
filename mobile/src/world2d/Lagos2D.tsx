@@ -14,6 +14,7 @@ import { WyrdPanel, type WyrdLine } from './WyrdPanel';
 import { CY, HEAD, MONO, Panel, loadCyberFonts } from './cyber';
 import { Radio, STATIONS, type Station } from './radio';
 import { Scenery } from './scenery';
+import { Traffic } from './traffic';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import type { Story } from '../api/client';
 import { type Light, depth, drawFlyer, drawMoving, redrawn, liveBox, lightPools, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
@@ -27,7 +28,11 @@ import { type Light, depth, drawFlyer, drawMoving, redrawn, liveBox, lightPools,
  *  - N switches day and night (it follows Lagos time when you arrive).
  */
 const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-type Car = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; lane: number; x: number; z: number; rot: number };
+/** [v]: the speed it cruises at; [cur]: its speed now (it eases towards what the road ahead allows); [stunUntil]: hit,
+ *  it stands still until then */
+type Car = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; lane: number; x: number; z: number; rot: number; cur?: number; stunUntil?: number };
+/** a puff of smoke from a damaged car, or a spark from a crash */
+type Puff = { x: number; z: number; y: number; vx: number; vz: number; vy: number; life: number; max: number; kind: 'smoke' | 'spark' };
 type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side: number; x: number; z: number; left: boolean; look: Look; heading: number };
 type Boat = { x: number; z: number; a: number; v: number };
 /** a flying car: where it is, how high, which way and how fast it flies */
@@ -95,8 +100,8 @@ function Game({ onExit }: { onExit: () => void }) {
   const hudKey = useRef('');
   const setHud = (h: Hud | null) => { const k = JSON.stringify(h); if (k !== hudKey.current) { hudKey.current = k; setHudRaw(h); } };
   /** live readings for the HUD: metres to the objective, speed at the wheel (km/h), and the district you are in */
-  const [live, setLiveRaw] = useState<{ dist: number | null; kmh: number; area: string }>({ dist: null, kmh: 0, area: '' });
-  const setLive = (l: { dist: number | null; kmh: number; area: string }) => setLiveRaw((p) => (p.dist === l.dist && p.kmh === l.kmh && p.area === l.area ? p : l));
+  const [live, setLiveRaw] = useState<{ dist: number | null; kmh: number; area: string; hp: number }>({ dist: null, kmh: 0, area: '', hp: 100 });
+  const setLive = (l: { dist: number | null; kmh: number; area: string; hp: number }) => setLiveRaw((p) => (p.dist === l.dist && p.kmh === l.kmh && p.area === l.area && p.hp === l.hp ? p : l));
   const [wallet, setWallet] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [board, setBoard] = useState(false);
@@ -163,8 +168,21 @@ function Game({ onExit }: { onExit: () => void }) {
     const world = new World();
     // the still city, drawn once in screen tiles and kept (see scenery.ts)
     const scenery = new Scenery(world);
+    // the traffic lights at the main junctions, and the smoke and sparks of crashes
+    const traffic = new Traffic();
+    const puffs: Puff[] = [];
+    let lastCrashSay = 0;
     let alive = true;
     const say = (t: string) => { setToast(t); setTimeout(() => setToast((c) => (c === t ? null : c)), Math.max(3200, t.length * 55)); };
+    /** you hit something at [speed] m/s: damage by how hard, sparks where, and a word about it */
+    function crash(speed: number, what: 'car' | 'wall', x: number, z: number, now: number) {
+      if (!me.car) return;
+      const dmg = Math.round(Math.min(45, (speed - (what === 'car' ? 2 : 5)) * 3.2));
+      if (dmg <= 0) return;
+      me.car.hp = Math.max(0, me.car.hp - dmg);
+      for (let k = 0; k < 12; k++) puffs.push({ x, z, y: 0.9, vx: (Math.random() - 0.5) * 7, vz: (Math.random() - 0.5) * 7, vy: 2 + Math.random() * 3, life: 0, max: 0.35 + Math.random() * 0.3, kind: 'spark' });
+      if (now - lastCrashSay > 2000) { lastCrashSay = now; say(me.car.hp <= 0 ? 'Your car is wrecked. Press E to get out and find another.' : `Crash! The car is at ${me.car.hp}%.`); }
+    }
     const wyrdSay = (t: string, live = false) => { if (t.startsWith('WYRD city bulletin') || live) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') || live ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setWyrdLive(live); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
     wyrdRef.current = wyrdSay;
     // WYRD's live wire, the same for everyone in the city: what's happening now (citizens settling missions, city
@@ -318,7 +336,7 @@ function Game({ onExit }: { onExit: () => void }) {
     }).catch(() => {});
     // start on the Marina, Lagos Island, by the lagoon -- then step onto the nearest real road
     const start = toXZ([6.4497, 3.3935]);
-    const me = { x: start.x, z: start.z, face: 0, step: 0, dist: 0, heading: 0, moving: false, car: null as null | { sprite: string; v: number; rot: number } };
+    const me = { x: start.x, z: start.z, face: 0, step: 0, dist: 0, heading: 0, moving: false, car: null as null | { sprite: string; v: number; rot: number; hp: number } }; // (hp: the car's condition, 100 to wrecked at 0)
     situationRef.current = () => {
       const road = world.nearestRoad(me.x, me.z, 80, KIND.residential);
       let area = '', ad = Infinity;
@@ -353,7 +371,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [], flyers: Flyer[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery, cam,
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery, cam, get traffic() { return traffic; },
       /** debugging: stand at (x, z) and look from [yaw], tipped to [p] (radians), at [zm] px per metre */
       view: (x: number, z: number, yaw?: number, p?: number, zm?: number) => {
         me.x = x; me.z = z; cam.x = x; cam.z = z;
@@ -448,7 +466,7 @@ function Game({ onExit }: { onExit: () => void }) {
       cars.forEach((c, i) => { const d = Math.hypot(c.x - me.x, c.z - me.z); if (d < bd && c !== (job?.type === 'chase' ? job.thief : null)) { bd = d; best = i; } });
       if (best < 0) { say('No car close enough. Walk up to one and press E.'); return; }
       const c = cars.splice(best, 1)[0];
-      me.x = c.x; me.z = c.z; me.car = { sprite: c.sprite, v: 0, rot: c.rot };
+      me.x = c.x; me.z = c.z; me.car = { sprite: c.sprite, v: 0, rot: c.rot, hp: 100 };
       setDriving(true);
       say(c.sprite === 'car-danfo' ? 'You have a danfo. Press M for a danfo run.' : 'You are driving. W to go, S to brake, A/D to steer.');
     }
@@ -600,12 +618,29 @@ function Game({ onExit }: { onExit: () => void }) {
         if (!boardRef.current) {
           if (me.car) {
             const c = me.car;
-            c.v += (-az) * (az < 0 ? 9 : 14) * dt;
-            if (!az) c.v *= 1 - 0.8 * dt;
-            c.v = Math.max(-5, Math.min(24, c.v));
+            const wrecked = c.hp <= 0; // (wrecked: it won't go -- get out and take another)
+            c.v += (wrecked ? 0 : -az) * (az < 0 ? 9 : 14) * dt;
+            if (!az || wrecked) c.v *= 1 - (wrecked ? 3 : 0.8) * dt;
+            c.v = Math.max(-5, Math.min(24 * (0.55 + 0.45 * c.hp / 100), c.v)); // (a battered car is slower)
             c.rot -= ax * dt * 2.2 * Math.min(1, Math.abs(c.v) / 6) * Math.sign(c.v || 1);
-            const nx = me.x + Math.sin(c.rot) * c.v * dt, nz = me.z + Math.cos(c.rot) * c.v * dt;
-            if (stop(nx, nz, 1.2)) c.v *= -0.3; else { me.x = nx; me.z = nz; }
+            const fx = Math.sin(c.rot), fz = Math.cos(c.rot);
+            const nx = me.x + fx * c.v * dt, nz = me.z + fz * c.v * dt;
+            if (stop(nx, nz, 1.2)) { crash(Math.abs(c.v), 'wall', me.x + fx * 2.2, me.z + fz * 2.2, now); c.v *= -0.3; } else { me.x = nx; me.z = nz; }
+            // other cars are solid: you're pushed back off them, and hitting one hard does damage (and stops it dead)
+            for (const o of cars) {
+              const dx = o.x - me.x, dz = o.z - me.z, d = Math.hypot(dx, dz);
+              if (d > 3.3 || d < 0.01) continue;
+              const ux = dx / d, uz = dz / d, closing = (fx * ux + fz * uz) * c.v;
+              me.x -= ux * (3.3 - d); me.z -= uz * (3.3 - d);
+              if (closing > 0.8) { crash(closing, 'car', me.x + ux * 1.7, me.z + uz * 1.7, now); c.v *= -0.25; o.stunUntil = now + 3000; o.cur = 0; }
+            }
+            // people: you can't drive through them -- the car stops short
+            for (const w of walkers) {
+              const dx = w.x - me.x, dz = w.z - me.z, d = Math.hypot(dx, dz);
+              if (d < 3 && (dx * fx + dz * fz) * Math.sign(c.v) > 0 && Math.abs(c.v) > 0.5) { c.v *= 0.2; if (now - lastCrashSay > 4000) { lastCrashSay = now; say('Mind the people!'); } }
+            }
+            // a damaged car smokes, more the worse it gets
+            if (c.hp < 55 && Math.random() < dt * (4 + (55 - c.hp) / 5)) puffs.push({ x: me.x - fx * 1.8, z: me.z - fz * 1.8, y: 1.2, vx: (Math.random() - 0.5) * 0.6, vz: (Math.random() - 0.5) * 0.6, vy: 1.4 + Math.random(), life: 0, max: 1.8 + Math.random(), kind: 'smoke' });
           } else if (ax || az) {
             const sp = (keys.has('shift') ? 5.2 : 1.55) * dt, L = Math.hypot(ax, az); // a walk is ~1.5 m/s; a run is a real run
             const co = Math.cos(cam.yaw), si = Math.sin(cam.yaw);
@@ -620,6 +655,7 @@ function Game({ onExit }: { onExit: () => void }) {
           me.moving = !me.car && !!(ax || az);
         }
         world.around(me.x, me.z, 800);
+      traffic.update(world, me.x, me.z);
         if (arriving && world.tiles.has(`${Math.floor(me.x / 500)}_${Math.floor(me.z / 500)}`)) {
           const n = world.nearestRoad(me.x, me.z, 400, KIND.residential);
           if (n) { const side = n.r.w / 2 + 1.5; const a = along(n.r.p, n.r.cum, n.s); me.x = n.x - a.dz * side; me.z = n.z + a.dx * side; cam.x = me.x; cam.z = me.z; }
@@ -633,10 +669,25 @@ function Game({ onExit }: { onExit: () => void }) {
         for (let i = cars.length - 1; i >= 0; i--) {
           const c = cars[i];
           if (!c.r) continue;
-          const ahead = cars.some((o) => o !== c && o.r === c.r && o.dir === c.dir && o.lane === c.lane && ((o.s - c.s) > 0 && (o.s - c.s) < 9));
-          const nearMe = Math.hypot(c.x - me.x, c.z - me.z) < 5 && !me.car;
-          const tv = ahead || nearMe ? 0 : (job?.type === 'chase' && job.thief === c ? 8.5 : c.v || 11);
-          c.s += tv * dt;
+          // what the road ahead allows: a gap to whatever's in front in its lane (another car on any road, or you), and
+          // the light at the junction it's coming to; it eases to that -- braking hard, pulling away gently
+          const thief = job?.type === 'chase' && job.thief === c;
+          const cruise = thief ? 8.5 : c.v || 11;
+          const hx = Math.sin(c.rot), hz = Math.cos(c.rot);
+          let gap = Infinity;
+          const look = (ox: number, oz: number) => { const dx = ox - c.x, dz = oz - c.z, al = dx * hx + dz * hz; if (al > 0 && al < 20 && Math.abs(dx * hz - dz * hx) < 2.1) gap = Math.min(gap, al); };
+          for (const o of cars) if (o !== c) look(o.x, o.z);
+          if (me.car) look(me.x, me.z);
+          let want = !me.car && Math.hypot(c.x - me.x, c.z - me.z) < 5 ? 0 : cruise;
+          if (!thief) {
+            if (gap < Infinity) want = Math.min(want, gap < 6.5 ? 0 : cruise * Math.min(1, (gap - 6.5) / 9));
+            const line = traffic.stopFor(c.r, c.dir, c.s, now);
+            if (line < Infinity) want = Math.min(want, line < 0.6 ? 0 : Math.sqrt(2 * 4.5 * line));
+          }
+          if ((c.stunUntil ?? 0) > now) want = 0;
+          const cur = c.cur ?? want;
+          c.cur = cur + Math.max(-9 * dt, Math.min(3.5 * dt, want - cur));
+          c.s += c.cur * dt;
           if (c.s >= c.r.len) {
             // carry on along a road that starts where this one ends, else turn round
             const end = along(c.r.p, c.r.cum, c.dir === 1 ? c.r.len : 0);
@@ -666,6 +717,12 @@ function Game({ onExit }: { onExit: () => void }) {
           const nx = b.x + Math.cos(b.a) * b.v * dt, nz = b.z + Math.sin(b.a) * b.v * dt;
           if (afloat(nx, nz)) { b.x = nx; b.z = nz; } else b.a += Math.PI * 0.6;
           if (Math.hypot(b.x - me.x, b.z - me.z) > 500) boats.splice(i, 1);
+        }
+        for (let i = puffs.length - 1; i >= 0; i--) {
+          const p = puffs[i];
+          p.life += dt; p.x += p.vx * dt; p.z += p.vz * dt; p.y += p.vy * dt;
+          if (p.kind === 'spark') p.vy -= 12 * dt;
+          if (p.life > p.max || p.y < 0) puffs.splice(i, 1);
         }
         // flying cars: sky lanes across the city, 30-60 m up, each crossing near you and flying on out of sight
         if (flyers.length < 3) { // (a few at a time: the sky over Lagos is busy, not crowded)
@@ -710,8 +767,8 @@ function Game({ onExit }: { onExit: () => void }) {
       // camera
       const want = me.car ? Math.min(zoom, 11) : zoom; // pull back a little at the wheel, to see the road ahead
       cam.w = W; cam.h = H; cam.dpr = dpr;
-      cam.scale += (want - cam.scale) * Math.min(1, dt * 3);
-      if (Math.abs(want - cam.scale) < want * 0.002) cam.scale = want; // settle exactly, so the scenery cache can hold
+      cam.scale += (want - cam.scale) * Math.min(1, dt * 9); // (a third of a second or so: the sharp scenery can start coming in)
+      if (Math.abs(want - cam.scale) < want * 0.01) cam.scale = want; // settle exactly, so the scenery cache can hold
       cam.x += (me.x - cam.x) * Math.min(1, dt * 5);
       cam.z += (me.z - cam.z) * Math.min(1, dt * 5);
       if (cam.yaw !== camWas.yaw || cam.tilt !== camWas.tilt) { camMovedAt = now; camWas = { yaw: cam.yaw, tilt: cam.tilt }; }
@@ -786,6 +843,13 @@ function Game({ onExit }: { onExit: () => void }) {
         hidden = upright(ctx);
         if (hidden && playerSprite) drawGhost(ctx, cam, playerSprite);
       }
+      // the traffic lights, then smoke and sparks
+      traffic.draw(ctx, (x, z, y) => toScreen(cam, x, z, y), cam.scale, W, H, now, night);
+      for (const p of puffs) {
+        const q = toScreen(cam, p.x, p.z, p.y), t = p.life / p.max;
+        if (p.kind === 'smoke') { ctx.fillStyle = `rgba(70,74,82,${(0.45 * (1 - t)).toFixed(3)})`; ctx.beginPath(); ctx.arc(q.sx, q.sy, (0.5 + t * 1.6) * cam.scale, 0, Math.PI * 2); ctx.fill(); }
+        else { ctx.fillStyle = t < 0.5 ? '#FFF3B0' : '#FFB23D'; ctx.beginPath(); ctx.arc(q.sx, q.sy, Math.max(1, 0.12 * cam.scale), 0, Math.PI * 2); ctx.fill(); }
+      }
       // flying cars, over the roofs, far ones first
       for (const f of [...flyers].sort((p, q) => depth(cam, p.x, p.z) - depth(cam, q.x, q.z))) drawFlyer(ctx, cam, { s: f.sprite, x: f.x, z: f.z, veh: true, heading: f.h, lift: f.y }, night);
       // the job's target: a bouncing marker
@@ -843,7 +907,7 @@ function Game({ onExit }: { onExit: () => void }) {
         setWhere(near?.r.name ?? '');
         let area = '', ad = Infinity;
         for (const d of districtsXZ) { const q = Math.hypot(d.x - me.x, d.z - me.z); if (q < ad) { ad = q; area = d.name; } }
-        setLive({ dist: tgt ? (d => (d < 1000 ? Math.round(d / 10) * 10 : Math.round(d / 100) * 100))(Math.hypot(tgt.x - me.x, tgt.z - me.z)) : null, kmh: me.car ? Math.round(Math.abs(me.car.v) * 3.6) : 0, area: ad < 4000 ? area : '' });
+        setLive({ dist: tgt ? (d => (d < 1000 ? Math.round(d / 10) * 10 : Math.round(d / 100) * 100))(Math.hypot(tgt.x - me.x, tgt.z - me.z)) : null, kmh: me.car ? Math.round(Math.abs(me.car.v) * 3.6) : 0, area: ad < 4000 ? area : '', hp: me.car ? Math.round(me.car.hp) : 100 });
       }
     };
     raf = requestAnimationFrame(frame);
@@ -954,6 +1018,8 @@ function Game({ onExit }: { onExit: () => void }) {
           <View style={{ alignItems: 'center', paddingHorizontal: 22, paddingVertical: 4 }}>
             <Text style={s.speed}>{String(live.kmh).padStart(3, '0')}</Text>
             <Text style={s.kickerDim}>KM/H</Text>
+            <View style={s.hpTrack}><View style={[s.hpFill, { width: `${live.hp}%`, backgroundColor: live.hp > 60 ? CY.green : live.hp > 25 ? CY.yellow : CY.red }]} /></View>
+            <Text style={[s.kickerDim, live.hp <= 25 && { color: CY.red }]}>{live.hp <= 0 ? 'WRECKED' : `CAR ${live.hp}%`}</Text>
           </View>
         </Panel>
       ) : null}
@@ -1104,6 +1170,8 @@ const s = StyleSheet.create({
   where: { position: 'absolute', left: 214, bottom: 22, maxWidth: 280 },
   whereText: { fontFamily: HEAD, fontSize: 16, fontWeight: '700', color: CY.text, letterSpacing: 0.5 },
   radio: { position: 'absolute', bottom: 92, alignSelf: 'center' },
+  hpTrack: { width: 70, height: 4, backgroundColor: 'rgba(255,255,255,0.15)', marginTop: 4 },
+  hpFill: { height: 4 },
   perf: { position: 'absolute', top: 70, left: 14, backgroundColor: 'rgba(5,8,15,0.8)', paddingHorizontal: 10, paddingVertical: 6, gap: 2 },
   perfText: { fontFamily: MONO, fontSize: 11, color: CY.green, letterSpacing: 0.5 },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 7 },
