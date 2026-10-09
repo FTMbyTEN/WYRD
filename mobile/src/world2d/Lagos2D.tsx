@@ -33,6 +33,17 @@ type Boat = { x: number; z: number; a: number; v: number };
 /** a flying car: where it is, how high, which way and how fast it flies */
 type Flyer = { x: number; z: number; y: number; h: number; v: number; sprite: string };
 // the 3D city's hover-car (world/hovercar.ts), baked in four paints
+/** what draws the canvas: the graphics card's name, or a software renderer (SwiftShader, llvmpipe, Microsoft Basic
+ *  Render Driver) -- Chrome falls back to software on some machines and drivers, and then every frame is slow */
+function graphicsName(): { name: string; software: boolean } {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (!gl) return { name: 'no WebGL', software: true };
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    return { name, software: /swiftshader|llvmpipe|software|basic render/i.test(name) };
+  } catch { return { name: 'unknown', software: false }; }
+}
 const FLYER_SPRITES = ['hover-navy', 'hover-pearl', 'hover-crimson', 'hover-gold'];
 type Place = { k: string; n: string | null; x: number; z: number };
 type Job =
@@ -99,6 +110,9 @@ function Game({ onExit }: { onExit: () => void }) {
   const radio = useRef<Radio | null>(null); // FM (Q)
   const [onAir, setOnAir] = useState<Station | null>(null);
   const [tuning, setTuning] = useState(false);
+  // the performance readout (F8): frames a second, the game's own work per frame, resolution, what draws the pixels
+  const [perf, setPerf] = useState<{ fps: number; ms: number; worst: number; res: string; gpu: string; software: boolean } | null>(null);
+  const perfOn = useRef(false);
   const tuneRadio = () => {
     if (!radio.current) { radio.current = new Radio(); radio.current.onChange = (st, live) => { setOnAir(st); setTuning(!!st && !live); }; }
     radio.current.tune();
@@ -399,6 +413,7 @@ function Game({ onExit }: { onExit: () => void }) {
       if (k === 'm') setBoard((v) => !v);
       if (k === 't') { e.preventDefault(); setWyrdOpen((v) => !v); }
       if (k === 'q' && !e.repeat) tuneRadio();
+      if (k === 'f8' && !e.repeat) { perfOn.current = !perfOn.current; if (!perfOn.current) setPerf(null); }
       if (k === 'tab') { e.preventDefault(); if (!e.repeat) setCityMap((v) => !v); }
       if (k === 'escape') { if (boardRef.current) setBoard(false); setWyrdOpen(false); }
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
@@ -532,17 +547,35 @@ function Game({ onExit }: { onExit: () => void }) {
     });
     let camMovedAt = -1e9, camWas = { yaw: 0, tilt: 0, scale: 0 };
     let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1, lastHazeNight = false, lastLive = { x0: 0, y0: 0, x1: 99999, y1: 99999 };
+    const gpu = graphicsName();
+    if (gpu.software) quality = 0.75; // drawn in software: a lighter resolution from the start, so it stays smooth
+    let perfAt = performance.now(), perfFrames = 0, perfWork = 0, perfWorst = 0;
     const frame = (now: number) => {
+      const t0 = performance.now();
+      frameBody(now);
+      const work = performance.now() - t0;
+      perfFrames++; perfWork += work; perfWorst = Math.max(perfWorst, work);
+      if (t0 - perfAt >= 1000) {
+        if (perfOn.current) setPerf({ fps: Math.round((perfFrames * 1000) / (t0 - perfAt)), ms: +(perfWork / perfFrames).toFixed(1), worst: Math.round(perfWorst), res: `${canvas.width}×${canvas.height}`, gpu: gpu.name, software: gpu.software });
+        perfAt = t0; perfFrames = 0; perfWork = 0; perfWorst = 0;
+      }
+    };
+    const frameBody = (now: number) => {
       raf = requestAnimationFrame(frame);
       // the world runs on real time, however long a frame takes to draw (turning the camera redraws the whole city):
       // a slow frame advances it in several small steps instead of slowing it down -- up to a quarter-second at once
       const realDt = Math.min(0.25, (now - last) / 1000); last = now;
       const steps = Math.max(1, Math.ceil(realDt / 0.05));
       let dt = realDt / steps;
-      // sharpness that keeps up: full device resolution while frames are quick; standard resolution on
-      // slower graphics (a 1.25x screen draws half again as many pixels), judged over the last couple of seconds
+      // sharpness that keeps up: full device resolution while frames are quick; standard resolution on slower
+      // graphics (a 1.25x screen draws half again as many pixels), judged over the last couple of seconds
       slowAvg = slowAvg * 0.97 + Math.min(100, realDt * 1000) * 0.03;
-      if (slowAvg > 24 && quality > 1 && now - qualityAt > 3000) { quality = 1; qualityAt = now; }
+      // ...and on modest graphics (a laptop's built-in chip filling the screen is the slow part, not the game), a step
+      // lighter at a time -- standard, then 85%, then 72% -- until frames keep up: a touch softer, much smoother
+      if (slowAvg > 24 && now - qualityAt > 3000) {
+        const next = quality > 1 ? 1 : quality > 0.85 ? 0.85 : quality > 0.72 ? 0.72 : quality;
+        if (next !== quality) { quality = next; qualityAt = now; slowAvg = 20; }
+      }
       // while the camera turns, tips or zooms the whole city is drawn afresh every frame (no cached scenery fits a
       // view that keeps changing): it's drawn at three-quarters resolution then -- in motion the eye can't tell, and
       // a quarter fewer pixels each way is nearly half the filling -- and sharp again the moment the camera rests
@@ -887,6 +920,12 @@ function Game({ onExit }: { onExit: () => void }) {
         </Panel>
       ) : null}
 
+      {perf ? (
+        <View style={s.perf} pointerEvents="none">
+          <Text style={s.perfText}>{perf.fps} FPS  ·  GAME {perf.ms} MS/FRAME (WORST {perf.worst})  ·  {perf.res}</Text>
+          <Text style={[s.perfText, perf.software && { color: CY.red }]}>{perf.software ? 'SOFTWARE DRAWING — turn on hardware acceleration in Chrome settings' : `GPU: ${perf.gpu.slice(0, 60)}`}</Text>
+        </View>
+      ) : null}
       {/* the radio: what's on, with a level meter */}
       {onAir ? (
         <Panel style={s.radio} accent={CY.green} edge="rgba(61,255,154,0.45)" cut={10} pad={0}>
@@ -1055,6 +1094,8 @@ const s = StyleSheet.create({
   where: { position: 'absolute', left: 214, bottom: 22, maxWidth: 280 },
   whereText: { fontFamily: HEAD, fontSize: 16, fontWeight: '700', color: CY.text, letterSpacing: 0.5 },
   radio: { position: 'absolute', bottom: 92, alignSelf: 'center' },
+  perf: { position: 'absolute', top: 70, left: 14, backgroundColor: 'rgba(5,8,15,0.8)', paddingHorizontal: 10, paddingVertical: 6, gap: 2 },
+  perfText: { fontFamily: MONO, fontSize: 11, color: CY.green, letterSpacing: 0.5 },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 7 },
   eq: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 18 },
   radioFreq: { fontFamily: MONO, fontSize: 14, color: CY.green, letterSpacing: 1 },
