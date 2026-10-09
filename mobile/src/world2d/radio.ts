@@ -1,14 +1,22 @@
+import { LAGOS_STATIONS } from '../world/lagosStations';
+
 /**
- * NAIJA 2099's FM radio: original stations made live in the browser (Web Audio), no recordings and no real
- * station's music or name. Three music stations play endless generated grooves in their own style; WYRD Talk
- * is the city mind as a DJ, reading the city's bulletins and the street's jokes in the browser's own voice.
+ * NAIJA 2099's FM radio. The dial is real Lagos radio, live -- Wazobia, Cool, Metro, Nigeria Info, Bond, GoRadio --
+ * played straight from the stations' own public streams in the player's browser (nothing stored or re-broadcast),
+ * and WYRD Talk, the city mind as a DJ reading the city's bulletins in the browser's own voice. A station that won't
+ * play hands over to the next; with no signal at all (offline), the radio falls back to music made live in the
+ * browser (Web Audio) in three original styles.
  */
-export type Station = { freq: string; name: string; kind: 'afro' | 'lofi' | 'highlife' | 'talk'; tag: string };
+export type Station = { freq: string; name: string; kind: 'live' | 'afro' | 'lofi' | 'highlife' | 'talk'; tag: string; url?: string };
 export const STATIONS: Station[] = [
-  { freq: '98.5', name: 'ÈKÓ AFROSYNTH', kind: 'afro', tag: 'Afrobeats from the year 2099' },
-  { freq: '88.7', name: 'LAGOON LO-FI', kind: 'lofi', tag: 'Slow beats for the go-slow' },
-  { freq: '101.9', name: 'HIGHLIFE 2099', kind: 'highlife', tag: 'Guitars that never grew old' },
+  ...LAGOS_STATIONS.map((l): Station => ({ freq: l.freq, name: l.name.toUpperCase(), kind: 'live', tag: l.tag, url: l.url })),
   { freq: '104.1', name: 'WYRD TALK', kind: 'talk', tag: 'The city mind, on air' },
+];
+/** no signal: music made in the browser */
+const OFFLINE: Station[] = [
+  { freq: '98.5', name: 'ÈKÓ AFROSYNTH', kind: 'afro', tag: 'No signal · Afrobeats from the year 2099' },
+  { freq: '88.7', name: 'LAGOON LO-FI', kind: 'lofi', tag: 'No signal · slow beats for the go-slow' },
+  { freq: '101.9', name: 'HIGHLIFE 2099', kind: 'highlife', tag: 'No signal · guitars that never grew old' },
 ];
 
 type Style = { bpm: number; root: number; scale: number[]; kick: number[]; snare: number[]; hat: number[]; bass: number[]; lead: number; chords: number[][]; swing: number };
@@ -44,6 +52,11 @@ export class Radio {
   private talkTimer = 0;
   private noise: AudioBuffer | null = null;
   station = -1; // -1: off
+  /** what's playing now (a live station, WYRD Talk, or the no-signal music) */
+  playing: Station | null = null;
+  /** told whenever what's playing changes, or a live station goes from tuning to on air */
+  onChange: ((st: Station | null, onAir: boolean) => void) | null = null;
+  private el: HTMLAudioElement | null = null;
   /** extra lines for WYRD Talk: the city's bulletins as they happen */
   news: string[] = [];
   volume = 0.5;
@@ -63,28 +76,49 @@ export class Radio {
     return this.ac;
   }
 
-  /** Tune to the next station (off -> 98.5 -> ... -> 104.1 -> off). Returns the station, or null when off. */
+  /** Tune to the next station along the dial (off -> each station -> off). Returns it, or null when off. */
   tune(): Station | null {
     this.stop();
     this.station = this.station + 1 >= STATIONS.length ? -1 : this.station + 1;
-    if (this.station < 0) return null;
+    if (this.station < 0) { this.playing = null; this.onChange?.(null, false); return null; }
+    return this.start(STATIONS[this.station], 0);
+  }
+  private start(st: Station, tries: number): Station {
+    this.stop();
     const ac = this.ensure();
     void ac.resume();
     this.static(0.35);
-    const st = STATIONS[this.station];
+    this.playing = st;
+    if (st.kind === 'live') {
+      // the station's own stream, straight into an audio element (a stream from another site can't go through Web
+      // Audio without that site's permission -- it would play as silence -- so the radio's tone filter isn't on these)
+      const el = (this.el ??= new Audio());
+      el.src = st.url!; el.volume = Math.min(1, this.volume * 1.4);
+      el.onplaying = () => { if (this.playing === st) this.onChange?.(st, true); };
+      el.onerror = () => {
+        if (this.playing !== st) return;
+        // dead air: on to the next live station; round the whole dial with no signal, the music made here
+        const live = STATIONS.filter((x) => x.kind === 'live');
+        if (tries + 1 < live.length) { const next = live[(live.indexOf(st) + 1) % live.length]; this.station = STATIONS.indexOf(next); this.start(next, tries + 1); }
+        else this.start(OFFLINE[Math.floor(Math.random() * OFFLINE.length)], 0);
+      };
+      el.play().catch(() => el.onerror?.(new Event('error')));
+      this.onChange?.(st, false);
+      return st;
+    }
+    this.onChange?.(st, true);
     if (st.kind === 'talk') { this.talkTimer = window.setTimeout(() => this.talk(), 700); return st; }
     this.step = 0; this.bar = 0; this.next = ac.currentTime + 0.4;
     this.timer = window.setInterval(() => this.schedule(STYLES[st.kind as 'afro']), 50);
     return st;
   }
-
-  setVolume(v: number) { this.volume = v; if (this.out) this.out.gain.value = v; }
-
+  setVolume(v: number) { this.volume = v; if (this.out) this.out.gain.value = v; if (this.el) this.el.volume = Math.min(1, v * 1.4); }
   stop() {
     clearInterval(this.timer); clearTimeout(this.talkTimer);
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+    if (this.el) { this.el.onerror = null; this.el.onplaying = null; this.el.pause(); this.el.removeAttribute('src'); this.el.load(); }
   }
-  off() { this.stop(); this.station = -1; }
+  off() { this.stop(); this.station = -1; this.playing = null; }
 
   // ---- music: a look-ahead scheduler, a quarter-second ahead ----
   private schedule(s: Style) {
@@ -132,7 +166,7 @@ export class Radio {
 
   // ---- WYRD Talk: lines read in turn, with the city's news among them ----
   private talk() {
-    if (this.station < 0 || STATIONS[this.station].kind !== 'talk' || typeof speechSynthesis === 'undefined') return;
+    if (this.playing?.kind !== 'talk' || typeof speechSynthesis === 'undefined') return;
     const pool = [...this.news.slice(-4), ...WYRD_LINES];
     const line = this.news.length && Math.random() < 0.5 ? this.news[this.news.length - 1 - Math.floor(Math.random() * Math.min(4, this.news.length))] : pool[Math.floor(Math.random() * pool.length)];
     const u = new SpeechSynthesisUtterance(line.replace(/^WYRD city bulletin: /, 'City bulletin. '));

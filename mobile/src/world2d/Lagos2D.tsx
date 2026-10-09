@@ -92,7 +92,11 @@ function Game({ onExit }: { onExit: () => void }) {
   const [wyrdOpen, setWyrdOpen] = useState(false); // the conversation with WYRD (T)
   const radio = useRef<Radio | null>(null); // FM (Q)
   const [onAir, setOnAir] = useState<Station | null>(null);
-  const tuneRadio = () => { radio.current ??= new Radio(); setOnAir(radio.current.tune()); };
+  const [tuning, setTuning] = useState(false);
+  const tuneRadio = () => {
+    if (!radio.current) { radio.current = new Radio(); radio.current.onChange = (st, live) => { setOnAir(st); setTuning(!!st && !live); }; }
+    radio.current.tune();
+  };
   const [wyrdLines, setWyrdLines] = useState<WyrdLine[]>([]);
   const addWyrd = (l: WyrdLine) => setWyrdLines((p) => [...p.slice(-60), l]);
   /** what WYRD is told about the moment you speak to it */
@@ -845,7 +849,7 @@ function Game({ onExit }: { onExit: () => void }) {
             <View style={s.eq}>{[0, 1, 2, 3, 4, 5].map((i) => React.createElement('div', { key: i, className: 'cy-eq', style: { width: 3, background: CY.green, animationDelay: `${i * 0.13}s` } }))}</View>
             <View>
               <Text style={s.radioFreq}>{onAir.freq} FM  <Text style={{ color: CY.text }}>{onAir.name}</Text></Text>
-              <Text style={s.kickerDim}>{onAir.tag.toUpperCase()}  ·  [Q] NEXT</Text>
+              <Text style={s.kickerDim}>{tuning ? 'TUNING…' : `${onAir.kind === 'live' ? '● LIVE  ·  ' : ''}${onAir.tag.toUpperCase()}`}  ·  [Q] NEXT</Text>
             </View>
           </View>
         </Panel>

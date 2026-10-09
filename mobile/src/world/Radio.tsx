@@ -1,20 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Mono } from '../components/ui';
+import { LAGOS_STATIONS } from './lagosStations';
 
 /**
  * Lagos FM: real Lagos stations, streamed live from the stations' own public streams (the game only
  * plays them; it never stores or re-broadcasts them). One audio element; a station that fails to
  * play hands over to the next. The choice and the volume are remembered on this device.
  */
-export const STATIONS = [
-  { id: 'wazobia', name: 'Wazobia FM', freq: '95.1', tag: 'Pidgin · street talk', url: 'https://wazobiafmlagos951-atunwadigital.streamguys1.com/wazobiafmlagos951' },
-  { id: 'cool', name: 'Cool FM', freq: '96.9', tag: 'Hits · Afrobeats', url: 'https://coolfmlagos969-atunwadigital.streamguys1.com/coolfmlagos969' },
-  { id: 'metro', name: 'Metro FM', freq: '97.7', tag: 'Lagos · talk & music', url: 'https://go.webgateready.com/metrofm' },
-  { id: 'nigeriainfo', name: 'Nigeria Info', freq: '99.3', tag: 'News · talk', url: 'https://nigeriainfofmlagos993-atunwadigital.streamguys1.com/nigeriainfofmlagos993' },
-  { id: 'bond', name: 'Bond FM', freq: '92.9', tag: 'Lagos classic', url: 'https://go.webgateready.com/bondfm' },
-  { id: 'goradio', name: 'GoRadio', freq: 'online', tag: 'Lagos online', url: 'https://online.goradio.com.ng/listen/gr/radio.mp3' },
-];
+export const STATIONS = LAGOS_STATIONS;
 const KEY = 'naija2099.fm';
 const load = (): { id: string | null; vol: number } => {
   try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); if (v && typeof v.vol === 'number') return v; } catch { /* no storage */ }
