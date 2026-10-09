@@ -11,6 +11,7 @@
  * No 3D engine: one 2D canvas, only what is on screen drawn.
  */
 import { SIZE } from './geo';
+import { asset } from './asset';
 import { drawModel, modelFor, type Model } from './mesh';
 import { drawPerson, facingOf, type Look } from './person';
 import { KIND, inPoly, type Road, type Tile } from './tiles';
@@ -138,7 +139,7 @@ let glowNow: CanvasRenderingContext2D | null = null;
 const imgs = new Map<string, HTMLImageElement>();
 export function img(name: string) {
   let i = imgs.get(name);
-  if (!i) { i = new Image(); i.src = `world2d/${name.includes('.') ? name : `pics/${name}.webp`}`; imgs.set(name, i); }
+  if (!i) { i = new Image(); i.src = asset(`world2d/${name.includes('.') ? name : `pics/${name}.webp`}`); imgs.set(name, i); }
   return i;
 }
 /** world -> camera-turned coordinates (rx across the screen, rz down it) */
@@ -572,6 +573,28 @@ export function drawGhost(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   picture(ctx, c, s);
   ctx.restore();
 }
+/** a building's walls with the way each faces out -- worked out once (it never changes; finding it each frame, for
+ *  every wall of every building, was a good part of the cost of turning the camera) */
+const outsideOf = new WeakMap<object, { i: number; j: number; len: number; nx: number; nz: number; mx: number; mz: number }[]>();
+function outsides(b: Tile['blds'][number]) {
+  let ws = outsideOf.get(b);
+  if (ws) return ws;
+  ws = [];
+  const p = b.p, n = p.length / 2;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const ex = p[j * 2] - p[i * 2], ez = p[j * 2 + 1] - p[i * 2 + 1], len = Math.hypot(ex, ez);
+    if (len < 0.3) continue;
+    // which way is out: step a little off the wall's middle -- if that lands inside the footprint, out is the other way
+    // (map data lists corners in either order, and a wrong guess would show the building's inside)
+    let nx = -ez / len, nz = ex / len;
+    const mx = (p[i * 2] + p[j * 2]) / 2, mz = (p[i * 2 + 1] + p[j * 2 + 1]) / 2;
+    if (inPoly(p, mx + nx * 0.4, mz + nz * 0.4)) { nx = -nx; nz = -nz; }
+    ws.push({ i, j, len, nx, nz, mx, mz });
+  }
+  outsideOf.set(b, ws);
+  return ws;
+}
 function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number], night: boolean, glow?: CanvasRenderingContext2D) {
   if (b.hide) return;
   const k = c.scale, up = b.h * k * c.rise;
@@ -591,17 +614,9 @@ function building(ctx: CanvasRenderingContext2D, c: Cam, b: Tile['blds'][number]
   const shop = detailed && b.style === 'shops' ? shopfront(ctx, AWNINGS[Math.floor(b.tone * 97) % AWNINGS.length], night) : null;
   // walls whose outside faces the camera, painted far to near so a building never covers itself
   const walls: { i: number; j: number; d: number; len: number; nx: number; nz: number }[] = [];
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    const ex = p[j * 2] - p[i * 2], ez = p[j * 2 + 1] - p[i * 2 + 1], len = Math.hypot(ex, ez);
-    if (len < 0.3) continue;
-    // which way is out: step a little off the wall's middle -- if that lands inside the footprint, out is the other way
-    // (map data lists corners in either order, and a wrong guess would show the building's inside)
-    let nx = -ez / len, nz = ex / len;
-    const mx = (p[i * 2] + p[j * 2]) / 2, mz = (p[i * 2 + 1] + p[j * 2 + 1]) / 2;
-    if (inPoly(p, mx + nx * 0.4, mz + nz * 0.4)) { nx = -nx; nz = -nz; }
-    if (si * nx + co * nz <= 0.02) continue;
-    walls.push({ i, j, len, nx, nz, d: depth(c, (p[i * 2] + p[j * 2]) / 2, (p[i * 2 + 1] + p[j * 2 + 1]) / 2) });
+  for (const w of outsides(b)) {
+    if (si * w.nx + co * w.nz <= 0.02) continue;
+    walls.push({ ...w, d: depth(c, w.mx, w.mz) });
   }
   walls.sort((w1, w2) => w1.d - w2.d);
   const front = walls.reduce<(typeof walls)[number] | null>((best, w) => (!best || w.len > best.len ? w : best), null); // the main facade: it gets the door

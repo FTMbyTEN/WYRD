@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { asset } from './asset';
 import { api } from '../api/client';
 import { DISTRICTS, LANDMARKS, toXZ } from './geo';
 import { modelFor } from './mesh';
@@ -219,7 +220,7 @@ function Game({ onExit }: { onExit: () => void }) {
       }
     };
     let places: Place[] = [];
-    fetch('world/v1/places.json').then((r) => r.json()).then((p: Place[]) => {
+    fetch(asset('world/v1/places.json')).then((r) => r.json()).then((p: Place[]) => {
       places = p;
       world.markets = p.filter((q) => q.k === 'market').map((q) => ({ x: q.x, z: q.z }));
     }).catch(() => {});
@@ -248,7 +249,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const afloat = (x: number, z: number) => water(x, z) && water(x + 8, z) && water(x - 8, z) && water(x, z + 8) && water(x, z - 8) && wet(x, z); // (wet: not under a bridge deck, not on the beach)
     const stop = (x: number, z: number, pad?: number) => world.blocked(x, z, pad) || (wet(x, z) && !wet(me.x, me.z)); // (already in the water somehow: free to get out)
     const beachProps: Sprite[] = [];
-    fetch('world2d/water.json').then((r) => r.json()).then((j: { frame: number[]; land: number[][]; islands: number[][]; water: number[][]; lakeIslands: number[][]; sand?: number[][]; beachLines?: number[][] }) => {
+    fetch(asset('world2d/water.json')).then((r) => r.json()).then((j: { frame: number[]; land: number[][]; islands: number[][]; water: number[][]; lakeIslands: number[][]; sand?: number[][]; beachLines?: number[][] }) => {
       const f = (a: number[]) => Float32Array.from(a, (v) => v / 10);
       sea = [{ p: f(j.frame), island: false }, ...j.land.map((a) => ({ p: f(a), island: true })), ...j.islands.map((a) => ({ p: f(a), island: true })),
         ...j.water.map((a) => ({ p: f(a), island: false })), ...j.lakeIslands.map((a) => ({ p: f(a), island: true }))];
@@ -286,7 +287,7 @@ function Game({ onExit }: { onExit: () => void }) {
         travelling: me.car ? 'driving' : me.moving ? 'walking' : 'standing', time: nightRef.current ? 'night' : 'day', doing };
     };
     mapData.current.me = me;
-    fetch('world2d/overview.json').then((r) => r.json()).then((o: Overview) => { mapData.current.overview = o; }).catch(() => {});
+    fetch(asset('world2d/overview.json')).then((r) => r.json()).then((o: Overview) => { mapData.current.overview = o; }).catch(() => {});
     // a ride across town: pay the danfo fare, arrive, and step off onto the nearest street once it has loaded
     let arriving = false;
     travelRef.current = async (x, z, name) => {
@@ -500,6 +501,7 @@ function Game({ onExit }: { onExit: () => void }) {
         if (alive) setLoading(false);
       }, 1200);
     });
+    let camMovedAt = -1e9, camWas = { yaw: 0, tilt: 0, scale: 0 };
     let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1, lastHazeNight = false, lastLive = { x0: 0, y0: 0, x1: 99999, y1: 99999 };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
@@ -508,7 +510,11 @@ function Game({ onExit }: { onExit: () => void }) {
       // slower graphics (a 1.25x screen draws half again as many pixels), judged over the last couple of seconds
       slowAvg = slowAvg * 0.97 + Math.min(100, dt * 1000) * 0.03;
       if (slowAvg > 24 && quality > 1 && now - qualityAt > 3000) { quality = 1; qualityAt = now; }
-      const dpr = Math.min(2, window.devicePixelRatio || 1, quality);
+      // while the camera turns, tips or zooms the whole city is drawn afresh every frame (no cached scenery fits a
+      // view that keeps changing): it's drawn at three-quarters resolution then -- in motion the eye can't tell, and
+      // a quarter fewer pixels each way is nearly half the filling -- and sharp again the moment the camera rests
+      const turning = now - camMovedAt < 150;
+      const dpr = Math.min(2, window.devicePixelRatio || 1, quality) * (turning ? 0.75 : 1);
       const W = canvas.clientWidth, H = canvas.clientHeight;
       if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -619,6 +625,7 @@ function Game({ onExit }: { onExit: () => void }) {
       if (Math.abs(want - cam.scale) < want * 0.002) cam.scale = want; // settle exactly, so the scenery cache can hold
       cam.x += (me.x - cam.x) * Math.min(1, dt * 5);
       cam.z += (me.z - cam.z) * Math.min(1, dt * 5);
+      if (cam.yaw !== camWas.yaw || cam.tilt !== camWas.tilt || cam.scale !== camWas.scale) { camMovedAt = now; camWas = { yaw: cam.yaw, tilt: cam.tilt, scale: cam.scale }; }
       // draw
       const v = viewOf(cam);
       const tiles = [...world.tiles.values()];

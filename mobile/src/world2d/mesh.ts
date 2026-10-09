@@ -698,6 +698,52 @@ function partOrder(model: Model, vx: number, vy: number, vz: number, sx: number,
  */
 export function drawModel(ctx: CanvasRenderingContext2D, c: { yaw: number; tilt: number; rise: number }, model: Model, x: number, z: number, heading: number,
   project: (x: number, z: number, y: number) => { sx: number; sy: number }, glow?: CanvasRenderingContext2D | null, size = 1) {
+  // The picture of a model only depends on the camera's turn, tilt and zoom, not on where it is on screen: it's drawn
+  // once into a picture of its own and copied from then on -- into every scenery tile it reaches, and again whenever
+  // something walks behind it -- until the camera turns, tips or zooms. (A detailed model is a couple of thousand
+  // faces: drawing them all again each time was most of the cost of a landmark on screen.)
+  const o = project(x, z, 0), ux = project(x + 1, z, 0), uz = project(x, z + 1, 0);
+  const t = ctx.getTransform(), pr = Math.hypot(t.a, t.b) || 1; // device pixels per screen unit
+  const key = `${c.yaw.toFixed(5)}|${c.tilt.toFixed(5)}|${heading.toFixed(5)}|${size}|${(ux.sx - o.sx).toFixed(4)}|${(ux.sy - o.sy).toFixed(4)}|${(uz.sx - o.sx).toFixed(4)}|${(uz.sy - o.sy).toFixed(4)}|${pr.toFixed(3)}`;
+  let pic = pictures.get(model);
+  if (!pic || pic.key !== key || (glow && !pic.glow)) {
+    // the camera on the move (a new view again within a moment): just draw it -- a picture now would be thrown away
+    // next frame, and making one costs more than drawing
+    const now = performance.now(), last = lastMiss.get(model) ?? -1e9;
+    lastMiss.set(model, now);
+    if (now - last < 300) { paintModel(ctx, c, model, x, z, heading, project, glow, size); return; }
+    // its box on screen, relative to its foot
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const co = Math.cos(heading) * size, si = Math.sin(heading) * size, [a, b, d, e] = model.box;
+    for (const [lx, lz] of [[a, d], [b, d], [b, e], [a, e]]) for (const y of [0, model.height]) {
+      const p = project(x + lx * co + lz * si, z - lx * si + lz * co, y);
+      x0 = Math.min(x0, p.sx - o.sx); x1 = Math.max(x1, p.sx - o.sx); y0 = Math.min(y0, p.sy - o.sy); y1 = Math.max(y1, p.sy - o.sy);
+    }
+    x0 -= 3; y0 -= 3; x1 += 3; y1 += 3;
+    const w = Math.max(1, Math.ceil((x1 - x0) * pr)), h = Math.max(1, Math.ceil((y1 - y0) * pr));
+    if (w * h > 36e6) { paintModel(ctx, c, model, x, z, heading, project, glow, size); return; } // (absurdly close: just draw it)
+    const make = (old?: HTMLCanvasElement) => { const cv = old ?? document.createElement('canvas'); cv.width = w; cv.height = h; return cv; };
+    const img = make(pic?.img), gl = glow ? make(pic?.glow ?? undefined) : null;
+    const g = img.getContext('2d')!, gg = gl ? gl.getContext('2d')! : null;
+    for (const q of [g, gg]) if (q) { q.setTransform(pr, 0, 0, pr, -x0 * pr, -y0 * pr); q.clearRect(x0, y0, x1 - x0, y1 - y0); }
+    paintModel(g, c, model, x, z, heading, (wx, wz, wy) => { const p = project(wx, wz, wy); return { sx: p.sx - o.sx, sy: p.sy - o.sy }; }, gg, size);
+    pic = { key, img, glow: gl, x0, y0, w: x1 - x0, h: y1 - y0 };
+    pictures.set(model, pic);
+  }
+  ctx.drawImage(pic.img, o.sx + pic.x0, o.sy + pic.y0, pic.w, pic.h);
+  if (glow && pic.glow) {
+    // the glow layer: the model blanks what's behind it, then its neon shines
+    glow.globalCompositeOperation = 'destination-out'; glow.drawImage(pic.img, o.sx + pic.x0, o.sy + pic.y0, pic.w, pic.h);
+    glow.globalCompositeOperation = 'source-over'; glow.drawImage(pic.glow, o.sx + pic.x0, o.sy + pic.y0, pic.w, pic.h);
+  }
+}
+/** when each model's picture last had to be made again */
+const lastMiss = new WeakMap<Model, number>();
+/** each model's picture for the latest camera it was drawn with */
+const pictures = new WeakMap<Model, { key: string; img: HTMLCanvasElement; glow: HTMLCanvasElement | null; x0: number; y0: number; w: number; h: number }>();
+/** paints the model's faces, far to near (drawModel keeps the result) */
+function paintModel(ctx: CanvasRenderingContext2D, c: { yaw: number; tilt: number; rise: number }, model: Model, x: number, z: number, heading: number,
+  project: (x: number, z: number, y: number) => { sx: number; sy: number }, glow?: CanvasRenderingContext2D | null, size = 1) {
   const co = Math.cos(heading) * size, si = Math.sin(heading) * size;
   // the model's +z front faces along (sin h, cos h): world = (lx cos h + lz sin h, lz cos h - lx sin h), its plan times its size
   const toW = (lx: number, lz: number) => [x + lx * co + lz * si, z - lx * si + lz * co];

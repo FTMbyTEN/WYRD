@@ -6,6 +6,8 @@
  *
  * Map data © OpenStreetMap contributors (ODbL).
  */
+import { asset } from './asset';
+
 export const BASE = 'world/v1';
 export const TILE = 500;
 export const KIND = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, link: 5, residential: 6, service: 7, foot: 8 };
@@ -88,7 +90,7 @@ export class World {
   changed(x0: number, x1: number, z0: number, z1: number) { this.changes.push([x0, x1, z0, z1]); this.version++; }
 
   constructor() {
-    this.ready = fetch(`${BASE}/index.json`).then((r) => r.json()).then((j) => { this.index = j; this.have = new Set(j.tiles); });
+    this.ready = fetch(asset(`${BASE}/index.json`)).then((r) => r.json()).then((j) => { this.index = j; this.have = new Set(j.tiles); });
   }
 
   /** Loads the tiles around (x, z) and forgets far ones. */
@@ -121,7 +123,7 @@ export class World {
 
   private async load(key: string) {
     try {
-      const raw = (await fetch(`${BASE}/${key}.json`).then((r) => r.json())) as Raw;
+      const raw = (await fetch(asset(`${BASE}/${key}.json`)).then((r) => r.json())) as Raw;
       const tile = this.parse(key, raw);
       this.tiles.set(key, tile);
       this.clearRoads(tile);
