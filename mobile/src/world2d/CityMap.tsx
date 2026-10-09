@@ -1,6 +1,49 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { asset } from './asset';
 import { DISTRICTS, LANDMARKS, toXZ } from './geo';
+
+/** something on the map you can search for: a landmark, a district, a street or a named place */
+type Found = { name: string; x: number; z: number; kind: string; area: string };
+const KIND_NAMES: Record<string, string> = { church: 'Church', mosque: 'Mosque', bank: 'Bank', hotel: 'Hotel', school: 'School', market: 'Market', mall: 'Mall', hospital: 'Hospital', fuel: 'Fuel station', gov: 'Government', fire: 'Fire station', police: 'Police' };
+/** the district a point is in (the nearest district centre), to tell apart places with the same name */
+const areaOf = (x: number, z: number) => { let best = '', bd = Infinity; for (const d of DISTRICTS) { const p = toXZ(d.at), q = Math.hypot(p.x - x, p.z - z); if (q < bd) { bd = q; best = d.name; } } return best; };
+/** everything searchable, gathered once: the famous buildings and districts, then the map's named places and streets */
+let index: Found[] | null = null;
+let loading: Promise<Found[]> | null = null;
+function searchIndex(): Promise<Found[]> {
+  if (index) return Promise.resolve(index);
+  loading ??= (async () => {
+    const out: Found[] = [
+      ...LANDMARKS.map((l) => { const p = toXZ(l.at); return { name: l.name, ...p, kind: 'Landmark', area: areaOf(p.x, p.z) }; }),
+      ...DISTRICTS.map((d) => { const p = toXZ(d.at); return { name: d.name, ...p, kind: 'District', area: '' }; }),
+    ];
+    try {
+      const places = await fetch(asset('world/v1/places.json')).then((q) => q.json()) as { k: string; n: string | null; x: number; z: number }[];
+      for (const p of places) if (p.n && !/^\d/.test(p.n)) out.push({ name: p.n, x: p.x, z: p.z, kind: KIND_NAMES[p.k] ?? 'Place', area: areaOf(p.x, p.z) });
+    } catch { /* offline: the rest still works */ }
+    try {
+      // every named street of the 2D map (scripts/build-street-index.mts): [name, x, z], a long road once per part of town
+      const streets = await fetch(asset('world2d/streets.json')).then((q) => q.json()) as [string, number, number][];
+      for (const [name, x, z] of streets) out.push({ name, x, z, kind: 'Street', area: areaOf(x, z) });
+    } catch { /* offline */ }
+    index = out;
+    return out;
+  })();
+  return loading;
+}
+/** the best matches for [q]: whole-word starts first, then anywhere in the name; landmarks and districts before the rest */
+function search(all: Found[], q: string): Found[] {
+  const t = q.trim().toLowerCase();
+  if (t.length < 2) return [];
+  const rank = (f: Found) => {
+    const n = f.name.toLowerCase();
+    const at = n.startsWith(t) ? 0 : n.split(/[\s-]+/).some((w) => w.startsWith(t)) ? 1 : n.includes(t) ? 2 : -1;
+    if (at < 0) return -1;
+    return at * 10 + (f.kind === 'Landmark' ? 0 : f.kind === 'District' ? 1 : f.kind === 'Street' ? 3 : 2);
+  };
+  return all.map((f) => ({ f, k: rank(f) })).filter((x) => x.k >= 0).sort((a, b) => a.k - b.k || a.f.name.length - b.f.name.length).slice(0, 8).map((x) => x.f);
+}
 
 /**
  * The city map (Tab): all of Lagos -- main roads, rail, the lagoon and the sea, districts and every
@@ -17,6 +60,18 @@ export function CityMap({ overview, sea, sand = [], me, onTravel, onClose }: {
   const view = useRef({ cx: me.x, cz: me.z, k: 0.06 }); // px per metre
   const [hover, setHover] = useState<{ name: string; x: number; z: number } | null>(null);
   const [, redraw] = useState(0);
+  // search: what's typed, what matches, and the place picked (pinned on the map)
+  const [query, setQuery] = useState('');
+  const [all, setAll] = useState<Found[]>(index ?? []);
+  const [pin, setPin] = useState<Found | null>(null);
+  const [pick, setPick] = useState(0);
+  useEffect(() => { if (!index) void searchIndex().then(setAll); }, []);
+  const results = search(all, query);
+  const choose = (f: Found) => {
+    setPin(f); setQuery(''); setPick(0);
+    view.current = { cx: f.x, cz: f.z, k: Math.max(view.current.k, f.kind === 'District' ? 0.08 : 0.22) };
+    redraw((n) => n + 1);
+  };
 
   const places = [
     ...LANDMARKS.map((l) => ({ name: l.name, ...toXZ(l.at), big: false })),
@@ -80,6 +135,15 @@ export function CityMap({ overview, sea, sand = [], me, onTravel, onClose }: {
     const mx = X(me.x), my = Z(me.z);
     ctx.fillStyle = 'rgba(242,201,76,0.35)'; ctx.beginPath(); ctx.arc(mx, my, 14, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#F2C94C'; ctx.strokeStyle = '#1E2A44'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(mx, my, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (pin) {
+      // the place you searched for: a pin with its name
+      const px = X(pin.x), py = Z(pin.z);
+      ctx.fillStyle = 'rgba(0,229,255,0.22)'; ctx.beginPath(); ctx.arc(px, py, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#00B8D4'; ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - 9, py - 16); ctx.arc(px, py - 18, 9, Math.PI * 0.85, Math.PI * 0.15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.font = '800 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#FFFFFF';
+      ctx.strokeText(pin.name, px, py - 34); ctx.fillStyle = '#1E2A44'; ctx.fillText(pin.name, px, py - 34);
+    }
     if (hover) {
       const hx = X(hover.x), hy = Z(hover.z);
       ctx.strokeStyle = '#1E2A44'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, 10, 0, Math.PI * 2); ctx.stroke();
@@ -132,10 +196,39 @@ export function CityMap({ overview, sea, sand = [], me, onTravel, onClose }: {
       <View style={s.card}>
         <View style={s.head}>
           <Text style={s.title}>Lagos</Text>
-          <Text style={s.sub}>{hover ? `${hover.name} — click to take a danfo there` : 'Drag to look around · scroll to zoom · click a place to travel'}</Text>
+          <Text style={s.sub}>{hover ? `${hover.name} — click to take a danfo there` : 'Search, or drag to look around · scroll to zoom · click a place to travel'}</Text>
           <Pressable onPress={onClose} style={s.close}><Text style={s.closeText}>Close (Tab)</Text></Pressable>
         </View>
-        {React.createElement('canvas', { ref, style: { width: '100%', flex: 1, display: 'block', borderRadius: 14, cursor: 'crosshair', minHeight: 0 } })}
+        <View style={s.searchRow}>
+          <TextInput value={query} onChangeText={(t) => { setQuery(t); setPick(0); }} placeholder="Search Lagos: a street, a place, a landmark…" placeholderTextColor="#9AA3B2"
+            style={s.search} autoFocus accessibilityLabel="Search the map"
+            onKeyPress={(e) => {
+              const k = (e.nativeEvent as { key: string }).key;
+              if (k === 'ArrowDown') setPick((p) => Math.min(results.length - 1, p + 1));
+              if (k === 'ArrowUp') setPick((p) => Math.max(0, p - 1));
+              if (k === 'Enter') { const f = results[pick] ?? results[0]; if (f) choose(f); }
+            }} />
+          {pin ? (
+            <View style={s.pinRow}>
+              <Text style={s.pinName} numberOfLines={1}>{pin.name}<Text style={s.pinMeta}>  {pin.kind}{pin.area ? ` · ${pin.area}` : ''}  ·  {(Math.hypot(pin.x - me.x, pin.z - me.z) / 1000).toFixed(1)} km</Text></Text>
+              <Pressable onPress={() => onTravel(pin.x, pin.z, pin.name)} style={s.go}><Text style={s.goText}>Travel there</Text></Pressable>
+              <Pressable onPress={() => setPin(null)} style={s.clear}><Text style={s.clearText}>✕</Text></Pressable>
+            </View>
+          ) : null}
+        </View>
+        <View style={{ flex: 1, minHeight: 0 }}>
+          {React.createElement('canvas', { ref, style: { width: '100%', height: '100%', display: 'block', borderRadius: 14, cursor: 'crosshair' } })}
+          {results.length ? (
+            <View style={s.results}>
+              {results.map((f, i) => (
+                <Pressable key={`${f.kind}${f.name}${f.x}`} onPress={() => choose(f)} onHoverIn={() => setPick(i)} style={[s.result, i === pick && s.resultOn]}>
+                  <Text style={s.resultName} numberOfLines={1}>{f.name}</Text>
+                  <Text style={s.resultMeta} numberOfLines={1}>{f.kind}{f.area ? ` · ${f.area}` : ''}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : query.trim().length >= 2 ? <View style={s.results}><Text style={[s.resultMeta, { padding: 10 }]}>{all.length ? 'Nothing by that name. Try part of it.' : 'Loading the map\'s names…'}</Text></View> : null}
+        </View>
         <Text style={s.osm}>Map data © OpenStreetMap contributors</Text>
       </View>
     </View>
@@ -152,4 +245,18 @@ const s = StyleSheet.create({
   close: { backgroundColor: '#1E2A44', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   closeText: { fontFamily: font, fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   osm: { fontFamily: font, fontSize: 10, color: '#8A93A3', textAlign: 'right' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  search: { flex: 1, minWidth: 260, fontFamily: font, fontSize: 15, borderWidth: 1.5, borderColor: '#C9CED6', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9, color: '#1E2A44', backgroundColor: '#F6F8FB' },
+  pinRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  pinName: { fontFamily: font, fontSize: 14, fontWeight: '800', color: '#1E2A44', flexShrink: 1 },
+  pinMeta: { fontWeight: '500', color: '#5B6475', fontSize: 12.5 },
+  go: { backgroundColor: '#00B8D4', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  goText: { fontFamily: font, fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  clear: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#EEF1F4' },
+  clearText: { fontFamily: font, fontSize: 13, fontWeight: '800', color: '#5B6475' },
+  results: { position: 'absolute', top: 8, left: 8, width: 380, maxWidth: '90%', backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 4, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 4 } },
+  result: { paddingHorizontal: 12, paddingVertical: 7 },
+  resultOn: { backgroundColor: '#E6F9FC' },
+  resultName: { fontFamily: font, fontSize: 14, fontWeight: '700', color: '#1E2A44' },
+  resultMeta: { fontFamily: font, fontSize: 12, color: '#5B6475' },
 });

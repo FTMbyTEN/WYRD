@@ -546,6 +546,7 @@ function Game({ onExit }: { onExit: () => void }) {
       }, 1200);
     });
     let camMovedAt = -1e9, camWas = { yaw: 0, tilt: 0 }; // (turning and tipping only: a zoom is shown by scaling the scenery)
+    let zoomAt = -1e9, scaleWas = 0, raisedAt = -1e9, raiseFailedAt = -1e9;
     let slowAvg = 16, quality = 2, qualityAt = performance.now(), lastHaze = -1, lastHazeNight = false, lastLive = { x0: 0, y0: 0, x1: 99999, y1: 99999 };
     const gpu = graphicsName();
     if (gpu.software) quality = 0.75; // drawn in software: a lighter resolution from the start, so it stays smooth
@@ -569,12 +570,20 @@ function Game({ onExit }: { onExit: () => void }) {
       let dt = realDt / steps;
       // sharpness that keeps up: full device resolution while frames are quick; standard resolution on slower
       // graphics (a 1.25x screen draws half again as many pixels), judged over the last couple of seconds
-      slowAvg = slowAvg * 0.97 + Math.min(100, realDt * 1000) * 0.03;
+      // (frames during and just after a camera turn or zoom don't count: those pass, and judging by them left the
+      // picture soft for good)
+      const calm = now - camMovedAt > 1500 && now - zoomAt > 1500;
+      if (calm) slowAvg = slowAvg * 0.97 + Math.min(100, realDt * 1000) * 0.03;
       // ...and on modest graphics (a laptop's built-in chip filling the screen is the slow part, not the game), a step
       // lighter at a time -- standard, then 85%, then 72% -- until frames keep up: a touch softer, much smoother
-      if (slowAvg > 24 && now - qualityAt > 3000) {
+      if (calm && slowAvg > 24 && now - qualityAt > 3000) {
         const next = quality > 1 ? 1 : quality > 0.85 ? 0.85 : quality > 0.72 ? 0.72 : quality;
-        if (next !== quality) { quality = next; qualityAt = now; slowAvg = 20; }
+        if (next !== quality) { if (now - raisedAt < 10000) raiseFailedAt = now; quality = next; qualityAt = now; slowAvg = 20; }
+      }
+      // and back up, a step sharper, once frames have been quick for a few seconds -- unless that step was just tried
+      // and couldn't keep up (then not again for a minute)
+      if (calm && slowAvg < 18 && quality < 2 && now - qualityAt > 4000 && now - raiseFailedAt > 60000) {
+        quality = quality < 0.85 ? 0.85 : quality < 1 ? 1 : 2; qualityAt = now; raisedAt = now;
       }
       // while the camera turns or tips the whole city is drawn afresh every frame (no cached scenery fits a
       // view that keeps changing): it's drawn at three-quarters resolution then -- in motion the eye can't tell, and
@@ -706,6 +715,7 @@ function Game({ onExit }: { onExit: () => void }) {
       cam.x += (me.x - cam.x) * Math.min(1, dt * 5);
       cam.z += (me.z - cam.z) * Math.min(1, dt * 5);
       if (cam.yaw !== camWas.yaw || cam.tilt !== camWas.tilt) { camMovedAt = now; camWas = { yaw: cam.yaw, tilt: cam.tilt }; }
+      if (cam.scale !== scaleWas) { zoomAt = now; scaleWas = cam.scale; }
       // draw
       const v = viewOf(cam);
       const tiles = [...world.tiles.values()];
