@@ -471,6 +471,21 @@ export const api = {
   /** Let WYRD learn from your play in NAIJA 2099 (or stop). */
   citySetTraining: (optIn: boolean) => callEndpoint<string>('city', 'setTraining', { optIn }).then((j) => JSON.parse(j) as CityDecree),
   /** anonymous tallies of what the city saw (only kept for players who agreed to let WYRD learn): [{k, p, n, v}] */
+  // ---- the partner API's owner controls (Konnectly) ----
+  /** a new partner key: the key is in this answer once, never again */
+  partnerIssueKey: (partner: string, env: 'test' | 'live', label: string) => callEndpoint<string>('partnerAdmin', 'issueKey', { partner, env, label }).then((j) => JSON.parse(j) as { key: string; prefix: string; env: string; label: string }),
+  partnerRevokeKey: (prefix: string) => callEndpoint<string>('partnerAdmin', 'revokeKey', { prefix }).then((j) => JSON.parse(j) as { revoked?: string; error?: string }),
+  /** open (or renew) staging once it's paid: 2,000 requests for 30 days */
+  partnerOpenStaging: (partner: string, note: string) => callEndpoint<string>('partnerAdmin', 'openStaging', { partner, note }).then((j) => JSON.parse(j) as { partner: string; allowance: number; valid_until: string }),
+  partnerKeys: (partner: string) => callEndpoint<string>('partnerAdmin', 'keys', { partner }).then((j) => JSON.parse(j) as {
+    keys: { prefix: string; env: string; label: string; active: boolean; last_used: string | null }[];
+    accounts: { env: string; allowance: number | null; used: number; valid_until: string | null; note: string | null }[];
+  }),
+  /** one real call to the model in the partner API's shape (owner only, a fraction of a cent) */
+  partnerSelfTest: () => callEndpoint<string>('partnerAdmin', 'selfTest', {}).then((j) => JSON.parse(j) as {
+    ok: boolean; model: string; ms: number; refused: boolean; error: string | null; detail: string | null;
+    answer: Record<string, unknown> | null; input_tokens: number; output_tokens: number; cost_usd: number;
+  }),
   // ---- Fair Streets: the police, held by the server ----
   /** an offence the game saw: the citation it became and your wanted status */
   policeReport: (r: { code: string; place: string; unit?: string; kmh?: number; witnesses?: number; patrol?: boolean; patrolId?: string }) =>

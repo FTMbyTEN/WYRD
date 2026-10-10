@@ -8,6 +8,8 @@ import { colors } from './theme';
 const GateScreen = lazy(() => import('./screens/GateScreen').then((m) => ({ default: m.GateScreen })));
 const loadShell = () => import('./screens/AppShell');
 const AppShell = lazy(() => loadShell().then((m) => ({ default: m.AppShell })));
+// the owner's partner-API page (#partners): keys, staging, a live test
+const PartnerKeys = lazy(() => import('./screens/PartnerKeys').then((m) => ({ default: m.PartnerKeys })));
 
 function Loading() {
   return (
@@ -23,6 +25,7 @@ const DirectGame = lazy(() => import('./world2d/Lagos2D').then((m) => ({ default
 const BakeVehicles = lazy(() => import('./world2d/BakeVehicles').then((m) => ({ default: m.BakeVehicles })));
 function Root() {
   const { status } = useAuth();
+  const [partners, setPartners] = useState(() => typeof location !== 'undefined' && location.hash.startsWith('#partners'));
   const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));
   // while someone is on the gate typing their details, fetch the app in the background so
   // signing in opens it at once instead of waiting on a download after the server says yes
@@ -44,7 +47,9 @@ function Root() {
   if (status === 'checking') return <Loading />;
   return (
     <Suspense fallback={<Loading />}>
-      {status === 'signedIn' ? <AppShell /> : <GateScreen />}
+      {status === 'signedIn'
+        ? (partners ? <PartnerKeys onClose={() => { history.replaceState(null, '', location.pathname); setPartners(false); }} /> : <AppShell />)
+        : <GateScreen />}
     </Suspense>
   );
 }
