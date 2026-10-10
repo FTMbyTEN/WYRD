@@ -20,7 +20,7 @@ export const FARES: Record<RideKind, number> = { road: 500, air: 1500 };
 const SPEED: Record<RideKind, number> = { road: 18, air: 45 }; // m/s, for the estimates
 
 /** the police on you, as the phone shows it */
-export type CopStatus = { stars: number; chasing: number; dist: number | null };
+export type CopStatus = { stars: number; chasing: number; dist: number | null; state?: string; calm?: boolean; hazards?: boolean; pursuitLeft?: number | null };
 /** someone you can ring */
 export type Contact = { id: string; name: string; role: string; does: string; tone: string };
 /** how a call went: what was said (in turn), and how many stars it took off */
@@ -43,9 +43,9 @@ export function contactsFor(background: string | null | undefined): Contact[] {
   return all;
 }
 
-type Screen = 'home' | 'rides' | 'radio' | 'live' | 'calls' | 'wallet' | 'settings';
+type Screen = 'home' | 'rides' | 'radio' | 'live' | 'calls' | 'wallet' | 'settings' | 'citations';
 
-export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, stations, onAir, onTune, live, onMap, onWyrd, onClose, background, cop, onCall, teach, onTeach }: {
+export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, stations, onAir, onTune, live, onMap, onWyrd, onClose, background, cop, onCall, teach, onTeach, onCalm }: {
   wallet: number | null; me: { x: number; z: number }; ride: RideStatus | null;
   onOrder: (dest: Found, kind: RideKind, lift?: boolean) => void; onCancel: () => void; onSkip: () => void; onFast: () => void;
   stations: Station[]; onAir: Station | null; onTune: (i: number | null) => void;
@@ -53,6 +53,8 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
   background: string | null | undefined; cop: CopStatus; onCall: (id: string) => Promise<CallResult>;
   /** whether WYRD may learn from this player's play, and changing it */
   teach: boolean; onTeach: (on: boolean) => void;
+  /** Calm streets: no pursuits, citations posted instead */
+  onCalm: (on: boolean) => void;
 }) {
   const [screen, setScreen] = useState<Screen>(ride ? 'rides' : cop.stars > 0 ? 'calls' : 'home');
   const [calling, setCalling] = useState<Contact | null>(null);
@@ -76,6 +78,7 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
     ['⚡', 'Live', () => setScreen('live'), 'linear-gradient(160deg,#FF6B8B,#C1123A)'],
     ['₦', 'Wallet', () => setScreen('wallet'), 'linear-gradient(160deg,#9CFFC9,#1E9E68)'],
     ['⚙', 'Settings', () => setScreen('settings'), 'linear-gradient(160deg,#B8C2D0,#5A6577)'],
+    ['⚖', 'Citations', () => setScreen('citations'), 'linear-gradient(160deg,#5B8CFF,#14213D)'],
   ];
   const DOCK = [APPS[0], APPS[1], APPS[2], APPS[3]];
   const back = () => { if (calling) setCalling(null); else setScreen('home'); };
@@ -138,7 +141,7 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
             <View style={{ flex: 1 }}>
               <View style={s.appHead}>
                 <Pressable onPress={back} style={s.backBtn} accessibilityLabel="Back"><Text style={s.backText}>‹</Text></Pressable>
-                <Text style={s.appTitle}>{calling ? '' : { rides: 'Rides', radio: 'Radio', live: 'Live', calls: 'Calls', wallet: 'Wallet', settings: 'Settings', home: '' }[screen]}</Text>
+                <Text style={s.appTitle}>{calling ? '' : { rides: 'Rides', radio: 'Radio', live: 'Live', calls: 'Calls', wallet: 'Wallet', settings: 'Settings', citations: 'Citations', home: '' }[screen]}</Text>
               </View>
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 14 }}>
                 {calling ? <Call who={calling} onCall={onCall} onDone={() => setCalling(null)} /> : null}
@@ -173,6 +176,7 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
                     }) : <Text style={s.rowSub}>Nothing on the wire yet. It comes in as the city moves.</Text>}
                   </View>
                 ) : null}
+                {!calling && screen === 'citations' ? <Citations /> : null}
                 {!calling && screen === 'settings' ? (
                   <View style={s.body}>
                     <Pressable onPress={() => onTeach(!teach)} style={[s.listRow, s.glass]} accessibilityRole="switch" accessibilityState={{ checked: teach }} accessibilityLabel="Let WYRD learn from my play">
@@ -181,6 +185,13 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
                         <Text style={s.rowSub}>{teach ? 'On' : 'Off'}</Text>
                       </View>
                       <View style={[s.toggle, teach && s.toggleOn]}><View style={[s.knob, teach && s.knobOn]} /></View>
+                    </Pressable>
+                    <Pressable onPress={() => onCalm(!cop.calm)} style={[s.listRow, s.glass]} accessibilityRole="switch" accessibilityState={{ checked: !!cop.calm }} accessibilityLabel="Calm streets">
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.rowMain}>Calm streets</Text>
+                        <Text style={s.rowSub}>No police chases: citations are posted to you instead.</Text>
+                      </View>
+                      <View style={[s.toggle, cop.calm && s.toggleOn]}><View style={[s.knob, cop.calm && s.knobOn]} /></View>
                     </Pressable>
                     <View style={[s.card, s.glass]}>
                       <Text style={s.wKicker}>WHAT WYRD KEEPS</Text>
@@ -211,6 +222,56 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
         </View>
       </View>
       <Text style={s.hint}>P or Esc to put it away</Text>
+    </View>
+  );
+}
+
+/** your record with the police: each citation, what proved it and how sure the city is, and an appeal */
+function Citations() {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.policeCitations>> | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [asking, setAsking] = useState<number | null>(null);
+  const [said, setSaid] = useState<Record<number, string>>({});
+  const load = () => { api.policeCitations().then(setData).catch(() => setFailed(true)); };
+  useEffect(load, []);
+  const appeal = (id: number, reason: string) => {
+    setAsking(null);
+    setSaid((p) => ({ ...p, [id]: 'Checking the evidence…' }));
+    api.policeAppeal(id, reason).then((r) => { setSaid((p) => ({ ...p, [id]: r.error ?? r.say ?? 'Done.' })); load(); })
+      .catch(() => setSaid((p) => ({ ...p, [id]: 'Couldn\'t reach the city. Try again.' })));
+  };
+  if (failed) return <Text style={[s.rowSub, { paddingHorizontal: 14 }]}>Your record couldn't load. Check your connection and open it again.</Text>;
+  if (!data) return <Text style={[s.rowSub, { paddingHorizontal: 14 }]}>Loading your record…</Text>;
+  const tone = (st: string) => (st === 'pending' ? '#FF8FA3' : st === 'paid' ? CY.yellow : st === 'overturned' || st === 'waived' ? CY.green : 'rgba(244,251,255,0.62)');
+  const SOURCE: Record<string, string> = { unit: 'WYRD unit', patrol: 'Patrol', crash: 'Collision record', witness: 'Witness', admission: 'Your own word' };
+  return (
+    <View style={s.body}>
+      <View style={[s.card, s.glass]}>
+        <Text style={s.wKicker}>{data.stars ? `WANTED ${'★'.repeat(data.stars)}` : 'NOTHING ON YOU NOW'}</Text>
+        <Text style={s.rowSub}>{data.pending ? `₦${data.pending.toLocaleString('en-NG')} in fines pending: settled at a stop, posted if a chase ends without one, or at the fines desk.` : 'Weak evidence is a note or a warning, never a fine. Every citation can be appealed for 7 days.'}</Text>
+      </View>
+      {!data.citations.length ? <Text style={s.rowSub}>No citations. Drive well and it stays that way.</Text> : null}
+      {data.citations.map((c) => (
+        <View key={c.id} style={[s.card, s.glass, { gap: 4 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[s.fare, { color: CY.cyan }]}>{c.code}</Text>
+            <Text style={[s.rowMain, { flex: 1 }]} numberOfLines={1}>{c.label}</Text>
+            <Text style={[s.wKicker, { color: tone(c.status) }]}>{c.status.toUpperCase()}</Text>
+          </View>
+          <Text style={s.rowSub}>{c.place} · {new Date(c.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {c.confidence}% sure</Text>
+          {c.outcome === 'fine' ? <Text style={s.rowSub}>Fine ₦{c.amount.toLocaleString('en-NG')}{c.paid ? ` · ₦${c.paid.toLocaleString('en-NG')} paid` : ''}{c.owed ? ` · ₦${c.owed.toLocaleString('en-NG')} on your plan` : ''}</Text> : null}
+          {c.evidence.map((e, i) => <Text key={i} style={s.rowSub}>• {SOURCE[e.source] ?? e.source}{e.source === 'unit' ? ` ${e.id}` : ''}: {e.detail} ({Math.round(e.confidence * 100)}%)</Text>)}
+          {c.appealResult ? <Text style={[s.rowSub, { color: CY.green }]}>Appeal: {c.appealResult}</Text> : null}
+          {said[c.id] ? <Text style={[s.rowSub, { color: CY.green }]}>{said[c.id]}</Text> : c.appealable ? (
+            <Pressable onPress={() => setAsking(asking === c.id ? null : c.id)} accessibilityLabel={`Appeal ${c.code}`}><Text style={[s.rowSub, { color: CY.cyan }]}>Appeal</Text></Pressable>
+          ) : null}
+          {asking === c.id ? (
+            <View style={s.actions}>
+              {['It wasn\'t me', 'The reading was wrong', 'Someone else caused it', 'Something else'].map((reason) => <Btn key={reason} label={reason} tone={CY.cyan} onPress={() => appeal(c.id, reason)} />)}
+            </View>
+          ) : null}
+        </View>
+      ))}
     </View>
   );
 }

@@ -469,6 +469,21 @@ export const api = {
   /** Let WYRD learn from your play in NAIJA 2099 (or stop). */
   citySetTraining: (optIn: boolean) => callEndpoint<string>('city', 'setTraining', { optIn }).then((j) => JSON.parse(j) as CityDecree),
   /** anonymous tallies of what the city saw (only kept for players who agreed to let WYRD learn): [{k, p, n, v}] */
+  // ---- Fair Streets: the police, held by the server ----
+  /** an offence the game saw: the citation it became and your wanted status */
+  policeReport: (r: { code: string; place: string; unit?: string; kmh?: number; witnesses?: number; patrol?: boolean; patrolId?: string }) =>
+    callEndpoint<string>('city', 'policeReport', { report: JSON.stringify(r) }).then((j) => JSON.parse(j) as PoliceStatus & { citation?: Citation; error?: string }),
+  /** the pursuit as the game sees it: what happens next */
+  policeTick: (t: { dist: number | null; speed: number; seen: boolean; hazards: boolean; onFoot: boolean; place?: string }) =>
+    callEndpoint<string>('city', 'policeTick', { tick: JSON.stringify(t) }).then((j) => JSON.parse(j) as PoliceTick),
+  /** a call to someone who can help with the police */
+  policeCall: (contact: string) => callEndpoint<string>('city', 'policeCall', { contact }).then((j) => JSON.parse(j) as PoliceStatus & { ok: boolean; cleared?: number; reason?: 'clean' | 'busy' | 'too_many' | 'no_answer' | 'payment_failed' | 'unreachable'; wait?: number; fee?: number; owed?: number; standDown?: boolean }),
+  /** your record: citations with their evidence */
+  policeCitations: () => callEndpoint<string>('city', 'policeCitations', {}).then((j) => JSON.parse(j) as PoliceStatus & { citations: Citation[] }),
+  /** appeal a citation: the evidence is checked again */
+  policeAppeal: (id: number, reason: string) => callEndpoint<string>('city', 'policeAppeal', { id, reason }).then((j) => JSON.parse(j) as { result?: 'overturned' | 'reduced' | 'upheld' | 'queued'; say?: string; refund?: number; citation?: Citation; error?: string }),
+  /** Calm streets: no pursuits, citations posted instead */
+  policeSettings: (calm: boolean) => callEndpoint<string>('city', 'policeSettings', { calm }).then((j) => JSON.parse(j) as PoliceStatus),
   /** cancel your WYRD Ride or flight: the fare back (all of it in the first minute, 80% after) */
   cityRefundRide: () => callEndpoint<string>('city', 'refundRide', {}).then((j) => JSON.parse(j) as CityWallet & { error?: string }),
   /** dispute a charge on your receipts: refunded at once (small) or queued for review */
@@ -503,4 +518,15 @@ export const api = {
   gameMyPvp: () => callEndpoint<GameMatch[]>('games', 'myPvp', {}),
   // pvp: the game if it changed since [version], else null (answered from the server's memory)
   gamePoll: (matchId: number, version: number) => callEndpoint<GameMatch | null>('games', 'poll', { matchId, version }),
+};
+
+/** where you stand with the police (Fair Streets) */
+export type PoliceStatus = { stars: number; heat: number; state: 'clear' | 'watched' | 'pursuit' | 'complying' | 'searching' | 'cooling'; calm: boolean; pending: number; clearIn: number | null; pursuitLeft: number | null; searchLeft: number | null };
+/** a settlement: what a stop, a posting or the desk cost */
+export type Settlement = { fine: number; paid: number; owed: number; waived: number; caution: boolean; codes: string[] };
+export type PoliceTick = PoliceStatus & { dispatch?: number; posted?: Settlement; why?: 'calm' | 'rest'; breakOff?: boolean; stop?: Settlement; complied?: boolean; searching?: boolean; escaped?: boolean; error?: string };
+export type Citation = {
+  id: number; code: string; label: string; place: string; outcome: 'note' | 'warning' | 'fine'; status: string;
+  amount: number; paid: number; owed: number; confidence: number; evidence: { source: string; id: string; confidence: number; detail: string }[];
+  settledBy: string | null; appealResult: string | null; at: string; appealable: boolean;
 };

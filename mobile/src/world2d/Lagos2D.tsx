@@ -19,7 +19,7 @@ import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import { Phone, type CallResult, type CopStatus, type RideKind, type RideStatus } from './Phone';
 import { Router, onRoute, type Route } from './router';
 import { areaOf, type Found } from './search';
-import type { Story } from '../api/client';
+import type { PoliceStatus, PoliceTick, Settlement, Story } from '../api/client';
 import { type Light, depth, drawFlyer, drawMoving, redrawn, liveBox, lightPools, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
 /**
  * NAIJA 2099 in 2D: the real Lagos from OpenStreetMap, seen from a tilted bird's-eye view in the
@@ -221,8 +221,8 @@ function Game({ onExit }: { onExit: () => void }) {
         lastCrashSay = now; say(me.car.hp <= 0 ? 'Your car is wrecked. Press E to get out and find another.' : `Crash! The car is at ${me.car.hp}%.`);
         const w = nearestUnit(x, z, 160);
         if (dmg >= 8) signal('crash', world.nearestRoad(x, z, 40, KIND.residential)?.r.name);
-        if (w && dmg >= 8 && what === 'car') addHeat(1);
-        if (w && dmg >= 8) unitSay(w, `collision ${what === 'car' ? 'between two cars' : 'with a wall'} on ${world.nearestRoad(x, z, 40, KIND.residential)?.r.name ?? 'the road'}. Your car at ${me.car.hp}%.`, true, me.car.hp <= 0 ? 'Car is done. Get out safe.' : 'Seen. Drive like you mean it.');
+        if (dmg >= 8 && what === 'car') report({ code: 'CD-1', place: world.nearestRoad(x, z, 40, KIND.residential)?.r.name ?? areaOf(x, z), unit: w?.unit?.id, witnesses: witnessesAt(x, z) });
+        if (w && dmg >= 8) unitSay(w, `collision ${what === 'car' ? 'between two cars' : 'with a wall'} on ${world.nearestRoad(x, z, 40, KIND.residential)?.r.name ?? 'the road'}. Your car at ${me.car.hp}%.`, true);
       }
     }
     const wyrdSay = (t: string, live = false) => { if (t.startsWith('WYRD city bulletin') || live) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') || live ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setWyrdLive(live); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
@@ -386,7 +386,7 @@ function Game({ onExit }: { onExit: () => void }) {
       const doing = hudKey.current ? JSON.parse(hudKey.current) : null;
       return { game: 'NAIJA 2099 (2D)', district: ad < 4000 ? area : 'outskirts', street: road?.r.name ?? null, landmarksNear: near,
         travelling: me.car ? 'driving' : me.moving ? 'walking' : 'standing', time: nightRef.current ? 'night' : 'day', doing,
-        trafficUnitReports: unitLog.slice(-5), wantedStars: Math.floor(heat), policeChasing: patrols.filter((p) => !p.leaving).length };
+        trafficUnitReports: unitLog.slice(-5), wantedStars: cops.stars, policeState: cops.state, policeChasing: patrols.filter((p) => !p.leaving).length };
     };
     mapData.current.me = me;
     fetch(asset('world2d/overview.json')).then((r) => r.json()).then((o: Overview) => { mapData.current.overview = o; }).catch(() => {});
@@ -415,7 +415,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [], flyers: Flyer[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, get ride() { return ride; }, rideCtl, get police() { return { patrols, heat, addHeat }; }, snap: snapMarks, wet, scenery, cam, get traffic() { return traffic; },
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, get ride() { return ride; }, rideCtl, get police() { return { patrols, cops }; }, snap: snapMarks, wet, scenery, cam, get traffic() { return traffic; },
       /** debugging: stand at (x, z) and look from [yaw], tipped to [p] (radians), at [zm] px per metre */
       view: (x: number, z: number, yaw?: number, p?: number, zm?: number) => {
         me.x = x; me.z = z; cam.x = x; cam.z = z;
@@ -547,21 +547,89 @@ function Game({ onExit }: { onExit: () => void }) {
         ranRed.set(k, now);
         const w = nearestUnit(j.x, j.z, 250);
         signal('redlight', junctionName(j));
-        if (w) { addHeat(1.5); unitSay(w, `red light run at ${junctionName(j)} -- your car, ${kmh} km/h. Logged.`, true, heat >= 2 ? 'Noted. Sending a patrol.' : 'Noted. I remember that car.'); say('A WYRD unit saw you run that red light.'); }
+        const pat = patrols.find((p) => !p.leaving && Math.hypot(p.x - me.x, p.z - me.z) < 60);
+        if (w || pat) {
+          if (w) unitSay(w, `red light run at ${junctionName(j)} -- your car, ${kmh} km/h.`, true);
+          report({ code: 'RL-1', place: junctionName(j), unit: w?.unit?.id, kmh, patrol: !!pat, patrolId: pat?.id, witnesses: witnessesAt(me.x, me.z) });
+        }
       }
-      if (kmh > 95 && now - speedLogged > 30000) {
+      // speeding past a unit: over 75 km/h (the city's 60 limit, plus 15) is SP-1; over 90, SP-2
+      if (kmh > 75 && now - speedLogged > 30000) {
         const w = nearestUnit(me.x, me.z, 60);
-        if (w) { signal('speeding', world.nearestRoad(me.x, me.z, 40, KIND.residential)?.r.name, kmh); speedLogged = now; addHeat(1); unitSay(w, `speed logged: ${kmh} km/h on ${world.nearestRoad(me.x, me.z, 40, KIND.residential)?.r.name ?? 'the road'}.`, true, 'Logged. Slow down, driver.'); }
+        if (w) {
+          const road = world.nearestRoad(me.x, me.z, 40, KIND.residential)?.r.name ?? 'the road';
+          signal('speeding', road, kmh); speedLogged = now;
+          unitSay(w, `speed logged: ${kmh} km/h on ${road}.`, true);
+          report({ code: kmh > 90 ? 'SP-2' : 'SP-1', place: road, unit: w.unit!.id, kmh, witnesses: 0 });
+        }
       }
     };
-    // ---- the police: what the units log is heat; at two stars WYRD sends a patrol after you ----
-    let heat = 0, lastDispatch = -1e9, patrolNo = 0, rammedAt = -1e9;
+    // ---- the police (Fair Streets): the server holds your record and decides; the game drives the patrols ----
+    let cops: PoliceStatus = { stars: 0, heat: 0, state: 'clear', calm: false, pending: 0, clearIn: null, pursuitLeft: null, searchLeft: null };
+    let patrolNo = 0, rammedAt = -1e9, hazards = false, lastTick = -1e9, ticking = false;
     const patrols: Patrol[] = [];
     let router: Router | null = null;
-    const addHeat = (n: number) => { heat = Math.min(5.9, heat + n); };
+    const active = () => cops.state === 'pursuit' || cops.state === 'complying' || cops.state === 'searching';
+    const fmt = (n: number) => n.toLocaleString('en-NG');
+    /** people near enough to have seen it (up to three) */
+    const witnessesAt = (x: number, z: number) => Math.min(3, walkers.filter((w) => !w.unit && Math.hypot(w.x - x, w.z - z) < 40).length);
+    /** what a settlement cost, in a sentence */
+    const costLine = (s: Settlement) => s.caution ? 'It stands as a caution: no money.'
+      : `₦${fmt(s.fine)}${s.paid ? `: ₦${fmt(s.paid)} paid now` : ''}${s.owed ? `, ₦${fmt(s.owed)} on your payment plan` : ''}${s.waived ? `, ₦${fmt(s.waived)} waived` : ''}.`;
+    const applyCops = (s: Partial<PoliceStatus> | null | undefined) => {
+      if (!s || s.stars === undefined) return;
+      cops = { ...cops, ...s } as PoliceStatus;
+      if (!active()) { hazards = false; patrols.forEach((p) => { p.leaving = true; }); }
+    };
+    const refreshWallet = () => { api.cityWallet().then((w) => setWallet(w.naira)).catch(() => {}); };
+    /** an offence the game saw goes to the server, which decides what it is */
+    const report = (r: Parameters<typeof api.policeReport>[0]) => {
+      api.policeReport(r).then((res) => {
+        if (res.error || !res.citation) return;
+        applyCops(res);
+        const c = res.citation, who = r.unit ?? r.patrolId ?? 'WYRD';
+        if (c.outcome === 'note') return; // (too little to go on: written down, nothing more)
+        if (c.outcome === 'warning') wyrdSay(`WYRD → ${who}: ${c.code} at ${c.place}. First this week, so it's a warning. Next time it's a fine.`);
+        else wyrdSay(`WYRD → ${who}: ${c.code} at ${c.place}, ${c.confidence}% sure. ₦${fmt(c.amount)} pending${res.stars >= 2 ? ' -- sending a patrol' : ''}.`);
+      }).catch(() => {});
+    };
+    /** the pursuit as the game sees it, every couple of seconds while anything is going on */
+    const policeTick = (now: number) => {
+      if (ticking) return;
+      const due = active() || cops.stars >= 2 ? 2000 : cops.stars > 0 || cops.state !== 'clear' ? 15000 : Infinity;
+      if (now - lastTick < due) return;
+      lastTick = now; ticking = true;
+      const chasers = patrols.filter((p) => !p.leaving);
+      const near = chasers.reduce((m, p) => Math.min(m, Math.hypot(p.x - me.x, p.z - me.z)), Infinity);
+      const seen = near < 160 || walkers.some((w) => w.unit && Math.hypot(w.x - me.x, w.z - me.z) < 60);
+      const speed = me.car ? Math.abs(me.car.v) : me.moving ? (keys.has('shift') ? 5 : 1.5) : 0;
+      api.policeTick({ dist: near === Infinity ? null : Math.round(near), speed: Math.round(speed * 10) / 10, seen, hazards, onFoot: !me.car,
+        place: world.nearestRoad(me.x, me.z, 60, KIND.residential)?.r.name ?? areaOf(me.x, me.z) })
+        .then((t) => onTick(t, performance.now())).catch(() => {}).finally(() => { ticking = false; });
+    };
+    const onTick = (t: PoliceTick, now: number) => {
+      if (t.error) return;
+      applyCops(t);
+      if (t.dispatch) for (let i = 0; i < t.dispatch; i++) void dispatch(now);
+      if (t.stop) {
+        const s = t.stop, p = patrols.find((q) => !q.leaving);
+        signal('caught', world.nearestRoad(me.x, me.z, 60, KIND.residential)?.r.name ?? areaOf(me.x, me.z));
+        say(t.complied
+          ? `Officer: "Thank you for stopping well." ${s.codes.join(', ')}: ${costLine(s)}`
+          : `Officer: "Oga, you dey drive like say na your papa road." ${s.codes.join(', ')}: ${costLine(s)}`);
+        wyrdSay(`WYRD → ${p?.id ?? 'patrol'}: Stop made. Record settled. Receipts and citations are on the phone.`);
+        refreshWallet();
+      }
+      if (t.breakOff) { say(`The patrol has broken off: three minutes is long enough for anyone. Citation posted: ${t.posted ? costLine(t.posted) : ''}`); refreshWallet(); }
+      if (t.searching) say('They\'ve lost sight of you. They\'ll look for a minute. The citation still comes.');
+      if (t.escaped) { signal('lost', world.nearestRoad(me.x, me.z, 60, KIND.residential)?.r.name ?? areaOf(me.x, me.z)); say(`You got away. The citation still comes: ${t.posted ? costLine(t.posted) : ''}`); refreshWallet(); }
+      if (t.posted && t.why) {
+        wyrdSay(t.why === 'calm' ? `WYRD: Calm streets is on, so no patrol. Your citation is posted: ${costLine(t.posted)}` : `WYRD: You were stopped not long ago, so no chase this time. Citation posted: ${costLine(t.posted)}`);
+        refreshWallet();
+      }
+    };
     /** WYRD sends a patrol: from a few streets away, by road to you */
     const dispatch = async (now: number) => {
-      lastDispatch = now;
       router ??= await Router.load().catch(() => null);
       let x = me.x, z = me.z, route: Route | null = null;
       // from whichever of eight spots round you has the shortest drive in
@@ -581,110 +649,48 @@ function Game({ onExit }: { onExit: () => void }) {
       wyrdSay(`WYRD → Police: car flagged${unit ? ` by ${unit.unit!.id}` : ''} near ${street}. Patrol ${id} dispatched.`);
       say(`Police patrol ${id} is coming for you. Stop and take the fine, or lose them.`);
     };
-    /** caught: pulled over and fined (the server takes it), and the record's cleared */
-    const caught = async (p: Patrol) => {
-      signal('caught', world.nearestRoad(me.x, me.z, 60, KIND.residential)?.r.name ?? areaOf(me.x, me.z));
-      patrols.forEach((q) => { q.leaving = true; });
-      heat = 0;
-      try {
-        const r = await api.cityPay('fine');
-        if ('error' in r && r.error) say(`Officer: "Go. And drive well." (${p.id} let you off)`);
-        else if ('warning' in r && r.warning) { setWallet(r.naira); say(`Officer: "This one na warning. WYRD get your plate now." No fine today, but the next stop costs you.`); }
-        else if ('fine' in r) {
-          setWallet(r.naira);
-          const plan = r.owed ? ` ₦${r.owed.toLocaleString('en-NG')} goes on your payment plan.` : '';
-          const waived = r.waived ? ` ₦${r.waived.toLocaleString('en-NG')} waived: your plan is full.` : '';
-          say(`Officer: "Oga, you dey drive like say na your papa road." Fined ₦${(r.fine ?? 0).toLocaleString('en-NG')}: ₦${(r.paid ?? 0).toLocaleString('en-NG')} paid now.${plan}${waived}`);
-        }
-      } catch { say(`Officer: "Go. And drive well." (${p.id} let you off)`); }
-      wyrdSay(`WYRD → ${p.id}: Stop made. Record cleared. (Receipts: Phone → Wallet.)`);
-    };
     /** the patrols called off */
     const standDown = (why: string) => {
       const on = patrols.filter((p) => !p.leaving);
       on.forEach((p) => { p.leaving = true; });
       if (on.length) wyrdSay(`WYRD → ${on.map((p) => p.id).join(', ')}: Stand down. ${why}`);
     };
-    /** take [n] stars off (5: all of them); the patrols go home under two. Returns how many came off */
-    const clearStars = (n: number, why: string) => {
-      const before = Math.floor(heat);
-      heat = n >= 5 ? 0 : Math.max(0, heat - n);
-      const after = Math.floor(heat);
-      if (after < 2) standDown(why);
-      return before - after;
-    };
-    const calledAt = new Map<string, number>();
-    const starsText = (n: number) => (n ? `${n} star${n > 1 ? 's' : ''} cleared` : 'Nothing cleared');
+
     /** a call from the phone: who picks up, what's said, and what it does to the stars */
     const CALLED: Record<string, string> = { fines: 'Alagbon Fines Desk', wyrd: 'WYRD', daddy: 'Family connections', lawyer: 'A lawyer', uncle: 'Family connections', sgt: 'Community connections', chairman: 'Community connections' };
     callRef.current = async (id) => { const res = await placeCall(id); if (res.cleared) signal('call', CALLED[id] ?? 'Someone', res.cleared); return res; };
+    /** a call from the phone: the server decides what it does; the conversation is written here */
     const placeCall = async (id: string): Promise<CallResult> => {
-      const now = performance.now(), stars = Math.floor(heat), bg = storyRef.current?.background;
-      const wait = (min: number) => Math.max(0, Math.ceil((min * 60000 - (now - (calledAt.get(id) ?? -1e12))) / 60000));
-      const busy = (min: number): CallResult | null => (wait(min) ? { lines: [['them', `(Missed call. They called back to say: "Not again so soon. Try me in ${wait(min)} min.")`]], cleared: 0, outcome: `Try again in ${wait(min)} min` } : null);
-      const clean = (who: string): CallResult => ({ lines: [['you', 'Hello?'], ['them', `${who} You're not in any trouble. Go and enjoy Lagos.`]], cleared: 0, outcome: 'No stars to clear' });
-      if (id === 'fines') {
-        if (!stars) return clean('Alagbon fines desk. Your record is clean.');
-        try {
-          const r = await api.cityPay('fine_desk');
-          if ('error' in r && r.error) return { lines: [['you', 'I want to settle a traffic matter.'], ['them', `It didn't go through: ${r.error}`]], cleared: 0, outcome: 'Payment failed' };
-          setWallet((r as { naira: number }).naira);
-        } catch { return { lines: [['them', '(The line is busy. Try again.)']], cleared: 0, outcome: 'No answer' }; }
-        const n = clearStars(2, 'Fine paid at Alagbon.');
-        return { lines: [['you', 'Good day. I want to pay a traffic fine.'], ['them', 'Plate number?'], ['you', 'It should be on WYRD\'s log.'], ['them', 'I see it. ₦2,000... received. Drive with sense.']], cleared: n, outcome: `${starsText(n)} · ₦2,000 paid` };
+      let r: Awaited<ReturnType<typeof api.policeCall>>;
+      try { r = await api.policeCall(id); } catch { return { lines: [['them', '(The line is busy. Try again.)']], cleared: 0, outcome: 'No answer' }; }
+      applyCops(r);
+      const n = r.cleared ?? 0;
+      if (r.standDown) standDown(id === 'lawyer' ? 'Counsel has filed.' : id === 'uncle' ? 'Orders from Force HQ.' : 'Word came down.');
+      if (r.fee) refreshWallet();
+      if (!r.ok) {
+        switch (r.reason) {
+          case 'clean': return { lines: [['you', 'Hello?'], ['them', id === 'fines' ? 'Alagbon fines desk. Your record is clean. Go and enjoy Lagos.' : id === 'daddy' ? 'Ah, my son. You\'re calling for no reason? Is everything fine?' : 'You\'re not in any trouble. Go and enjoy Lagos.']], cleared: 0, outcome: 'Nothing to clear' };
+          case 'busy': return { lines: [['them', `(Missed call. They called back to say: "Not again so soon. Try me in ${r.wait} min.")`]], cleared: 0, outcome: `Try again in ${r.wait} min` };
+          case 'too_many': return { lines: [['you', 'WYRD, can you talk to the police for me?'], ['them', 'Not with that record. Get it to two stars or less and I\'ll put in a word.']], cleared: 0, outcome: 'Too many stars for WYRD' };
+          case 'no_answer': return { lines: [['them', '(The number you are calling is not available at the moment. Please try again later.)']], cleared: 0, outcome: `No answer · try in ${r.wait ?? 5} min` };
+          case 'payment_failed': return { lines: [['you', 'I want to settle this.'], ['them', id === 'lawyer' ? 'My retainer first, and your account can\'t cover it.' : 'The payment didn\'t go through.']], cleared: 0, outcome: 'Payment failed' };
+          default: return { lines: [['them', '(This number is not reachable.)']], cleared: 0, outcome: 'No answer' };
+        }
       }
-      if (id === 'wyrd') {
-        if (!stars) return clean('WYRD here.');
-        const b = busy(10); if (b) return b;
-        if (stars > 2) return { lines: [['you', 'WYRD, can you talk to the police for me?'], ['them', 'Not with that record. Get it to two stars or less and I\'ll put in a word.']], cleared: 0, outcome: 'Too many stars for WYRD' };
-        calledAt.set(id, now);
-        const n = clearStars(1, 'WYRD vouched for the driver.');
-        wyrdSay('WYRD: I\'ve told my units you\'re known to me. One star off. Don\'t make me regret it.');
-        return { lines: [['you', 'WYRD, can you put in a word for me?'], ['them', 'Already done. One star off. My units are still watching, though.']], cleared: n, outcome: starsText(n) };
+      const did = n ? `${n} star${n > 1 ? 's' : ''} cleared` : 'Record settled';
+      switch (id) {
+        case 'fines': return { lines: [['you', 'Good day. I want to settle a traffic matter.'], ['them', 'I see it on WYRD\'s log.'], ['them', `₦${fmt(r.fee ?? 0)}${r.owed ? `, ₦${fmt(r.owed)} of it on your plan` : ''}. Received. Drive with sense.`]], cleared: n, outcome: `${did} · ₦${fmt(r.fee ?? 0)}` };
+        case 'wyrd': wyrdSay('WYRD: I\'ve told my units you\'re known to me. Don\'t make me regret it.'); return { lines: [['you', 'WYRD, can you put in a word for me?'], ['them', 'Already done. My units are still watching, though.']], cleared: n, outcome: did };
+        case 'daddy': return { lines: [['you', 'Daddy, small wahala with the police...'], ['them', 'Again? Which division this time?'], ['you', 'WYRD flagged the car.'], ['them', 'Hmm. I will call the AIG. And stop driving like a danfo driver.']], cleared: n, outcome: did };
+        case 'lawyer': return { lines: [['them', 'Funmi Adeyemi chambers.'], ['you', 'Barrister, the police are after me.'], ['them', 'Say nothing to anyone. I\'m filing now... Done. They have been told to stand down.'], ['them', 'My invoice is in your inbox: ₦10,000.']], cleared: n, outcome: `${did} · ₦10,000 retainer` };
+        case 'uncle': setTimeout(() => wyrdSay('WYRD: Noted. A call from Force HQ cleared your record. Money talks in Lagos; I keep the minutes.'), 2500); return { lines: [['them', 'Ah, my boy! How is Chief?'], ['you', 'He\'s fine, Uncle. It\'s the police again.'], ['them', 'Leave it with me. Nobody will disturb you today.']], cleared: n, outcome: did };
+        case 'sgt': return { lines: [['them', 'Nurse! How far?'], ['you', 'Sergeant, your boys are after me.'], ['them', 'For you? Ehen. Give me five minutes.']], cleared: n, outcome: did };
+        default: return { lines: [['them', 'Who be this?'], ['you', 'Na me, Mama Bisi pikin, from Ojuelegba.'], ['them', 'Ah! No wahala. I go talk to them.']], cleared: n, outcome: did };
       }
-      if (id === 'daddy' && bg === 'heir') {
-        if (!stars) return { lines: [['them', 'Ah, my son. You\'re calling for no reason? Is everything fine?'], ['you', 'Just checking on you, sir.']], cleared: 0, outcome: 'No stars to clear' };
-        const b = busy(4); if (b) return b;
-        calledAt.set(id, now);
-        const n = clearStars(1, 'A call from Chief Adebayo-Coker.');
-        return { lines: [['you', 'Daddy, small wahala with the police...'], ['them', 'Again? Which division this time?'], ['you', 'Lagos Island. WYRD flagged the car.'], ['them', 'Hmm. I will call the AIG. And stop driving like a danfo driver.']], cleared: n, outcome: starsText(n) };
-      }
-      if (id === 'lawyer' && bg === 'heir') {
-        if (!stars) return clean('Funmi Adeyemi chambers. Nothing is pending against you.');
-        try {
-          const r = await api.cityPay('lawyer');
-          if ('error' in r && r.error) return { lines: [['them', 'Funmi Adeyemi chambers.'], ['you', 'Barrister, I need you.'], ['them', `My retainer first: ${r.error}`]], cleared: 0, outcome: 'Payment failed' };
-          setWallet((r as { naira: number }).naira);
-        } catch { return { lines: [['them', '(Voicemail: "Barrister Adeyemi is in court.")']], cleared: 0, outcome: 'No answer' }; }
-        const n = clearStars(5, 'Counsel has filed.');
-        return { lines: [['them', 'Funmi Adeyemi chambers.'], ['you', 'Barrister, the police are after me.'], ['them', 'Say nothing to anyone. I\'m filing now... Done. They have been told to stand down.'], ['them', 'My invoice is in your inbox: ₦10,000.']], cleared: n, outcome: `${starsText(n)} · ₦10,000 retainer` };
-      }
-      if (id === 'uncle' && bg === 'heir') {
-        if (!stars) return { lines: [['them', 'My boy! How is Chief? You\'re not in trouble, abi?'], ['you', 'No, Uncle. Just greeting you.']], cleared: 0, outcome: 'No stars to clear' };
-        const b = busy(15); if (b) return b;
-        if (Math.random() < 0.3) { calledAt.set(id, now - 10 * 60000); return { lines: [['them', '(The number you are calling is not available at the moment. Please try again later.)']], cleared: 0, outcome: 'No answer · try in 5 min' }; }
-        calledAt.set(id, now);
-        const n = clearStars(5, 'Orders from Force HQ.');
-        setTimeout(() => wyrdSay('WYRD: Noted. A call from Force HQ cleared your record. Money talks in Lagos; I keep the minutes.'), 2500);
-        return { lines: [['them', 'Ah, my boy! How is Chief?'], ['you', 'He\'s fine, Uncle. It\'s the police again.'], ['them', 'Leave it with me. Nobody will disturb you today.']], cleared: n, outcome: starsText(n) };
-      }
-      if ((id === 'sgt' && bg === 'nurse') || (id === 'chairman' && bg === 'conductor')) {
-        if (!stars) return clean(id === 'sgt' ? 'Nurse! How far?' : 'Who be this? Ah, na you.');
-        const b = busy(10); if (b) return b;
-        calledAt.set(id, now);
-        const n = clearStars(1, id === 'sgt' ? 'Sgt. Bello vouched for the driver.' : 'The NURTW chairman spoke for the driver.');
-        return id === 'sgt'
-          ? { lines: [['them', 'Nurse! How far?'], ['you', 'Sergeant, your boys are after me.'], ['them', 'For you? Ehen. Give me five minutes.']], cleared: n, outcome: starsText(n) }
-          : { lines: [['them', 'Who be this?'], ['you', 'Na me, Mama Bisi pikin, from Ojuelegba.'], ['them', 'Ah! No wahala. I go talk to them.']], cleared: n, outcome: starsText(n) };
-      }
-      return { lines: [['them', '(This number is not reachable.)']], cleared: 0, outcome: 'No answer' };
     };
     const stepPolice = (dt: number, now: number) => {
-      const stars = Math.floor(heat), chasing = patrols.filter((p) => !p.leaving);
-      if (stars >= 2 && chasing.length < (stars >= 4 ? 2 : 1) && now - lastDispatch > 8000) void dispatch(now);
-      // the heat cools, unless a patrol is on you
-      if (!chasing.length) heat = Math.max(0, heat - dt / 40);
-      const mySpeed = me.car ? Math.abs(me.car.v) : me.moving ? (keys.has('shift') ? 5 : 1.5) : 0;
+      policeTick(now);
+      const searching = cops.state === 'searching';
       for (let i = patrols.length - 1; i >= 0; i--) {
         const p = patrols[i], d = Math.hypot(me.x - p.x, me.z - p.z);
         if (p.leaving) {
@@ -703,7 +709,7 @@ function Game({ onExit }: { onExit: () => void }) {
           if (!world.blocked(nx, nz, 1.2)) { p.x = nx; p.z = nz; } else p.v *= 0.5;
           if (d > 60) p.route = null, p.replanAt = Math.min(p.replanAt, now); // (got away again: back to the roads)
         } else {
-          want = 22;
+          want = searching ? 10 : 22; // (searching: slow, looking)
           const R = p.route, ahead = onRoute(R, p.s + 15);
           let turn = Math.abs(ahead.heading - p.h); if (turn > Math.PI) turn = Math.PI * 2 - turn;
           if (turn > 0.5) want = 10;
@@ -719,10 +725,7 @@ function Game({ onExit }: { onExit: () => void }) {
           if (R) { p.route = R; p.s = 0; }
         }
         p.v += Math.max(-10 * dt, Math.min(6 * dt, want - p.v));
-        // pulled over: you've stopped (or they're on you on foot) with the patrol right there
-        if (d < (me.car ? 10 : 6) && mySpeed < 2.2) { p.near += dt; if (p.near > 2) { void caught(p); return; } } else p.near = 0;
-        // lost them: far off for long enough
-        if (d > 700 || (d > 420 && mySpeed > 8)) { p.farFor += dt; if (p.farFor > 15) { signal('lost', world.nearestRoad(me.x, me.z, 60, KIND.residential)?.r.name ?? areaOf(me.x, me.z)); p.leaving = true; heat = Math.max(0, heat - 1.5); say(`You lost patrol ${p.id}.`); wyrdSay(`WYRD → ${p.id}: Lost the car. Stand down -- my units are still watching.`); } } else p.farFor = 0;
+        // (whether you've stopped, complied, or got away is the server's call: see policeTick)
       }
     };
     /** a WYRD traffic unit at the corner of the light junctions near you: it takes the junction over and runs it */
@@ -759,6 +762,7 @@ function Game({ onExit }: { onExit: () => void }) {
       keys.add(k);
       if (k === 'e' && !boardRide()) toggleCar();
       if (k === 'p' && !e.repeat) setPhone((v) => !v);
+      if (k === 'h' && !e.repeat && active()) { hazards = !hazards; say(hazards ? (me.car ? 'Hazards on. Slow down and the patrol will stop you where it\'s safe.' : 'Hands up. Stay where you are.') : 'Hazards off.'); }
       if (k === 'n') setNight((v) => !v);
       if (k === 'r') setStanding((v) => (v ? false : 'standing'));
       if (k === 'm') setBoard((v) => !v);
@@ -1162,7 +1166,7 @@ function Game({ onExit }: { onExit: () => void }) {
               if (d > 3.3 || d < 0.01) continue;
               const ux = dx / d, uz = dz / d, closing = (fx * ux + fz * uz) * c.v;
               me.x -= ux * (3.3 - d); me.z -= uz * (3.3 - d);
-              if (closing > 0.8) { crash(closing, 'car', me.x + ux * 1.7, me.z + uz * 1.7, now); c.v *= -0.25; p.v = 0; if (now - rammedAt > 5000) { rammedAt = now; addHeat(2); wyrdSay(`${p.id} → WYRD: Rammed by the suspect car. Requesting backup.`); } }
+              if (closing > 0.8) { crash(closing, 'car', me.x + ux * 1.7, me.z + uz * 1.7, now); c.v *= -0.25; p.v = 0; if (now - rammedAt > 5000) { rammedAt = now; report({ code: 'PT-1', place: world.nearestRoad(me.x, me.z, 40, KIND.residential)?.r.name ?? areaOf(me.x, me.z), patrol: true, patrolId: p.id, witnesses: witnessesAt(me.x, me.z) }); wyrdSay(`${p.id} → WYRD: Struck by the car we're following. Nobody hurt. Requesting backup.`); } }
             }
             // people: you can't drive through them -- the car stops short
             for (const w of walkers) {
@@ -1421,6 +1425,16 @@ function Game({ onExit }: { onExit: () => void }) {
       // flying cars, over the roofs, far ones first
       const sky = ride?.kind === 'air' ? [...flyers, ride] : flyers;
       for (const f of [...sky].sort((p, q) => depth(cam, p.x, p.z) - depth(cam, q.x, q.z))) drawFlyer(ctx, cam, { s: f.sprite, x: f.x, z: f.z, veh: true, heading: f.h, lift: f.y }, night);
+      // your hazards, flashing amber
+      if (hazards && me.car && Math.floor(now / 400) % 2) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        for (const [fx, fz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+          const c0 = Math.cos(me.car.rot), s0 = Math.sin(me.car.rot), q = toScreen(cam, me.x + (fx * 0.9) * c0 + (fz * 2) * s0, me.z - (fx * 0.9) * s0 + (fz * 2) * c0, 0.8), rr = 0.7 * cam.scale;
+          const gr = ctx.createRadialGradient(q.sx, q.sy, 0, q.sx, q.sy, rr); gr.addColorStop(0, 'rgba(255,170,40,0.95)'); gr.addColorStop(1, 'rgba(255,170,40,0)');
+          ctx.fillStyle = gr; ctx.fillRect(q.sx - rr, q.sy - rr, rr * 2, rr * 2);
+        }
+        ctx.restore();
+      }
       // the patrols' light bars, flashing red and blue
       if (patrols.length) {
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -1496,7 +1510,7 @@ function Game({ onExit }: { onExit: () => void }) {
         setRide(rideStatus());
         const chasers = patrols.filter((p) => !p.leaving);
         const nearCop = chasers.reduce((m, p) => Math.min(m, Math.hypot(p.x - me.x, p.z - me.z)), Infinity);
-        setCop({ stars: Math.floor(heat), chasing: chasers.length, dist: nearCop === Infinity ? null : Math.round(nearCop / 10) * 10, clearIn: Math.ceil(heat * 40) });
+        setCop({ stars: cops.stars, chasing: chasers.length, dist: nearCop === Infinity ? null : Math.round(nearCop / 10) * 10, clearIn: cops.clearIn ?? 0, state: cops.state, calm: cops.calm, hazards, pursuitLeft: cops.pursuitLeft ?? null });
         { const t = new Date(Date.now() + 3600_000); setClock(`${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}`); }
         const rs = rideStatus();
         if (rs && !job) setHud({ kind: 'job', head: rs.kind === 'air' ? 'WYRD Air' : 'WYRD Ride', title: rs.phase === 'coming' ? 'Your ride is on its way' : rs.phase === 'waiting' ? 'Your ride is here — walk to it, press E' : 'Riding to', target: rs.dest, time: rs.phase === 'waiting' ? undefined : rs.seconds < 60 ? `${rs.seconds}s` : `${Math.round(rs.seconds / 60)} min` });
@@ -1596,8 +1610,10 @@ function Game({ onExit }: { onExit: () => void }) {
                   <Text style={[s.kicker, { color: CY.red }]}>WANTED</Text>
                   <Text style={s.wantedStars}>{'★'.repeat(cop.stars)}<Text style={{ color: 'rgba(255,255,255,0.18)' }}>{'★'.repeat(Math.max(0, 5 - cop.stars))}</Text></Text>
                 </View>
-                <Text style={s.wantedLine}>{cop.chasing ? `● POLICE ON YOU${cop.dist != null ? ` · ${cop.dist} M` : ''}` : 'LOGGED BY WYRD\'S UNITS'}</Text>
-                <Text style={s.wantedSub}>{cop.chasing ? 'STOP FOR THE FINE · OR LOSE THEM · [P] CALL' : `CLEARS IN ${Math.floor(cop.clearIn / 60)}:${String(cop.clearIn % 60).padStart(2, '0')} · [P] MAKE A CALL`}</Text>
+                <Text style={s.wantedLine}>{cop.state === 'searching' ? '● THEY\'VE LOST SIGHT OF YOU' : cop.state === 'complying' ? '● COMPLYING · PULL OVER WHEN SAFE' : cop.chasing ? `● POLICE ON YOU${cop.dist != null ? ` · ${cop.dist} M` : ''}` : 'LOGGED BY WYRD\'S UNITS'}</Text>
+                <Text style={s.wantedSub}>{cop.chasing
+                  ? `[H] COMPLY · LESS TO PAY${cop.pursuitLeft != null ? ` · BREAKS OFF IN ${cop.pursuitLeft}S` : ''} · [P] CALL`
+                  : `CLEARS IN ${Math.floor(cop.clearIn / 60)}:${String(cop.clearIn % 60).padStart(2, '0')} · [P] MAKE A CALL`}</Text>
               </View>
             </Panel>
           </Pressable>) : null}
@@ -1653,7 +1669,7 @@ function Game({ onExit }: { onExit: () => void }) {
 
       {/* controls, bottom right: each with its key */}
       <View style={s.controls}>
-        <Text style={s.hintPill}>{cop.chasing ? 'POLICE ON YOU · STOP TO TAKE THE FINE · OR LOSE THEM · P CALL SOMEONE' : rideStatus?.phase === 'riding' ? 'RIDING · P PHONE (SKIP / ×4) · SCROLL ZOOM · DRAG TURN' : rideStatus?.phase === 'waiting' ? 'WALK TO YOUR RIDE · E GET IN' : driving ? 'W/S DRIVE · A/D STEER · E GET OUT' : 'WASD WALK · SHIFT RUN · E TAKE A CAR · P PHONE · SCROLL ZOOM · DRAG TURN'}</Text>
+        <Text style={s.hintPill}>{cop.chasing ? (cop.hazards ? 'COMPLYING · SLOW DOWN · THE PATROL WILL STOP YOU WHERE IT\'S SAFE' : 'POLICE ON YOU · H HAZARDS TO COMPLY (LESS TO PAY) · OR LOSE THEM · P CALL SOMEONE') : rideStatus?.phase === 'riding' ? 'RIDING · P PHONE (SKIP / ×4) · SCROLL ZOOM · DRAG TURN' : rideStatus?.phase === 'waiting' ? 'WALK TO YOUR RIDE · E GET IN' : driving ? 'W/S DRIVE · A/D STEER · E GET OUT' : 'WASD WALK · SHIFT RUN · E TAKE A CAR · P PHONE · SCROLL ZOOM · DRAG TURN'}</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {([
             ['P', 'PHONE', () => setPhone((v) => !v), CY.yellow],
@@ -1686,6 +1702,7 @@ function Game({ onExit }: { onExit: () => void }) {
           onOrder={(f, k, lift) => rideCtl.current.order(f, k, lift)} onCancel={() => rideCtl.current.cancel()} onSkip={() => rideCtl.current.skip()} onFast={() => rideCtl.current.fast()}
           stations={STATIONS} onAir={onAir} onTune={tuneTo} live={wyrdLines}
           background={story?.background} cop={cop} onCall={(id) => callRef.current(id)}
+          onCalm={(on) => { api.policeSettings(on).then((s) => setCop({ ...cop, calm: s.calm })).catch(() => {}); }}
           teach={training?.optIn ?? false} onTeach={answerTraining}
           onMap={() => { setPhone(false); setCityMap(true); }} onWyrd={() => { setPhone(false); setWyrdOpen(true); }} onClose={() => setPhone(false)} />
       ) : null}
