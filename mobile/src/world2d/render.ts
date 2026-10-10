@@ -13,7 +13,7 @@
 import { SIZE } from './geo';
 import { asset } from './asset';
 import { drawModel, modelFor, type Model } from './mesh';
-import { drawPerson, facingOf, type Look } from './person';
+import { drawPerson, facingOf, type Look, type Pose } from './person';
 import { KIND, inPoly, type Road, type Tile } from './tiles';
 /** The camera: centre (x, z) in metres, zoom (px per metre), screen size, and its angles. */
 export type Cam = { x: number; z: number; scale: number; w: number; h: number; dpr: number;
@@ -27,6 +27,8 @@ export type Sprite = { s: string; x: number; z: number; rot?: number; up?: boole
   veh?: boolean;
   /** a passer-by drawn by the small rig: look, and walk phase (undefined = standing) */
   look?: Look; walk?: number;
+  /** ...and what their hands are doing, animated by [t] (seconds) */
+  pose?: Pose; t?: number;
   /** TEN or Ama, from their baked motion-capture sheets */
   hero?: { who: 'ten' | 'ama'; anim: 'walk' | 'run' | 'idle'; frame: number } };
 // baked sheets: people 192 px cells x 8 rows of headings, spanning 1.7 m, feet 90% down
@@ -898,7 +900,7 @@ function picture(ctx: CanvasRenderingContext2D, c: Cam, s: Sprite) {
   }
   if (s.look) {
     const sh = screenHeading(c, s.heading ?? 0);
-    drawPerson(ctx, sx, sy, c.scale, s.look, facingOf(Math.sin(sh), Math.cos(sh)), s.walk ?? null);
+    drawPerson(ctx, sx, sy, c.scale, s.look, facingOf(Math.sin(sh), Math.cos(sh)), s.walk ?? null, s.pose, s.t);
     return;
   }
   const im0 = img(s.s);

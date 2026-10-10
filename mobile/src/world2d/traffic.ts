@@ -15,6 +15,10 @@ import { KIND, type Road, type World } from './tiles';
 type Approach = { r: Road; ix: number; iz: number; fwd: boolean; group: 0 | 1 };
 export type Junction = { x: number; z: number; approaches: Approach[]; offset: number };
 export type Light = 'g' | 'a' | 'r';
+/** a junction run by a WYRD traffic unit: which way has the light, how far through its change, since when (ms) */
+export type Control = { id: string; group: 0 | 1; phase: Light; since: number };
+/** a junction's lasting name (junctions are found afresh as you move; this one stays the same) */
+export const junctionKey = (j: Junction) => `${Math.round(j.x)},${Math.round(j.z)}`;
 
 const CYCLE = 26; // seconds for both ways to have had their turn
 /** the stop line: this far before the junction's middle (m) */
@@ -25,6 +29,32 @@ export class Traffic {
   /** along each road, its junctions: where (distance from the road's start) and the light group each way */
   private along = new Map<Road, { s: number; j: Junction; fwd: 0 | 1 | -1; back: 0 | 1 | -1 }[]>();
   private built = { x: Infinity, z: 0, version: -1 };
+  /** the junctions a WYRD unit is running, by key: their lights go by the queues, not the clock */
+  private ctl = new Map<string, Control>();
+
+  /** a unit takes over junction [j] (from wherever its timed lights were) */
+  take(j: Junction, id: string, now: number): Control {
+    const k = junctionKey(j);
+    let c = this.ctl.get(k);
+    if (!c) { const t = (now / 1000 + j.offset) % CYCLE; c = { id, group: t >= 13 ? 1 : 0, phase: 'g', since: now }; this.ctl.set(k, c); }
+    return c;
+  }
+  release(key: string) { this.ctl.delete(key); }
+  control(j: Junction) { return this.ctl.get(junctionKey(j)); }
+  /**
+   * One look at a unit's junction, with [q] cars waiting each way: green stays where the traffic is -- at least 8 s,
+   * on while its own queue lasts, but no more than 30 s while the other way waits -- then amber, a moment of all-red,
+   * and the other way goes. Returns 'switch' when it starts changing over.
+   */
+  run(j: Junction, q: [number, number], now: number): 'switch' | null {
+    const c = this.ctl.get(junctionKey(j));
+    if (!c) return null;
+    const t = (now - c.since) / 1000, mine = q[c.group], other = q[1 - c.group];
+    if (c.phase === 'g' && t >= 8 && other > 0 && (mine === 0 || t >= 30)) { c.phase = 'a'; c.since = now; return 'switch'; }
+    if (c.phase === 'a' && t >= 2.5) { c.phase = 'r'; c.since = now; }
+    else if (c.phase === 'r' && t >= 1) { c.group = (1 - c.group) as 0 | 1; c.phase = 'g'; c.since = now; }
+    return null;
+  }
 
   /** Finds the junctions near (x, z) again when you've moved on, or the map around changed. */
   update(world: World, x: number, z: number) {
@@ -84,6 +114,8 @@ export class Traffic {
 
   /** the light for approach [group] of junction [j] at time [now] (ms) */
   light(j: Junction, group: 0 | 1, now: number): Light {
+    const c = this.ctl.size ? this.ctl.get(junctionKey(j)) : undefined;
+    if (c) return group === c.group ? c.phase : 'r';
     const t = (now / 1000 + j.offset) % CYCLE;
     const g0 = t < 10 ? 'g' : t < 12.5 ? 'a' : 'r';
     const g1 = t >= 13 && t < 23 ? 'g' : t >= 23 && t < 25.5 ? 'a' : 'r';

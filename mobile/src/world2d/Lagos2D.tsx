@@ -6,7 +6,7 @@ import { DISTRICTS, LANDMARKS, toXZ } from './geo';
 import { modelFor } from './mesh';
 import { place, planRect } from './place';
 import { KIND, World, along, crosses, inPoly, type Bld, type Road } from './tiles';
-import { lookFor, type Look } from './person';
+import { lookFor, type Look, type Pose } from './person';
 import { CityMap, type Overview } from './CityMap';
 import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './story';
 import { Dialogue, Standing } from './StoryPanels';
@@ -14,7 +14,7 @@ import { WyrdPanel, type WyrdLine } from './WyrdPanel';
 import { CY, HEAD, MONO, Panel, loadCyberFonts } from './cyber';
 import { Radio, STATIONS, type Station } from './radio';
 import { Scenery } from './scenery';
-import { Traffic } from './traffic';
+import { Traffic, junctionKey, type Junction } from './traffic';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
 import { Phone, type RideKind, type RideStatus } from './Phone';
 import { Router, onRoute, type Route } from './router';
@@ -33,10 +33,23 @@ import { type Light, depth, drawFlyer, drawMoving, redrawn, liveBox, lightPools,
 const PHONE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 /** [v]: the speed it cruises at; [cur]: its speed now (it eases towards what the road ahead allows); [stunUntil]: hit,
  *  it stands still until then */
-type Car = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; lane: number; x: number; z: number; rot: number; cur?: number; stunUntil?: number };
+type Car = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; lane: number; x: number; z: number; rot: number; cur?: number; stunUntil?: number; stopUntil?: number; lastStop?: number };
 /** a puff of smoke from a damaged car, or a spark from a crash */
 type Puff = { x: number; z: number; y: number; vx: number; vz: number; vy: number; life: number; max: number; kind: 'smoke' | 'spark' };
-type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side: number; x: number; z: number; left: boolean; look: Look; heading: number };
+type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side: number; x: number; z: number; left: boolean; look: Look; heading: number;
+  /** what they're doing in the city (not just walking): see ROLES */
+  role: Role; label: string; pose?: Pose; goal?: number; until?: number; bought?: boolean; boardAt?: number; t0: number;
+  /** a WYRD traffic unit: its call sign, the junction it runs, the queues it last counted, when it last reported */
+  unit?: { id: string; key: string; q: [number, number]; reported: number } };
+/**
+ * Everyone out there has something to do: commuters on their way somewhere (and in through a door when they get
+ * there), vendors selling from a tray to whoever stops, people waiting at the roadside for a danfo (which pulls over
+ * for them), LAWMA sweepers, WYRD's traffic units running the light junctions (and reporting back to WYRD), friends stopped to gist.
+ */
+type Role = 'commuter' | 'vendor' | 'sweeper' | 'waiting' | 'warden' | 'chat';
+const GOODS = ['gala and Lacasera', 'roasted corn', 'puff-puff', 'pure water', 'phone credit', 'chin-chin', 'boiled groundnuts', 'agege bread'];
+const CALLS = ['Fine boy, buy gala!', 'Pure water! Cold one!', 'Customer, come and see!', 'E dey sweet, try am!', 'Two for ₦200!'];
+const commuting = () => { const h = lagosHour(); return h >= 6 && h < 10 ? 'Off to work' : h >= 10 && h < 16 ? 'On an errand' : h >= 16 && h < 20 ? 'Heading home' : 'Out late'; };
 type Boat = { x: number; z: number; a: number; v: number };
 /** a flying car: where it is, how high, which way and how fast it flies */
 type Flyer = { x: number; z: number; y: number; h: number; v: number; sprite: string };
@@ -200,7 +213,11 @@ function Game({ onExit }: { onExit: () => void }) {
       if (dmg <= 0) return;
       me.car.hp = Math.max(0, me.car.hp - dmg);
       for (let k = 0; k < 12; k++) puffs.push({ x, z, y: 0.9, vx: (Math.random() - 0.5) * 7, vz: (Math.random() - 0.5) * 7, vy: 2 + Math.random() * 3, life: 0, max: 0.35 + Math.random() * 0.3, kind: 'spark' });
-      if (now - lastCrashSay > 2000) { lastCrashSay = now; say(me.car.hp <= 0 ? 'Your car is wrecked. Press E to get out and find another.' : `Crash! The car is at ${me.car.hp}%.`); }
+      if (now - lastCrashSay > 2000) {
+        lastCrashSay = now; say(me.car.hp <= 0 ? 'Your car is wrecked. Press E to get out and find another.' : `Crash! The car is at ${me.car.hp}%.`);
+        const w = nearestUnit(x, z, 160);
+        if (w && dmg >= 8) unitSay(w, `collision ${what === 'car' ? 'between two cars' : 'with a wall'} on ${world.nearestRoad(x, z, 40, KIND.residential)?.r.name ?? 'the road'}. Your car at ${me.car.hp}%.`, true, me.car.hp <= 0 ? 'Car is done. Get out safe.' : 'Seen. Drive like you mean it.');
+      }
     }
     const wyrdSay = (t: string, live = false) => { if (t.startsWith('WYRD city bulletin') || live) radio.current?.news.push(t); addWyrd({ from: t.startsWith('WYRD city bulletin') || live ? 'bulletin' : 'wyrd', text: t, at: Date.now() }); setWyrd(t); setWyrdLive(live); setTimeout(() => setWyrd((c) => (c === t ? null : c)), Math.max(6000, t.length * 60)); };
     wyrdRef.current = wyrdSay;
@@ -363,7 +380,8 @@ function Game({ onExit }: { onExit: () => void }) {
       const near = LANDMARKS.map((l) => ({ name: l.name, ...toXZ(l.at) })).map((l) => ({ name: l.name, m: Math.round(Math.hypot(l.x - me.x, l.z - me.z)) })).filter((l) => l.m < 1500).sort((p, q) => p.m - q.m).slice(0, 4);
       const doing = hudKey.current ? JSON.parse(hudKey.current) : null;
       return { game: 'NAIJA 2099 (2D)', district: ad < 4000 ? area : 'outskirts', street: road?.r.name ?? null, landmarksNear: near,
-        travelling: me.car ? 'driving' : me.moving ? 'walking' : 'standing', time: nightRef.current ? 'night' : 'day', doing };
+        travelling: me.car ? 'driving' : me.moving ? 'walking' : 'standing', time: nightRef.current ? 'night' : 'day', doing,
+        trafficUnitReports: unitLog.slice(-5) };
     };
     mapData.current.me = me;
     fetch(asset('world2d/overview.json')).then((r) => r.json()).then((o: Overview) => { mapData.current.overview = o; }).catch(() => {});
@@ -429,7 +447,103 @@ function Game({ onExit }: { onExit: () => void }) {
       const hit = world.nearestRoad(px, pz, 25, KIND.residential);
       if (hit && hit.d < hit.r.w / 2 + 0.3) return; // that spot is on another road's tarmac
       if (world.blocked(px, pz, 0.3)) return;
-      walkers.push({ r, s: s0, dir: Math.random() < 0.5 ? 1 : -1, v: 1 + Math.random() * 0.6, sprite: WALKERS[Math.floor(Math.random() * 4)], side, x: 0, z: 0, left: false, look: lookFor(1 + Math.floor(Math.random() * 1e6)), heading: 0 });
+      const look = lookFor(1 + Math.floor(Math.random() * 1e6)), now = performance.now();
+      const base = { r, s: s0, dir: (Math.random() < 0.5 ? 1 : -1) as 1 | -1, sprite: WALKERS[Math.floor(Math.random() * 4)], side, x: px, z: pz, left: false, t0: Math.random() * 10 };
+      const toRoad = Math.atan2(a.x - px, a.z - pz); // (facing the street)
+      // (each kind of work only so many at a time: commuters come and go, the others stay put)
+      const has = (k: Role) => walkers.filter((w) => w.role === k).length, CAP: Partial<Record<Role, number>> = { vendor: 5, waiting: 6, sweeper: 2, chat: 6 };
+      let roll = Math.random();
+      const main = r.kind <= KIND.tertiary;
+      const role: Role = roll < 0.14 ? 'vendor' : roll < 0.24 && main ? 'waiting' : roll < 0.29 ? 'sweeper' : roll < 0.37 ? 'chat' : 'commuter';
+      if (role !== 'commuter' && has(role) >= (CAP[role] ?? 99)) roll = 1;
+      if (roll < 0.14) {
+        walkers.push({ ...base, v: 0, look: { ...look, load: undefined }, heading: toRoad, role: 'vendor', pose: 'hold', label: `Selling ${GOODS[Math.floor(Math.random() * GOODS.length)]}` });
+      } else if (roll < 0.24 && main) {
+        walkers.push({ ...base, v: 0, look, heading: toRoad, role: 'waiting', label: 'Waiting for a danfo' });
+      } else if (roll < 0.29) {
+        walkers.push({ ...base, v: 0.35, look: { ...look, wrap: undefined, gele: undefined, kaftan: false, load: undefined, vest: '#FF7A1A', cap: '#1B5E20', top: '#2E7D32' }, heading: 0, role: 'sweeper', pose: 'sweep', label: 'LAWMA · sweeping the street' });
+      } else if (roll < 0.37) {
+        // two friends stopped to talk, facing each other (or one alone on the phone)
+        if (Math.random() < 0.35) { walkers.push({ ...base, v: 0, look, heading: toRoad + Math.PI / 2, role: 'chat', pose: 'phone', label: 'On the phone' }); return; }
+        const b = along(r.p, r.cum, Math.min(r.len, s0 + 1.3)), bx = b.x - b.dz * off, bz = b.z + b.dx * off;
+        const h = Math.atan2(bx - px, bz - pz);
+        walkers.push({ ...base, v: 0, look, heading: h, role: 'chat', label: 'Gisting with a friend' });
+        walkers.push({ ...base, x: bx, z: bz, v: 0, look: lookFor(1 + Math.floor(Math.random() * 1e6)), heading: h + Math.PI, role: 'chat', label: 'Gisting with a friend' });
+      } else {
+        walkers.push({ ...base, v: 1 + Math.random() * 0.6, look, heading: 0, role: 'commuter', label: commuting(), goal: 30 + Math.random() * 120 });
+      }
+      void now;
+    };
+    // ---- WYRD's traffic units: each runs a junction's lights by the queues it sees, and reports to WYRD ----
+    const roadOf = (j: Junction, g: 0 | 1) => j.approaches.find((a) => a.group === g && a.r.name)?.r.name;
+    const junctionName = (j: Junction) => { const a = roadOf(j, 0), b = roadOf(j, 1); return a && b && a !== b ? `${a} / ${b}` : a ?? b ?? 'the junction'; };
+    const unitLog: string[] = []; // the latest reports, for WYRD (and what it's told when you talk to it)
+    /** unit [w] reports [text] to WYRD: into WYRD's feed; [loud]: up in WYRD's box too, and WYRD answers */
+    const unitSay = (w: Walker, text: string, loud: boolean, reply?: string) => {
+      const line = `Traffic unit ${w.unit!.id} → WYRD: ${text}`;
+      unitLog.push(line); if (unitLog.length > 8) unitLog.shift();
+      if (loud) wyrdSay(line); else addWyrd({ from: 'bulletin', text: line, at: Date.now() });
+      if (reply) setTimeout(() => wyrdSay(`WYRD → ${w.unit!.id}: ${reply}`), 1800);
+    };
+    const units = () => walkers.filter((w) => w.unit);
+    const nearestUnit = (x: number, z: number, max: number) => { let b: Walker | null = null, bd = max; for (const w of units()) { const d = Math.hypot(w.x - x, w.z - z); if (d < bd) { bd = d; b = w; } } return b; };
+    /** which way (light group) something heading (hx, hz) comes into junction [j] */
+    const groupInto = (j: Junction, hx: number, hz: number) => { let best: 0 | 1 | -1 = -1, bd = 0.5; for (const a of j.approaches) { const d = a.ix * hx + a.iz * hz; if (d > bd) { bd = d; best = a.group; } } return best; };
+    const ranRed = new Map<string, number>();
+    let speedLogged = 0;
+    /** each unit's look at its junction: count the queues, run the lights, report now and then; and watch you */
+    const runUnits = (now: number) => {
+      for (const w of units()) {
+        const u = w.unit!, j = traffic.junctions.find((k) => junctionKey(k) === u.key);
+        if (!j) continue;
+        const c = traffic.take(j, u.id, now);
+        const q: [number, number] = [0, 0];
+        const count = (x: number, z: number, rot: number, v: number) => { if (v > 1.5 || Math.hypot(x - j.x, z - j.z) > 50) return; const gi = groupInto(j, Math.sin(rot), Math.cos(rot)); if (gi !== -1) q[gi]++; };
+        for (const o of cars) count(o.x, o.z, o.rot, o.cur ?? o.v);
+        if (me.car) count(me.x, me.z, me.car.rot, Math.abs(me.car.v));
+        u.q = q;
+        const was = c.group;
+        if (traffic.run(j, q, now) === 'switch' && Math.hypot(w.x - me.x, w.z - me.z) < 300 && now - u.reported > 25000) {
+          u.reported = now;
+          unitSay(w, `${junctionName(j)}: ${q[1 - was]} waiting on ${roadOf(j, (1 - was) as 0 | 1) ?? 'the cross road'}, ${q[was]} on ${roadOf(j, was) ?? 'the main road'}. Switching.`, false);
+        }
+        const way = roadOf(j, c.group) ?? (c.group === 0 ? 'main road' : 'cross road');
+        w.label = `WYRD unit ${u.id} · ${c.phase === 'g' ? `${way} go` : c.phase === 'a' ? 'clearing' : 'all stop'} · ${q[0] + q[1]} waiting`;
+        w.heading = Math.atan2(j.x - w.x, j.z - w.z);
+      }
+      // you, at the wheel, as the units see it: through a red light, or far too fast
+      if (!me.car || Math.abs(me.car.v) < 4) return;
+      const hx = Math.sin(me.car.rot) * Math.sign(me.car.v), hz = Math.cos(me.car.rot) * Math.sign(me.car.v), kmh = Math.round(Math.abs(me.car.v) * 3.6);
+      for (const j of traffic.junctions) {
+        if (Math.hypot(j.x - me.x, j.z - me.z) > 6) continue;
+        const k = junctionKey(j), gi = groupInto(j, hx, hz);
+        if (gi === -1 || traffic.light(j, gi, now) !== 'r' || now - (ranRed.get(k) ?? -1e9) < 20000) continue;
+        ranRed.set(k, now);
+        const w = nearestUnit(j.x, j.z, 250);
+        if (w) { unitSay(w, `red light run at ${junctionName(j)} -- your car, ${kmh} km/h. Logged.`, true, 'Noted. I remember that car.'); say('A WYRD unit saw you run that red light.'); }
+      }
+      if (kmh > 95 && now - speedLogged > 30000) {
+        const w = nearestUnit(me.x, me.z, 60);
+        if (w) { speedLogged = now; unitSay(w, `speed logged: ${kmh} km/h on ${world.nearestRoad(me.x, me.z, 40, KIND.residential)?.r.name ?? 'the road'}.`, true, 'Logged. Slow down, driver.'); }
+      }
+    };
+    /** a WYRD traffic unit at the corner of the light junctions near you: it takes the junction over and runs it */
+    const spawnWardens = () => {
+      if (walkers.filter((w) => w.role === 'warden').length >= 2) return;
+      for (const j of traffic.junctions) {
+        if (Math.hypot(j.x - me.x, j.z - me.z) > 130 || walkers.some((w) => w.role === 'warden' && Math.hypot(w.x - j.x, w.z - j.z) < 40)) continue;
+        for (let k = 0; k < 8; k++) {
+          const a = Math.PI / 4 + (k % 4) * Math.PI / 2, d = 9 + Math.floor(k / 4) * 5, x = j.x + Math.sin(a) * d, z = j.z + Math.cos(a) * d;
+          const n = world.nearestRoad(x, z, 30, KIND.residential);
+          if (!n || n.d < n.r.w / 2 + 0.6 || world.blocked(x, z, 2)) continue; // (on the pavement, clear of the walls)
+          const key = junctionKey(j), id = `T-${String(Math.abs(Math.round(j.x * 3 + j.z * 7)) % 90 + 10)}`;
+          const look: Look = { ...lookFor(1), bot: '#00F0FF' };
+          walkers.push({ r: n.r, s: n.s, dir: 1, v: 0, sprite: WALKERS[0], side: 1, x, z, left: false, look, heading: Math.atan2(j.x - x, j.z - z), role: 'warden', pose: 'wave', label: `WYRD unit ${id}`, t0: Math.random() * 10, unit: { id, key, q: [0, 0], reported: performance.now() - 30000 } });
+          traffic.take(j, id, performance.now());
+          unitSay(walkers[walkers.length - 1], `On station at ${junctionName(j)}. Taking the lights.`, false);
+          return;
+        }
+      }
     };
     const placeCar = (c: Car) => {
       const s = c.dir === 1 ? c.s : c.r.len - c.s;
@@ -852,6 +966,8 @@ function Game({ onExit }: { onExit: () => void }) {
         if (Math.hypot(me.x - poolAt.x, me.z - poolAt.z) > 40 || now - poolTime > 2000) refreshPool();
         for (let n = 0; n < 3 && cars.length < wanted; n++) spawnCar(me);
         while (walkers.length < 40) { const before = walkers.length; spawnWalker(me); if (walkers.length === before) break; }
+        if (step === 0 && Math.random() < 0.05) spawnWardens();
+        if (step === 0) runUnits(now);
         for (let i = cars.length - 1; i >= 0; i--) {
           const c = cars[i];
           if (!c.r) continue;
@@ -872,6 +988,12 @@ function Game({ onExit }: { onExit: () => void }) {
             if (line < Infinity) want = Math.min(want, line < 0.6 ? 0 : Math.sqrt(2 * 4.5 * line));
           }
           if ((c.stunUntil ?? 0) > now) want = 0;
+          // a danfo (or BRT bus) pulls over for people waiting at the roadside, and they get on
+          if (!thief && (c.sprite === 'car-danfo' || c.sprite === 'bus-brt') && now - (c.lastStop ?? -1e9) > 20000) {
+            const by = walkers.filter((w) => w.role === 'waiting' && !w.boardAt && Math.hypot(w.x - c.x, w.z - c.z) < 7);
+            if (by.length) { c.stopUntil = now + 4000; c.lastStop = now; by.forEach((w) => { w.boardAt = now + 1500 + Math.random() * 1800; w.label = c.sprite === 'bus-brt' ? 'Getting on the BRT' : 'Getting on the danfo'; }); }
+          }
+          if ((c.stopUntil ?? 0) > now) want = 0;
           const cur = c.cur ?? want;
           c.cur = cur + Math.max(-9 * dt, Math.min(3.5 * dt, want - cur));
           c.s += c.cur * dt;
@@ -887,13 +1009,32 @@ function Game({ onExit }: { onExit: () => void }) {
         }
         for (let i = walkers.length - 1; i >= 0; i--) {
           const w = walkers[i];
+          if (Math.hypot(w.x - me.x, w.z - me.z) > 180) { if (w.unit) traffic.release(w.unit.key); walkers.splice(i, 1); continue; }
+          // got on the danfo that pulled over for them
+          if (w.boardAt && now > w.boardAt) { walkers.splice(i, 1); continue; }
+          if (w.role !== 'commuter' && w.role !== 'sweeper') continue; // (the rest stay where they are, at work)
+          if ((w.until ?? 0) > now) continue; // (stopped to buy something)
+          if (w.until) { w.until = 0; w.label = commuting(); }
           w.s += w.v * dt;
-          if (w.s >= w.r.len) { w.dir = (-w.dir) as 1 | -1; w.s = 0; }
+          if (w.s >= w.r.len) { w.dir = (-w.dir) as 1 | -1; w.s = 0; w.goal = 30 + Math.random() * 120; }
           const a = along(w.r.p, w.r.cum, w.dir === 1 ? w.s : w.r.len - w.s), off = pavementOffset(w.r) * w.side;
           const nx = a.x - a.dz * off, nz = a.z + a.dx * off;
           if (Math.hypot(nx - w.x, nz - w.z) > 0.001) w.heading = Math.atan2(nx - w.x, nz - w.z);
           w.x = nx; w.z = nz;
-          if (Math.hypot(w.x - me.x, w.z - me.z) > 180) walkers.splice(i, 1);
+          if (w.role !== 'commuter') continue;
+          // passing a vendor: sometimes stops to buy
+          if (!w.bought) for (const v of walkers) {
+            if (v.role !== 'vendor' || Math.hypot(v.x - w.x, v.z - w.z) > 1.6) continue;
+            w.bought = true;
+            if (Math.random() < 0.4) { w.until = now + 3500 + Math.random() * 2500; w.heading = Math.atan2(v.x - w.x, v.z - w.z); w.label = `Buying ${v.label.replace(/^Selling /, '')}`; }
+            break;
+          }
+          // where they were going: in through the door of the building beside them
+          if (w.s >= (w.goal ?? Infinity)) {
+            const out = pavementOffset(w.r) + 3.5, gx = a.x - a.dz * out * w.side, gz = a.z + a.dx * out * w.side;
+            if (world.blocked(gx, gz, 0.6)) { walkers.splice(i, 1); continue; }
+            w.goal = w.s + 20 + Math.random() * 60;
+          }
         }
         if (boats.length < 5 && sea.length) {
           const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 200, x = me.x + Math.cos(a) * d, z = me.z + Math.sin(a) * d;
@@ -972,7 +1113,10 @@ function Game({ onExit }: { onExit: () => void }) {
       for (const c of cars) spr.push({ s: c.sprite, x: c.x, z: c.z, veh: true, heading: c.rot });
       const inRide = ride?.phase === 'riding';
       if (ride?.kind === 'road') spr.push({ s: ride.sprite, x: ride.x, z: ride.z, veh: true, heading: ride.h });
-      for (const w of walkers) spr.push({ s: w.sprite, x: w.x, z: w.z, look: w.look, heading: w.heading, walk: (w.s / 0.7) % 2 });
+      for (const w of walkers) {
+        const moving = (w.role === 'commuter' || w.role === 'sweeper') && !((w.until ?? 0) > now);
+        spr.push({ s: w.sprite, x: w.x, z: w.z, look: w.look, heading: w.heading, walk: moving ? (w.s / 0.7) % 2 : undefined, pose: w.pose, t: now / 1000 + w.t0 });
+      }
       let playerSprite: Sprite | null = null;
       if (me.car) { playerSprite = { s: me.car.sprite, x: me.x, z: me.z, veh: true, heading: me.car.rot }; spr.push(playerSprite); }
       else if (inRide) { if (ride!.kind === 'road') playerSprite = spr[spr.length - 1]; } // (you're in it: it's the one to keep in sight)
@@ -1043,6 +1187,21 @@ function Game({ onExit }: { onExit: () => void }) {
       // flying cars, over the roofs, far ones first
       const sky = ride?.kind === 'air' ? [...flyers, ride] : flyers;
       for (const f of [...sky].sort((p, q) => depth(cam, p.x, p.z) - depth(cam, q.x, q.z))) drawFlyer(ctx, cam, { s: f.sprite, x: f.x, z: f.z, veh: true, heading: f.h, lift: f.y }, night);
+      // what the people near you are doing: a tag over each of the nearest few (vendors call out when you're close)
+      if (cam.scale >= 9 && !me.car && !inRide) {
+        const near = walkers.map((w) => ({ w, d: Math.hypot(w.x - me.x, w.z - me.z) })).filter((p) => p.d < 14).sort((p, q) => p.d - q.d).slice(0, 4);
+        ctx.font = `600 ${Math.round(Math.max(10, Math.min(13, cam.scale * 0.7)))}px "Share Tech Mono", monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (const { w, d } of near) {
+          const text = w.role === 'vendor' && d < 4 ? `“${CALLS[Math.floor((now / 4000 + w.t0) % CALLS.length)]}”` : w.label;
+          const q = toScreen(cam, w.x, w.z, w.unit ? 4.3 : 3.75), tw = ctx.measureText(text).width + 12, th = 18;
+          ctx.globalAlpha = Math.max(0, Math.min(1, (14 - d) / 4));
+          ctx.fillStyle = 'rgba(6,9,14,0.82)'; ctx.fillRect(q.sx - tw / 2, q.sy - th / 2, tw, th);
+          ctx.fillStyle = w.role === 'warden' ? '#FF2BD6' : w.role === 'sweeper' ? '#FF9A3D' : w.role === 'vendor' ? '#3DFF9A' : '#00F0FF';
+          ctx.fillRect(q.sx - tw / 2, q.sy - th / 2, 2, th);
+          ctx.fillStyle = '#E8F7FF'; ctx.fillText(text, q.sx + 1, q.sy + 1);
+          ctx.globalAlpha = 1;
+        }
+      }
       // the job's target: a bouncing marker
       const tgt = ride && ride.phase !== 'leaving' ? (ride.phase === 'riding' ? ride.dest : ride) : !job ? storyTarget : job.type === 'delivery' ? (job.carrying ? job.drop : job.pick) : job.type === 'danfo' ? job.stops[job.at] : job.thief;
       if (tgt) {
