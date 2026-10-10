@@ -469,6 +469,8 @@ export const api = {
   /** Let WYRD learn from your play in NAIJA 2099 (or stop). */
   citySetTraining: (optIn: boolean) => callEndpoint<string>('city', 'setTraining', { optIn }).then((j) => JSON.parse(j) as CityDecree),
   /** anonymous tallies of what the city saw (only kept for players who agreed to let WYRD learn): [{k, p, n, v}] */
+  /** your latest receipts from the naira ledger, newest first */
+  cityReceipts: () => callEndpoint<string>('city', 'receipts', {}).then((j) => JSON.parse(j) as { ref: string; kind: string; memo: string; amount: number; balance: number; at: string; reversed: boolean }[]),
   citySignals: (batch: string) => callEndpoint<string>('city', 'signals', { batch }).then((j) => JSON.parse(j) as { kept?: number; optIn?: boolean; error?: string }),
   cityDesign: () => callEndpoint<string>('city', 'design', {}).then((j) => JSON.parse(j) as CityLiveDesign),
   // the design studio: the owner designs the game with WYRD (operators only)

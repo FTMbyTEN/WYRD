@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CY, HEAD, MONO } from './cyber';
+import { api } from '../api/client';
 import type { Station } from './radio';
 import { index, search, searchIndex, type Found } from './search';
 import type { WyrdLine } from './WyrdPanel';
@@ -196,9 +197,7 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
                       <Text style={[s.wBig, { fontSize: 36 }]}>₦{wallet == null ? '—' : Math.round(wallet).toLocaleString('en-NG')}</Text>
                       <Text style={s.wSmall}>Held by WYRD · settled on the city's books</Text>
                     </View>
-                    {([['WYRD Ride', '₦500'], ['WYRD Air', '₦1,500'], ['Danfo across town', '₦100'], ['Police fine', '₦2,000']] as const).map(([a, b]) => (
-                      <View key={a} style={[s.listRow, s.glass]}><Text style={[s.rowMain, { flex: 1 }]}>{a}</Text><Text style={s.fare}>{b}</Text></View>
-                    ))}
+                    <Receipts />
                   </View>
                 ) : null}
               </ScrollView>
@@ -213,6 +212,33 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
       </View>
       <Text style={s.hint}>P or Esc to put it away</Text>
     </View>
+  );
+}
+
+/** the wallet's receipts: every naira in and out, from the city's ledger */
+function Receipts() {
+  const [list, setList] = useState<Awaited<ReturnType<typeof api.cityReceipts>> | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { api.cityReceipts().then(setList).catch(() => setFailed(true)); }, []);
+  if (failed) return <Text style={s.rowSub}>Receipts couldn't load. Check your connection and open the wallet again.</Text>;
+  if (!list) return <Text style={s.rowSub}>Loading receipts…</Text>;
+  if (!list.length) return <Text style={s.rowSub}>No receipts yet. Every naira you earn or spend will show here.</Text>;
+  return (
+    <>
+      <Text style={[s.wKicker, { marginTop: 6 }]}>RECEIPTS</Text>
+      {list.map((r) => (
+        <View key={r.ref} style={[s.listRow, s.glass, r.reversed && { opacity: 0.55 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.rowMain} numberOfLines={1}>{r.memo}</Text>
+            <Text style={s.rowSub}>{r.ref} · {new Date(r.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{r.reversed ? ' · reversed' : ''}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[s.fare, { color: r.amount >= 0 ? CY.green : '#FF8FA3' }]}>{r.amount >= 0 ? '+' : '−'}₦{Math.abs(r.amount).toLocaleString('en-NG')}</Text>
+            <Text style={s.rowSub}>₦{r.balance.toLocaleString('en-NG')}</Text>
+          </View>
+        </View>
+      ))}
+    </>
   );
 }
 
