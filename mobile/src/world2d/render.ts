@@ -41,7 +41,7 @@ const heroHalf = (e: number) => Math.max(0.85, (1.8 * Math.cos(e)) / 1.75 + 0.03
 const VEH_CELL = 160, VEH_DIRS = 32, VEH_PITCHES = [0.15, 0.25, 0.35, 0.55, 0.75, 0.95];
 const vehGround = (span: number, pitch: number) => 0.5 + (0.06 * span * Math.cos(pitch)) / span;
 export const VEH_SPAN: Record<string, number> = {
-  'car-red': 6.2, 'car-blue': 6.2, 'car-white': 6.2, 'car-purple': 6.2, 'car-grey': 6.2, 'car-taxi': 6.2,
+  'car-red': 6.2, 'car-blue': 6.2, 'car-white': 6.2, 'car-purple': 6.2, 'car-grey': 6.2, 'car-taxi': 6.2, 'car-police': 6.2,
   'car-danfo': 6.8, 'bus-brt': 14.5, okada: 3.2, keke: 3.8, 'boat-taxi': 10.5,
   'wyrd-cab-navy': 6.4, 'wyrd-cab-pearl': 6.4, 'wyrd-arrow-crimson': 6.4, 'wyrd-arrow-black': 6.4,
   'wyrd-bubble-gold': 4.6, 'wyrd-bubble-mint': 4.6, 'wyrd-hauler-white': 7.4, 'wyrd-hauler-orange': 7.4,

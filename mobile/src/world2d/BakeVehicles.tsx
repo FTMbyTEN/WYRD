@@ -45,6 +45,25 @@ function car(color: number, opts: { long?: number; low?: boolean } = {}) {
   return g;
 }
 
+/** A Lagos police patrol car of 2099: deep navy, a white band along the doors, a red-and-blue light bar on the roof. */
+function police() {
+  const g = car(0x14213d);
+  const L = 4.4, W = 1.9;
+  const band = new THREE.Mesh(new THREE.BoxGeometry(W + 0.03, 0.2, L * 0.62), paint(0xf5f7fa));
+  band.position.set(0, 0.64, -L * 0.02); g.add(band);
+  const bonnet = new THREE.Mesh(new THREE.BoxGeometry(W * 0.5, 0.02, L * 0.2), paint(0xf5f7fa));
+  bonnet.position.set(0, 0.9, L * 0.33); g.add(bonnet);
+  const y = 0.58 + 0.76 + 0.1;
+  const base = new THREE.Mesh(new RoundedBoxGeometry(W * 0.7, 0.1, 0.32, 2, 0.04), paint(0x111318));
+  base.position.set(0, y, -L * 0.06); g.add(base);
+  for (const [sx, c] of [[-1, 0xff1a3c], [1, 0x1a6bff]] as const) {
+    const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.2 });
+    const l = new THREE.Mesh(new RoundedBoxGeometry(W * 0.3, 0.14, 0.26, 2, 0.05), m);
+    l.position.set(sx * W * 0.17, y + 0.1, -L * 0.06); g.add(l);
+  }
+  return g;
+}
+
 /** A long blue Lagos BRT bus, front towards +z. */
 function brt() {
   const g = new THREE.Group();
@@ -194,6 +213,7 @@ const LIST: { name: string; make: () => THREE.Object3D; span: number }[] = [
   { name: 'car-purple', make: () => car(0x8e24aa, { low: true }), span: 6.2 },
   { name: 'car-grey', make: () => car(0x4a5568), span: 6.2 },
   { name: 'car-taxi', make: () => car(0xf2c94c), span: 6.2 },
+  { name: 'car-police', make: () => police(), span: 6.2 },
   { name: 'car-danfo', make: () => turned(makeDanfo(false).group), span: 6.8 },
   { name: 'bus-brt', make: () => brt(), span: 14.5 },
   { name: 'okada', make: () => turned(makeOkada(false).group), span: 3.2 },

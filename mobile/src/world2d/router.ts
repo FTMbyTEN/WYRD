@@ -14,6 +14,7 @@ export class Router {
   private nodes!: Float64Array;
   private edges: Edge[] = [];
   private out: { e: Edge; fwd: boolean }[][] = [];
+  private any: { e: Edge; fwd: boolean }[][] = []; // (every way, one-way or not: for the police, sirens on)
   private grid = new Map<string, Edge[]>();
   private main!: Uint8Array; // nodes in the city's one big connected network
   private static ready: Promise<Router> | null = null;
@@ -26,6 +27,7 @@ export class Router {
     this.nodes = Float64Array.from(g.nodes, (v) => v / 10);
     const N = this.nodes.length / 2;
     this.out = Array.from({ length: N }, () => []);
+    this.any = Array.from({ length: N }, () => []);
     for (const e of g.edges) {
       const [a, b, oneway, w10] = e;
       const ax = this.nodes[a * 2], az = this.nodes[a * 2 + 1];
@@ -38,6 +40,7 @@ export class Router {
       this.edges.push(edge);
       this.out[a].push({ e: edge, fwd: true });
       if (!edge.oneway) this.out[b].push({ e: edge, fwd: false });
+      this.any[a].push({ e: edge, fwd: true }); this.any[b].push({ e: edge, fwd: false });
       // each stretch in the grid cells it passes through (100 m), for finding the road nearest a point
       for (let i = 0; i < p.length; i += 2) {
         const k = `${Math.floor(p[i] / 100)},${Math.floor(p[i + 1] / 100)}`;
@@ -77,11 +80,13 @@ export class Router {
     return best;
   }
 
-  /** the shortest drive from [from] to [to] by road (A*), as a line to follow in the right-hand lane; null if none */
-  route(from: RoadPoint, to: RoadPoint): Route | null {
+  /** the shortest drive from [from] to [to] by road (A*), as a line to follow in the right-hand lane; null if none.
+   *  [anyWay]: one-way streets either way (a police car with its siren on) */
+  route(from: RoadPoint, to: RoadPoint, anyWay = false): Route | null {
+    const out = anyWay ? this.any : this.out;
     const N = this.nodes.length / 2;
     // the same stretch, ahead: straight there
-    if (from.edge === to.edge && (to.s >= from.s || !from.edge.oneway)) return this.line([[from.edge, from.s, to.s]]);
+    if (from.edge === to.edge && (to.s >= from.s || !from.edge.oneway || anyWay)) return this.line([[from.edge, from.s, to.s]]);
     const g = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), via: ({ e: Edge; fwd: boolean } | null)[] = new Array(N).fill(null);
     const h = (n: number) => Math.hypot(this.nodes[n * 2] - to.x, this.nodes[n * 2 + 1] - to.z);
     const open: [number, number][] = []; // [f, node], kept as a binary heap
@@ -90,16 +95,16 @@ export class Router {
     // from the start point: along its stretch to either end (only forwards on a one-way)
     const e0 = from.edge;
     g[e0.b] = e0.len - from.s; push(g[e0.b] + h(e0.b), e0.b);
-    if (!e0.oneway) { g[e0.a] = Math.min(g[e0.a], from.s); push(g[e0.a] + h(e0.a), e0.a); }
+    if (!e0.oneway || anyWay) { g[e0.a] = Math.min(g[e0.a], from.s); push(g[e0.a] + h(e0.a), e0.a); }
     // the goal: reaching the end stretch's start (then forwards), or its end (then back, two-way only)
-    const goalA = to.edge.a, goalB = to.edge.oneway ? -1 : to.edge.b;
+    const goalA = to.edge.a, goalB = to.edge.oneway && !anyWay ? -1 : to.edge.b;
     let bestEnd: { node: number; cost: number } | null = null;
     while (open.length) {
       const [f, n] = pop();
       if (bestEnd && f >= bestEnd.cost) break;
       if (n === goalA) { const c = g[n] + to.s; if (!bestEnd || c < bestEnd.cost) bestEnd = { node: n, cost: c }; }
       if (n === goalB) { const c = g[n] + (to.edge.len - to.s); if (!bestEnd || c < bestEnd.cost) bestEnd = { node: n, cost: c }; }
-      for (const o of this.out[n]) {
+      for (const o of out[n]) {
         const m = o.fwd ? o.e.b : o.e.a, c = g[n] + o.e.len;
         if (c < g[m]) { g[m] = c; prev[m] = n; via[m] = o; push(c + h(m), m); }
       }

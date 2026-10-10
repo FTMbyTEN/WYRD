@@ -21,7 +21,7 @@ export function loadCyberFonts() {
   l.href = 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap';
   document.head.appendChild(l);
   const st = document.createElement('style');
-  st.textContent = '@keyframes cyEq{0%,100%{height:4px}50%{height:18px}} .cy-eq{height:4px;animation:cyEq .9s ease-in-out infinite}';
+  st.textContent = '@keyframes cyEq{0%,100%{height:4px}50%{height:18px}} .cy-eq{height:4px;animation:cyEq .9s ease-in-out infinite} @keyframes cySiren{0%,49%{filter:drop-shadow(0 0 6px rgba(255,26,60,.95))}50%,100%{filter:drop-shadow(0 0 6px rgba(26,107,255,.95))}} .cy-siren{animation:cySiren .5s step-end infinite}';
   document.head.appendChild(st);
 }
 
