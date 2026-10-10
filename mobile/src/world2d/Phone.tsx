@@ -47,7 +47,7 @@ type Screen = 'home' | 'rides' | 'radio' | 'live' | 'calls' | 'wallet' | 'settin
 
 export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, stations, onAir, onTune, live, onMap, onWyrd, onClose, background, cop, onCall, teach, onTeach }: {
   wallet: number | null; me: { x: number; z: number }; ride: RideStatus | null;
-  onOrder: (dest: Found, kind: RideKind) => void; onCancel: () => void; onSkip: () => void; onFast: () => void;
+  onOrder: (dest: Found, kind: RideKind, lift?: boolean) => void; onCancel: () => void; onSkip: () => void; onFast: () => void;
   stations: Station[]; onAir: Station | null; onTune: (i: number | null) => void;
   live: WyrdLine[]; onMap: () => void; onWyrd: () => void; onClose: () => void;
   background: string | null | undefined; cop: CopStatus; onCall: (id: string) => Promise<CallResult>;
@@ -219,15 +219,41 @@ export function Phone({ wallet, me, ride, onOrder, onCancel, onSkip, onFast, sta
 function Receipts() {
   const [list, setList] = useState<Awaited<ReturnType<typeof api.cityReceipts>> | null>(null);
   const [failed, setFailed] = useState(false);
-  useEffect(() => { api.cityReceipts().then(setList).catch(() => setFailed(true)); }, []);
+  const [w, setW] = useState<{ debt?: number; rentGraceUntil?: string | null; hostel?: boolean } | null>(null);
+  const [asking, setAsking] = useState<string | null>(null); // the receipt being disputed
+  const [said, setSaid] = useState<Record<string, string>>({}); // what came of each dispute
+  const load = () => { api.cityReceipts().then(setList).catch(() => setFailed(true)); api.cityWallet().then(setW).catch(() => {}); };
+  useEffect(load, []);
+  const dispute = (ref: string, reason: 'not_delivered' | 'wrong_amount' | 'other') => {
+    setAsking(null);
+    api.cityDispute(ref, reason).then((r) => {
+      setSaid((p) => ({ ...p, [ref]: r.error ? r.error : r.status === 'refunded' ? `Refunded ₦${(r.refund ?? 0).toLocaleString('en-NG')}.` : 'Sent for review. You\'ll see a refund here if it\'s upheld.' }));
+      load();
+    }).catch(() => setSaid((p) => ({ ...p, [ref]: 'Couldn\'t reach the city. Try again.' })));
+  };
+  const plan = w?.debt ? (
+    <View style={[s.card, s.glass, { borderLeftWidth: 3, borderLeftColor: CY.yellow }]}>
+      <Text style={[s.wKicker, { color: CY.yellow }]}>PAYMENT PLAN</Text>
+      <Text style={s.wMid}>₦{w.debt.toLocaleString('en-NG')} owed</Text>
+      <Text style={s.rowSub}>A fifth of each payout goes to it until it's paid. No interest, ever. Under ₦2,000 owed for 30 days is forgiven.</Text>
+    </View>
+  ) : null;
+  const grace = w?.rentGraceUntil ? (
+    <View style={[s.card, s.glass, { borderLeftWidth: 3, borderLeftColor: '#FF8FA3' }]}>
+      <Text style={[s.wKicker, { color: '#FF8FA3' }]}>RENT DUE</Text>
+      <Text style={s.rowSub}>Your home is kept until {new Date(w.rentGraceUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}. Earn the rent by then and it's paid automatically; if not, you move to a free hostel bed and keep everything else.</Text>
+    </View>
+  ) : w?.hostel ? <Text style={s.rowSub}>You're staying in a free hostel bed. Rent a home again whenever you like.</Text> : null;
   if (failed) return <Text style={s.rowSub}>Receipts couldn't load. Check your connection and open the wallet again.</Text>;
   if (!list) return <Text style={s.rowSub}>Loading receipts…</Text>;
-  if (!list.length) return <Text style={s.rowSub}>No receipts yet. Every naira you earn or spend will show here.</Text>;
+  if (!list.length) return <>{plan}{grace}<Text style={s.rowSub}>No receipts yet. Every naira you earn or spend will show here.</Text></>;
   return (
     <>
+      {plan}{grace}
       <Text style={[s.wKicker, { marginTop: 6 }]}>RECEIPTS</Text>
       {list.map((r) => (
-        <View key={r.ref} style={[s.listRow, s.glass, r.reversed && { opacity: 0.55 }]}>
+        <View key={r.ref} style={{ gap: 4 }}>
+        <View style={[s.listRow, s.glass, r.reversed && { opacity: 0.55 }]}>
           <View style={{ flex: 1 }}>
             <Text style={s.rowMain} numberOfLines={1}>{r.memo}</Text>
             <Text style={s.rowSub}>{r.ref} · {new Date(r.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{r.reversed ? ' · reversed' : ''}</Text>
@@ -235,7 +261,19 @@ function Receipts() {
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={[s.fare, { color: r.amount >= 0 ? CY.green : '#FF8FA3' }]}>{r.amount >= 0 ? '+' : '−'}₦{Math.abs(r.amount).toLocaleString('en-NG')}</Text>
             <Text style={s.rowSub}>₦{r.balance.toLocaleString('en-NG')}</Text>
+            {r.amount < 0 && !r.reversed && r.kind !== 'plan' && !said[r.ref] ? (
+              <Pressable onPress={() => setAsking(asking === r.ref ? null : r.ref)} accessibilityLabel={`Dispute ${r.ref}`}><Text style={[s.rowSub, { color: CY.cyan }]}>Dispute</Text></Pressable>
+            ) : null}
           </View>
+        </View>
+        {asking === r.ref ? (
+          <View style={s.actions}>
+            {([['not_delivered', 'Didn\'t get it'], ['wrong_amount', 'Wrong amount'], ['other', 'Something else']] as const).map(([k, label]) => (
+              <Btn key={k} label={label} tone={CY.cyan} onPress={() => dispute(r.ref, k)} />
+            ))}
+          </View>
+        ) : null}
+        {said[r.ref] ? <Text style={[s.rowSub, { color: CY.green, paddingLeft: 12 }]}>{said[r.ref]}</Text> : null}
         </View>
       ))}
     </>
@@ -338,7 +376,7 @@ function RideCard({ ride, onOpen }: { ride: RideStatus; onOpen?: () => void }) {
 
 function Rides({ me, wallet, ride, onOrder, onCancel, onSkip, onFast }: {
   me: { x: number; z: number }; wallet: number | null; ride: RideStatus | null;
-  onOrder: (dest: Found, kind: RideKind) => void; onCancel: () => void; onSkip: () => void; onFast: () => void;
+  onOrder: (dest: Found, kind: RideKind, lift?: boolean) => void; onCancel: () => void; onSkip: () => void; onFast: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [all, setAll] = useState<Found[]>(index ?? []);
@@ -383,6 +421,16 @@ function Rides({ me, wallet, ride, onOrder, onCancel, onSkip, onFast }: {
               </Pressable>
             );
           })}
+          {wallet != null && wallet < 500 ? (
+            <Pressable onPress={() => onOrder(dest, 'road', true)} style={({ pressed }) => [s.listRow, s.glass, { borderColor: 'rgba(61,255,154,0.55)' }, pressed && { opacity: 0.75 }]}>
+              <Text style={s.optIcon}>🤝</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowMain}>WYRD Lift</Text>
+                <Text style={s.rowSub}>Short of fare? A free ride by road, once an hour.</Text>
+              </View>
+              <Text style={[s.fare, { color: CY.green }]}>Free</Text>
+            </Pressable>
+          ) : null}
         </>
       ) : (
         <>

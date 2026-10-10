@@ -456,4 +456,12 @@ export interface CityHome { slug: string; name: string; district: string; kind: 
 /** Something to do at a place: cost (negative naira) or pay, health given back, standing, cooldown. */
 export interface CityActivity { id: string; label: string; naira: number; heal: number; standing: number; againS: number }
 /** Your naira and your home. */
-export interface CityWallet { naira: number; home: CityHome | null; paid?: number; guide?: string[] }
+export interface CityWallet {
+  naira: number; home: CityHome | null; paid?: number; guide?: string[];
+  /** owed on a payment plan (a fifth of each payout goes to it), the rent grace, and whether you're in a hostel bed */
+  debt?: number; rentGraceUntil?: string | null; hostel?: boolean;
+  /** a police stop: warned, or fined (paid now, owed on the plan, waived past the plan's cap) */
+  warning?: boolean; fine?: number; owed?: number; waived?: number;
+  /** a fare on credit, a free WYRD Lift, a ride refunded, a dispute's outcome */
+  credit?: number; lift?: boolean; refund?: number; status?: 'refunded' | 'queued';
+}

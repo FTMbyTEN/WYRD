@@ -456,7 +456,7 @@ export const api = {
   cityJobFinish: (id: string, dist: number, passengers: number, limitS: number) => callEndpoint<string>('city', 'jobFinish', { id, dist, passengers, limitS }).then((j) => JSON.parse(j) as (CityWallet & { paid: number; note: string }) | { error: string }),
   cityGuideMark: (step: string) => callEndpoint<string>('city', 'guideMark', { step }).then((j) => JSON.parse(j) as { guide: string[]; paid: number; naira: number } | { error: string }),
   cityGuideSkip: () => callEndpoint<string>('city', 'guideSkip', {}).then((j) => JSON.parse(j) as { guide: string[]; paid: number; naira: number }),
-  cityPay: (reason: 'maglev' | 'danfo' | 'ride' | 'air' | 'fine' | 'lawyer') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
+  cityPay: (reason: 'maglev' | 'danfo' | 'ride' | 'air' | 'fine' | 'fine_desk' | 'lawyer' | 'lift') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   /** NAIJA 2099's story: reputation and branching missions (the server decides every step). */
   cityStory: () => callEndpoint<string>('city', 'story', {}).then((j) => JSON.parse(j) as Story),
   cityStoryAct: (mission: string, move: string) => callEndpoint<string>('city', 'storyAct', { mission, move }).then((j) => JSON.parse(j) as { ok?: boolean; error?: string; say?: string; step?: string; naira?: number; paid?: number; cost?: number; bulletin?: string | null; story?: Story }),
@@ -469,6 +469,10 @@ export const api = {
   /** Let WYRD learn from your play in NAIJA 2099 (or stop). */
   citySetTraining: (optIn: boolean) => callEndpoint<string>('city', 'setTraining', { optIn }).then((j) => JSON.parse(j) as CityDecree),
   /** anonymous tallies of what the city saw (only kept for players who agreed to let WYRD learn): [{k, p, n, v}] */
+  /** cancel your WYRD Ride or flight: the fare back (all of it in the first minute, 80% after) */
+  cityRefundRide: () => callEndpoint<string>('city', 'refundRide', {}).then((j) => JSON.parse(j) as CityWallet & { error?: string }),
+  /** dispute a charge on your receipts: refunded at once (small) or queued for review */
+  cityDispute: (ref: string, reason: 'not_delivered' | 'wrong_amount' | 'other') => callEndpoint<string>('city', 'dispute', { ref, reason }).then((j) => JSON.parse(j) as CityWallet & { error?: string }),
   /** your latest receipts from the naira ledger, newest first */
   cityReceipts: () => callEndpoint<string>('city', 'receipts', {}).then((j) => JSON.parse(j) as { ref: string; kind: string; memo: string; amount: number; balance: number; at: string; reversed: boolean }[]),
   citySignals: (batch: string) => callEndpoint<string>('city', 'signals', { batch }).then((j) => JSON.parse(j) as { kept?: number; optIn?: boolean; error?: string }),

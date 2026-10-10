@@ -152,7 +152,7 @@ function Game({ onExit }: { onExit: () => void }) {
   const [rideStatus, setRideRaw] = useState<RideStatus | null>(null);
   const rideKey = useRef('');
   const setRide = (st: RideStatus | null) => { const k = JSON.stringify(st); if (k !== rideKey.current) { rideKey.current = k; setRideRaw(st); } };
-  const rideCtl = useRef<{ order: (f: Found, k: RideKind) => void; cancel: () => void; skip: () => void; fast: () => void }>({ order: () => {}, cancel: () => {}, skip: () => {}, fast: () => {} });
+  const rideCtl = useRef<{ order: (f: Found, k: RideKind, lift?: boolean) => void; cancel: () => void; skip: () => void; fast: () => void }>({ order: () => {}, cancel: () => {}, skip: () => {}, fast: () => {} });
   const tuneTo = (i: number | null) => {
     if (!radio.current) { radio.current = new Radio(); radio.current.onChange = (st, live) => { setOnAir(st); setTuning(!!st && !live); }; }
     radio.current.tuneTo(i);
@@ -401,6 +401,7 @@ function Game({ onExit }: { onExit: () => void }) {
         const r = await api.cityPay('danfo');
         if ('error' in r && r.error) { say(String(r.error)); return; }
         setWallet((r as { naira: number }).naira);
+        if ('credit' in r && r.credit) setTimeout(() => say(`Short of fare: the conductor let you ride on credit. ₦${r.credit} goes on your plan, paid from what you earn next.`), 3600);
       } catch { say('No danfo answered. Try again.'); return; }
       if (me.car) { me.car = null; setDriving(false); }
       me.x = x; me.z = z; cam.x = x; cam.z = z;
@@ -587,10 +588,16 @@ function Game({ onExit }: { onExit: () => void }) {
       heat = 0;
       try {
         const r = await api.cityPay('fine');
-        if ('error' in r && r.error) say(`Officer: "Oya, go. Next time, e go cost you." (${p.id} let you off -- you couldn't pay)`);
-        else { setWallet((r as { naira: number }).naira); say(`Officer: "Oga, you dey drive like say na your papa road." Fined ₦2,000.`); }
+        if ('error' in r && r.error) say(`Officer: "Go. And drive well." (${p.id} let you off)`);
+        else if ('warning' in r && r.warning) { setWallet(r.naira); say(`Officer: "This one na warning. WYRD get your plate now." No fine today, but the next stop costs you.`); }
+        else if ('fine' in r) {
+          setWallet(r.naira);
+          const plan = r.owed ? ` ₦${r.owed.toLocaleString('en-NG')} goes on your payment plan.` : '';
+          const waived = r.waived ? ` ₦${r.waived.toLocaleString('en-NG')} waived: your plan is full.` : '';
+          say(`Officer: "Oga, you dey drive like say na your papa road." Fined ₦${(r.fine ?? 0).toLocaleString('en-NG')}: ₦${(r.paid ?? 0).toLocaleString('en-NG')} paid now.${plan}${waived}`);
+        }
       } catch { say(`Officer: "Go. And drive well." (${p.id} let you off)`); }
-      wyrdSay(`WYRD → ${p.id}: Stop made, fine settled. Record cleared.`);
+      wyrdSay(`WYRD → ${p.id}: Stop made. Record cleared. (Receipts: Phone → Wallet.)`);
     };
     /** the patrols called off */
     const standDown = (why: string) => {
@@ -619,7 +626,7 @@ function Game({ onExit }: { onExit: () => void }) {
       if (id === 'fines') {
         if (!stars) return clean('Alagbon fines desk. Your record is clean.');
         try {
-          const r = await api.cityPay('fine');
+          const r = await api.cityPay('fine_desk');
           if ('error' in r && r.error) return { lines: [['you', 'I want to settle a traffic matter.'], ['them', `It didn't go through: ${r.error}`]], cleared: 0, outcome: 'Payment failed' };
           setWallet((r as { naira: number }).naira);
         } catch { return { lines: [['them', '(The line is busy. Try again.)']], cleared: 0, outcome: 'No answer' }; }
@@ -880,7 +887,7 @@ function Game({ onExit }: { onExit: () => void }) {
     // ---- rides: ordered on the phone; the car or flyer comes for you, you get in (E), and it takes you there ----
     let ride: Ride | null = null;
     const RIDE_V = { road: 18, air: 45 };
-    rideCtl.current.order = async (f, kind) => {
+    rideCtl.current.order = async (f, kind, lift) => {
       if (ride) { say('You already have a ride on its way.'); return; }
       if (job) { say('Finish your job first -- the customer is waiting.'); return; }
       if (me.car) { say('Park and step out first (E), then order.'); return; }
@@ -904,7 +911,7 @@ function Game({ onExit }: { onExit: () => void }) {
         }
       }
       try {
-        const r = await api.cityPay(kind === 'air' ? 'air' : 'ride');
+        const r = await api.cityPay(lift ? 'lift' : kind === 'air' ? 'air' : 'ride');
         if ('error' in r && r.error) { say(String(r.error)); return; }
         setWallet((r as { naira: number }).naira);
       } catch { say('WYRD could not take the payment. Try again.'); return; }
@@ -955,7 +962,12 @@ function Game({ onExit }: { onExit: () => void }) {
     rideCtl.current.cancel = () => {
       if (!ride || ride.phase === 'riding') return;
       ride.phase = 'leaving'; ride.t = 0;
-      say('Ride cancelled. (The fare is not refunded.)');
+      say('Ride cancelled.');
+      api.cityRefundRide().then((r) => {
+        if (r.error) return;
+        setWallet(r.naira);
+        if (r.refund) say(`Ride cancelled: ₦${r.refund.toLocaleString('en-NG')} back in your wallet.`);
+      }).catch(() => {});
     };
     rideCtl.current.fast = () => { if (ride) ride.fast = !ride.fast; };
     rideCtl.current.skip = () => {
@@ -1671,7 +1683,7 @@ function Game({ onExit }: { onExit: () => void }) {
 
       {phone ? (
         <Phone wallet={wallet} me={mapData.current.me} ride={rideStatus}
-          onOrder={(f, k) => rideCtl.current.order(f, k)} onCancel={() => rideCtl.current.cancel()} onSkip={() => rideCtl.current.skip()} onFast={() => rideCtl.current.fast()}
+          onOrder={(f, k, lift) => rideCtl.current.order(f, k, lift)} onCancel={() => rideCtl.current.cancel()} onSkip={() => rideCtl.current.skip()} onFast={() => rideCtl.current.fast()}
           stations={STATIONS} onAir={onAir} onTune={tuneTo} live={wyrdLines}
           background={story?.background} cop={cop} onCall={(id) => callRef.current(id)}
           teach={training?.optIn ?? false} onTeach={answerTraining}
