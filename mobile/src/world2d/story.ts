@@ -487,7 +487,33 @@ export const FINALE: MissionDef = {
   },
 };
 
-export const MISSIONS = [TOMATO, GRIDLOCK, SCHOOL, MASTERS, WATER, GENERATOR, OWAMBE, SEAWALL, UNION, PHONE, EYO, CONTAINER, STARTUP, GOAT, FLOOD, LEAK, PEPPERSOUP, GHOSTBUS, GRANDMA, MATCHDAY, JAPA, DRONESTRIKE, VOICES, BANKRUN, FINALE];
+/** where WYRD's faulty unit T-31 stands: the Mushin junction the okada riders complain about */
+export const T31_AT: LatLon = [6.5318, 3.3478];
+
+export const T31: MissionDef = {
+  id: 't31', title: 'Unit T-31', brief: 'A WYRD traffic unit in Mushin is fining okada riders for speeds nobody could reach.', faction: 'NURTW',
+  beats: {
+    '': { at: [6.5296, 3.3462], radius: 60, objective: 'Meet Rasheed at', place: 'the okada park, Mushin', who: "Rasheed, okada riders' chairman",
+      line: '"That T-31 for the junction dey fine my boys for 90, 100 km/h. Abeg -- my okada no fit pass 70 even if devil push am! Na lie the machine dey tell. Help us prove am."',
+      choices: [{ move: 'accept', label: 'I go check the machine', detail: 'Start Unit T-31' }] },
+    pace: { at: T31_AT, radius: 90, objective: 'Drive past T-31 at a steady speed at', place: 'the Mushin junction', arriveMove: 'pace', vehicle: true, who: '', line: '', choices: [] },
+    witnesses: { at: T31_AT, radius: 90, objective: 'Find people who saw it at', place: 'the Mushin junction', who: 'Mama Kudi, roadside seller',
+      line: '"Every day, every day. The machine flash, the boys get message say dem speed -- and dem dey crawl past me like snail. Who go believe us?"',
+      choices: [
+        { move: 'witness:listen', label: 'Take everyone\'s statements', detail: 'Slow and thorough: the street will remember who listened' },
+        { move: 'witness:cctv', label: 'Buy the phone shop\'s CCTV (₦1,000)', detail: 'A week of footage: bikes crawling, T-31 flashing' },
+      ] },
+    compare: { at: [6.5095, 3.3711], radius: 60, objective: 'Compare T-31\'s log with the city\'s at', place: "WYRD's data office, Yaba", who: 'WYRD',
+      line: '"T-31 says one thing. My patrols and these people say another. You\'ve done the work -- how do you want this told?"',
+      choices: [
+        { move: 'expose:wyrd', label: 'File it with WYRD', detail: 'The proper way: WYRD checks, fixes, refunds' },
+        { move: 'expose:press', label: 'Take it to the press', detail: 'Loud: the whole city hears how the robot lied' },
+        { move: 'expose:riders', label: "Give it to the riders' union", detail: "Rasheed's people carry it to WYRD themselves" },
+      ] },
+  },
+};
+
+export const MISSIONS = [TOMATO, T31, GRIDLOCK, SCHOOL, MASTERS, WATER, GENERATOR, OWAMBE, SEAWALL, UNION, PHONE, EYO, CONTAINER, STARTUP, GOAT, FLOOD, LEAK, PEPPERSOUP, GHOSTBUS, GRANDMA, MATCHDAY, JAPA, DRONESTRIKE, VOICES, BANKRUN, FINALE];
 
 /** where a beat happens, in world metres (landmarks from their snapped positions) */
 export function beatPoint(b: Beat, marks: { id: string; x: number; z: number }[]) {

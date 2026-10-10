@@ -269,6 +269,8 @@ export type Story = { rep: { district: Record<string, number>; faction: Record<s
   people?: Record<string, { trust: number; notes: { at: string; what: string; felt: string }[] }>;
   bulletins?: { at: string; text: string }[];
   background?: string; backgrounds?: Record<string, [string, string]>;
+  /** WYRD units fixed for the whole city by a player (e.g. 'T-31') */
+  fixedUnits?: string[];
   career?: string; careerXp?: number; careerStage?: string | null; careers?: Record<string, string>; careerStages?: string[] };
 
 export const api = {

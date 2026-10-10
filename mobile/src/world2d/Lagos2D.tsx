@@ -8,7 +8,7 @@ import { place, planRect } from './place';
 import { KIND, World, along, crosses, inPoly, type Bld, type Road } from './tiles';
 import { lookFor, type Look, type Pose } from './person';
 import { CityMap, type Overview } from './CityMap';
-import { MISSIONS, beatPoint, type Beat, type Choice, type MissionDef } from './story';
+import { MISSIONS, T31_AT, beatPoint, type Beat, type Choice, type MissionDef } from './story';
 import { Dialogue, Standing } from './StoryPanels';
 import { WyrdPanel, type WyrdLine } from './WyrdPanel';
 import { CY, HEAD, MONO, Panel, loadCyberFonts } from './cyber';
@@ -514,7 +514,7 @@ function Game({ onExit }: { onExit: () => void }) {
     /** which way (light group) something heading (hx, hz) comes into junction [j] */
     const groupInto = (j: Junction, hx: number, hz: number) => { let best: 0 | 1 | -1 = -1, bd = 0.5; for (const a of j.approaches) { const d = a.ix * hx + a.iz * hz; if (d > bd) { bd = d; best = a.group; } } return best; };
     const ranRed = new Map<string, number>();
-    let speedLogged = 0;
+    let speedLogged = 0, t31Logged = -1e9;
     /** each unit's look at its junction: count the queues, run the lights, report now and then; and watch you */
     const runUnits = (now: number) => {
       for (const w of units()) {
@@ -551,6 +551,18 @@ function Game({ onExit }: { onExit: () => void }) {
         if (w || pat) {
           if (w) unitSay(w, `red light run at ${junctionName(j)} -- your car, ${kmh} km/h.`, true);
           report({ code: 'RL-1', place: junctionName(j), unit: w?.unit?.id, kmh, patrol: !!pat, patrolId: pat?.id, witnesses: witnessesAt(me.x, me.z) });
+        }
+      }
+      // T-31 (until it's fixed) reads 20 km/h high: drive past it at 60 and it logs 80
+      const t31 = walkers.find((u) => u.unit?.id === 'T-31');
+      if (t31 && !(storyRef.current?.fixedUnits ?? []).includes('T-31') && Math.hypot(t31.x - me.x, t31.z - me.z) < 45 && kmh > 35 && now - t31Logged > 30000) {
+        const reading = kmh + 20;
+        t31Logged = now;
+        if (reading > 75) {
+          const road = world.nearestRoad(me.x, me.z, 40, KIND.residential)?.r.name ?? 'the road';
+          unitSay(t31, `speed logged: ${reading} km/h on ${road}.`, true);
+          say(`T-31 logged you at ${reading} km/h. Your speedometer said ${kmh}.`);
+          report({ code: reading > 90 ? 'SP-2' : 'SP-1', place: road, unit: 'T-31', kmh: reading, witnesses: 0 });
         }
       }
       // speeding past a unit: over 75 km/h (the city's 60 limit, plus 15) is SP-1; over 90, SP-2
@@ -737,7 +749,9 @@ function Game({ onExit }: { onExit: () => void }) {
           const a = Math.PI / 4 + (k % 4) * Math.PI / 2, d = 9 + Math.floor(k / 4) * 5, x = j.x + Math.sin(a) * d, z = j.z + Math.cos(a) * d;
           const n = world.nearestRoad(x, z, 30, KIND.residential);
           if (!n || n.d < n.r.w / 2 + 0.6 || world.blocked(x, z, 2)) continue; // (on the pavement, clear of the walls)
-          const key = junctionKey(j), id = `T-${String(Math.abs(Math.round(j.x * 3 + j.z * 7)) % 90 + 10)}`;
+          const t31 = toXZ(T31_AT), atT31 = Math.hypot(j.x - t31.x, j.z - t31.z) < 500 && !walkers.some((u) => u.unit?.id === 'T-31');
+          const n0 = Math.abs(Math.round(j.x * 3 + j.z * 7)) % 90 + 10;
+          const key = junctionKey(j), id = atT31 ? 'T-31' : `T-${n0 === 31 ? 32 : n0}`;
           const look: Look = { ...lookFor(1), bot: '#00F0FF' };
           walkers.push({ r: n.r, s: n.s, dir: 1, v: 0, sprite: WALKERS[0], side: 1, x, z, left: false, look, heading: Math.atan2(j.x - x, j.z - z), role: 'warden', pose: 'wave', label: `WYRD unit ${id}`, t0: Math.random() * 10, unit: { id, key, q: [0, 0], reported: performance.now() - 30000 } });
           traffic.take(j, id, performance.now());
