@@ -83,6 +83,13 @@ export class Radio {
     if (this.station < 0) { this.playing = null; this.onChange?.(null, false); return null; }
     return this.start(STATIONS[this.station], 0);
   }
+  /** Tune straight to station [i] of the dial (the phone's radio), or off with null. */
+  tuneTo(i: number | null): Station | null {
+    this.stop();
+    if (i == null || !STATIONS[i]) { this.station = -1; this.playing = null; this.onChange?.(null, false); return null; }
+    this.station = i;
+    return this.start(STATIONS[i], 0);
+  }
   private start(st: Station, tries: number): Station {
     this.stop();
     const ac = this.ensure();

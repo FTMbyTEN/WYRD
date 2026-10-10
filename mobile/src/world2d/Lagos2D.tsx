@@ -16,6 +16,9 @@ import { Radio, STATIONS, type Station } from './radio';
 import { Scenery } from './scenery';
 import { Traffic } from './traffic';
 import { ChooseCharacter, LOCAL_LOOK } from './ChooseCharacter';
+import { Phone, type RideKind, type RideStatus } from './Phone';
+import { Router, onRoute, type Route } from './router';
+import type { Found } from './search';
 import type { Story } from '../api/client';
 import { type Light, depth, drawFlyer, drawMoving, redrawn, liveBox, lightPools, drawGhost, drawHaze, drawBridges, drawGround, nightGround, nightLights, nightTint, drawUpright, img, landmarkSprite, toScreen, viewOf, type Cam, type Sprite } from './render';
 /**
@@ -37,6 +40,12 @@ type Walker = { r: Road; s: number; dir: 1 | -1; v: number; sprite: string; side
 type Boat = { x: number; z: number; a: number; v: number };
 /** a flying car: where it is, how high, which way and how fast it flies */
 type Flyer = { x: number; z: number; y: number; h: number; v: number; sprite: string };
+/** a WYRD ride you ordered on the phone: by road (a car following a real route) or by air (a WYRD flyer) */
+type Ride = {
+  kind: RideKind; phase: 'coming' | 'waiting' | 'riding' | 'leaving'; dest: { x: number; z: number; name: string };
+  route: Route | null; trip: Route | null; s: number; v: number; x: number; z: number; y: number; h: number; sprite: string;
+  fast: boolean; from: { x: number; z: number }; to: { x: number; z: number }; t: number;
+};
 /** what draws the canvas: the graphics card's name, or a software renderer (SwiftShader, llvmpipe, Microsoft Basic
  *  Render Driver) -- Chrome falls back to software on some machines and drivers, and then every frame is slow */
 function graphicsName(): { name: string; software: boolean } {
@@ -121,6 +130,16 @@ function Game({ onExit }: { onExit: () => void }) {
   const tuneRadio = () => {
     if (!radio.current) { radio.current = new Radio(); radio.current.onChange = (st, live) => { setOnAir(st); setTuning(!!st && !live); }; }
     radio.current.tune();
+  };
+  // the phone (P) and the ride on it
+  const [phone, setPhone] = useState(false);
+  const [rideStatus, setRideRaw] = useState<RideStatus | null>(null);
+  const rideKey = useRef('');
+  const setRide = (st: RideStatus | null) => { const k = JSON.stringify(st); if (k !== rideKey.current) { rideKey.current = k; setRideRaw(st); } };
+  const rideCtl = useRef<{ order: (f: Found, k: RideKind) => void; cancel: () => void; skip: () => void; fast: () => void }>({ order: () => {}, cancel: () => {}, skip: () => {}, fast: () => {} });
+  const tuneTo = (i: number | null) => {
+    if (!radio.current) { radio.current = new Radio(); radio.current.onChange = (st, live) => { setOnAir(st); setTuning(!!st && !live); }; }
+    radio.current.tuneTo(i);
   };
   const [wyrdLines, setWyrdLines] = useState<WyrdLine[]>([]);
   const addWyrd = (l: WyrdLine) => setWyrdLines((p) => [...p.slice(-60), l]);
@@ -353,6 +372,7 @@ function Game({ onExit }: { onExit: () => void }) {
     travelRef.current = async (x, z, name) => {
       setCityMap(false);
       if (job) { say('Finish your job first -- the customer is waiting.'); return; }
+      if (ride) { say('You have a WYRD ride on — cancel it on your phone first.'); return; }
       if (Math.hypot(x - me.x, z - me.z) < 150) { say('You are already there. Walk it!'); return; }
       try {
         const r = await api.cityPay('danfo');
@@ -371,7 +391,7 @@ function Game({ onExit }: { onExit: () => void }) {
     const cars: Car[] = [], walkers: Walker[] = [], boats: Boat[] = [], flyers: Flyer[] = [];
     let job: Job | null = null;
     const keys = new Set<string>();
-    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, snap: snapMarks, wet, scenery, cam, get traffic() { return traffic; },
+    (window as unknown as { __naija?: unknown }).__naija = { cars, walkers, boats, me, world, get marks() { return marks; }, get ride() { return ride; }, rideCtl, snap: snapMarks, wet, scenery, cam, get traffic() { return traffic; },
       /** debugging: stand at (x, z) and look from [yaw], tipped to [p] (radians), at [zm] px per metre */
       view: (x: number, z: number, yaw?: number, p?: number, zm?: number) => {
         me.x = x; me.z = z; cam.x = x; cam.z = z;
@@ -425,7 +445,8 @@ function Game({ onExit }: { onExit: () => void }) {
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) { if (e.key === 'Escape') { setWyrdOpen(false); (el as HTMLElement).blur(); } return; }
       const k = e.key.toLowerCase();
       keys.add(k);
-      if (k === 'e') toggleCar();
+      if (k === 'e' && !boardRide()) toggleCar();
+      if (k === 'p' && !e.repeat) setPhone((v) => !v);
       if (k === 'n') setNight((v) => !v);
       if (k === 'r') setStanding((v) => (v ? false : 'standing'));
       if (k === 'm') setBoard((v) => !v);
@@ -433,7 +454,7 @@ function Game({ onExit }: { onExit: () => void }) {
       if (k === 'q' && !e.repeat) tuneRadio();
       if (k === 'f8' && !e.repeat) { perfOn.current = !perfOn.current; if (!perfOn.current) setPerf(null); }
       if (k === 'tab') { e.preventDefault(); if (!e.repeat) setCityMap((v) => !v); }
-      if (k === 'escape') { if (boardRef.current) setBoard(false); setWyrdOpen(false); }
+      if (k === 'escape') { if (boardRef.current) setBoard(false); setWyrdOpen(false); setPhone(false); }
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
     };
     const up = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
@@ -551,6 +572,169 @@ function Game({ onExit }: { onExit: () => void }) {
       } catch { say('The city did not answer. Try again.'); }
       storyBusy = false; setTalkBusy(false);
     };
+    // ---- rides: ordered on the phone; the car or flyer comes for you, you get in (E), and it takes you there ----
+    let ride: Ride | null = null;
+    const RIDE_V = { road: 18, air: 45 };
+    rideCtl.current.order = async (f, kind) => {
+      if (ride) { say('You already have a ride on its way.'); return; }
+      if (job) { say('Finish your job first -- the customer is waiting.'); return; }
+      if (me.car) { say('Park and step out first (E), then order.'); return; }
+      if (Math.hypot(f.x - me.x, f.z - me.z) < 150) { say(`${f.name} is right here. Walk it!`); return; }
+      let route: Route | null = null, trip: Route | null = null;
+      if (kind === 'road') {
+        // the way there by road, worked out before you pay: pickup on the main road nearest you, drop-off nearest there
+        let router: Router;
+        try { router = await Router.load(); } catch { say('WYRD Ride could not reach the city. Try again.'); return; }
+        const pick = router.nearest(me.x, me.z, 600), drop = router.nearest(f.x, f.z, 1500);
+        if (!pick) { say('No main road near you for a pickup. Walk to a bigger road, or take WYRD Air.'); return; }
+        if (!drop) { say(`No road reaches ${f.name}. WYRD Air can fly you there.`); return; }
+        trip = router.route(pick, drop);
+        if (!trip || trip.len < 40) { say(`No way there by road. WYRD Air can fly you there.`); return; }
+        // the car starts a few streets away and drives to you (one-way systems can make the way round long: it
+        // starts the last 450 m of it, out of sight)
+        for (let i = 0; i < 8 && !route; i++) {
+          const a = Math.random() * Math.PI * 2, st = router.nearest(me.x + Math.cos(a) * 260, me.z + Math.sin(a) * 260, 300);
+          const r = st && router.route(st, pick);
+          if (r && r.len > 120) route = r;
+        }
+      }
+      try {
+        const r = await api.cityPay(kind === 'air' ? 'air' : 'ride');
+        if ('error' in r && r.error) { say(String(r.error)); return; }
+        setWallet((r as { naira: number }).naira);
+      } catch { say('WYRD could not take the payment. Try again.'); return; }
+      const dest = { x: f.x, z: f.z, name: f.name };
+      if (kind === 'road') {
+        const s0 = route ? Math.max(0, route.len - 450) : 0, at = route ? onRoute(route, s0) : onRoute(trip!, 0);
+        ride = { kind, phase: route ? 'coming' : 'waiting', dest, route, trip, s: s0, v: 0, x: at.x, z: at.z, y: 0, h: at.heading, sprite: 'car-white', fast: false, from: { x: at.x, z: at.z }, to: dest, t: 0 };
+        say(route ? `WYRD Ride ordered to ${f.name}. Your car is on its way — watch for the arrow.` : 'Your WYRD Ride is right here. Walk over and press E.');
+      } else {
+        // a WYRD flyer: in from over the roofs, down beside you
+        const a = Math.random() * Math.PI * 2, x = me.x + Math.cos(a) * 320, z = me.z + Math.sin(a) * 320;
+        const st = world.nearestRoad(me.x, me.z, 60, KIND.residential), land = st ? { x: st.x, z: st.z } : { x: me.x + 4, z: me.z + 3 }; // (down on the street)
+        const sprite = ['wyrd-cab-navy', 'wyrd-cab-pearl', 'wyrd-bubble-gold', 'wyrd-bubble-mint'][Math.floor(Math.random() * 4)];
+        ride = { kind, phase: 'coming', dest, route: null, trip: null, s: 0, v: 0, x, z, y: 45, h: Math.atan2(land.x - x, land.z - z), sprite, fast: false, from: { x, z }, to: land, t: 0 };
+        say(`WYRD Air ordered to ${f.name}. Your flyer is coming in over the roofs.`);
+      }
+    };
+    /** get into the ride when it's here and you're beside it (E); true if E was about the ride */
+    const boardRide = () => {
+      if (!ride || ride.phase === 'leaving') return false;
+      if (ride.phase === 'riding') return true; // (sit tight: Skip on the phone if you want to be there now)
+      // still pulling in, but right beside you: it stops for you there
+      if (ride.phase === 'coming') {
+        if (Math.hypot(ride.x - me.x, ride.z - me.z) > 12 || (ride.kind === 'air' && ride.y > 6)) return false;
+        if (ride.kind === 'road') { ride.s = ride.route!.len; const a = onRoute(ride.route!, ride.s); ride.x = a.x; ride.z = a.z; ride.h = a.heading; }
+        else { ride.x = ride.to.x; ride.z = ride.to.z; ride.y = 1.5; }
+        ride.phase = 'waiting';
+      }
+      if (Math.hypot(ride.x - me.x, ride.z - me.z) > 12) { say('Walk up to your ride (the yellow arrow), then press E.'); return true; }
+      if (ride.kind === 'road') { ride.route = ride.trip; ride.s = 0; }
+      else { ride.from = { x: ride.x, z: ride.z }; ride.to = { x: ride.dest.x, z: ride.dest.z }; ride.s = 0; ride.h = Math.atan2(ride.to.x - ride.x, ride.to.z - ride.z); }
+      ride.phase = 'riding'; ride.v = 0; me.moving = false;
+      say(ride.kind === 'air' ? `Up and away to ${ride.dest.name}.` : `On the way to ${ride.dest.name}. Sit back — WYRD is driving.`);
+      return true;
+    };
+    /** you're there: out onto the street, and the ride goes on its way */
+    const arrive = () => {
+      if (!ride) return;
+      if (ride.kind === 'road') {
+        const a = onRoute(ride.route!, ride.route!.len);
+        me.x = a.x + Math.cos(a.heading) * 2.8; me.z = a.z - Math.sin(a.heading) * 2.8; // (out on the kerb side)
+      } else { me.x = ride.x - 3; me.z = ride.z; arriving = true; } // (stepped off onto the nearest street once it's in)
+      cam.x = me.x; cam.z = me.z;
+      say(`You have arrived at ${ride.dest.name}. Thank you for riding with WYRD.`);
+      ride.phase = 'leaving'; ride.t = 0;
+    };
+    rideCtl.current.cancel = () => {
+      if (!ride || ride.phase === 'riding') return;
+      ride.phase = 'leaving'; ride.t = 0;
+      say('Ride cancelled. (The fare is not refunded.)');
+    };
+    rideCtl.current.fast = () => { if (ride) ride.fast = !ride.fast; };
+    rideCtl.current.skip = () => {
+      if (!ride) return;
+      if (ride.phase === 'coming') {
+        // straight to the pickup
+        if (ride.kind === 'road') { ride.s = ride.route!.len; const a = onRoute(ride.route!, ride.s); ride.x = a.x; ride.z = a.z; ride.h = a.heading; }
+        else { ride.x = ride.to.x; ride.z = ride.to.z; ride.y = 1.5; }
+        ride.phase = 'waiting'; say('Your ride is here. Walk over and press E.');
+      } else if (ride.phase === 'riding') {
+        // straight to the drop-off (the city there loads in around you)
+        if (ride.kind === 'road') { ride.s = ride.route!.len; const a = onRoute(ride.route!, ride.s); ride.x = a.x; ride.z = a.z; ride.h = a.heading; }
+        else { ride.x = ride.to.x; ride.z = ride.to.z; ride.y = 1.5; }
+        me.x = ride.x; me.z = ride.z; cam.x = me.x; cam.z = me.z;
+        cars.length = 0; walkers.length = 0; arriving = ride.kind === 'air';
+        arrive();
+      }
+    };
+    /** the ride moves on: [dt] seconds (four times as many when fast-forwarded) */
+    const stepRide = (dt0: number) => {
+      if (!ride) return;
+      const dt = dt0 * (ride.fast && ride.phase !== 'waiting' ? 4 : 1);
+      ride.t += dt;
+      if (ride.kind === 'road') {
+        if (ride.phase === 'leaving') {
+          // pulls away down the road and is gone
+          if (world.nearestRoad(ride.x, ride.z, 30, KIND.residential)) cars.push({ ...nearestRoadCar(ride.x, ride.z, ride.sprite), v: 12, rot: ride.h } as Car);
+          ride = null; return;
+        }
+        if (ride.phase === 'waiting') return;
+        const R = ride.route!;
+        // as a careful driver: up to speed gently, slower round corners, and keeping a gap to whatever's ahead
+        let want = ride.phase === 'coming' ? 15 : RIDE_V.road;
+        const ahead = onRoute(R, ride.s + 18);
+        let turn = Math.abs(ahead.heading - ride.h); if (turn > Math.PI) turn = Math.PI * 2 - turn;
+        if (turn > 0.5) want = Math.min(want, 8); else if (turn > 0.25) want = Math.min(want, 12);
+        const hx = Math.sin(ride.h), hz = Math.cos(ride.h);
+        let gap = Infinity;
+        for (const o of cars) { const dx = o.x - ride.x, dz = o.z - ride.z, al = dx * hx + dz * hz; if (al > 0 && al < 20 && Math.abs(dx * hz - dz * hx) < 2.1) gap = Math.min(gap, al); }
+        if (ride.phase === 'coming' && !me.car) { const dx = me.x - ride.x, dz = me.z - ride.z, al = dx * hx + dz * hz; if (al > 0 && al < 8 && Math.abs(dx * hz - dz * hx) < 2) gap = Math.min(gap, al); }
+        if (gap < Infinity) want = Math.min(want, gap < 6.5 ? 0 : want * Math.min(1, (gap - 6.5) / 9));
+        // ...and it slows to a stop at the end
+        want = Math.min(want, Math.sqrt(2 * 3 * Math.max(0, R.len - ride.s)) + 0.5);
+        ride.v += Math.max(-9 * dt, Math.min(3 * dt, want - ride.v));
+        ride.s = Math.min(R.len, ride.s + ride.v * dt);
+        const a = onRoute(R, ride.s);
+        ride.x = a.x; ride.z = a.z; ride.h = a.heading;
+        if (ride.s >= R.len - 0.05) {
+          if (ride.phase === 'coming') { ride.phase = 'waiting'; ride.v = 0; say('Your WYRD Ride is here. Walk over and press E.'); }
+          else arrive();
+        }
+      } else {
+        if (ride.phase === 'leaving') {
+          // climbs away and is gone
+          ride.y += 9 * dt; ride.x += Math.sin(ride.h) * 22 * dt; ride.z += Math.cos(ride.h) * 22 * dt;
+          if (ride.y > 60 || Math.hypot(ride.x - me.x, ride.z - me.z) > 400) ride = null;
+          return;
+        }
+        if (ride.phase === 'waiting') { ride.y = 1.5 + Math.sin(ride.t * 2) * 0.15; return; }
+        // flies at cruising height and comes down at the end: up off the ground first when you're aboard
+        const dx = ride.to.x - ride.x, dz = ride.to.z - ride.z, left = Math.hypot(dx, dz);
+        const gone = Math.hypot(ride.x - ride.from.x, ride.z - ride.from.z);
+        const top = ride.phase === 'riding' ? Math.min(45, 1.5 + gone * 0.5) : 45;
+        const wantY = Math.max(1.5, Math.min(top, 1.5 + left * 0.35));
+        const climbing = ride.phase === 'riding' && ride.y < wantY - 0.5 && gone < 30;
+        const want = climbing ? 6 : Math.min(RIDE_V.air, 4 + left * 0.6);
+        ride.v += Math.max(-14 * dt, Math.min(8 * dt, want - ride.v));
+        const step = Math.min(left, ride.v * dt);
+        if (left > 0.01) { ride.x += (dx / left) * step; ride.z += (dz / left) * step; ride.h = Math.atan2(dx, dz); }
+        ride.y += Math.max(-10 * dt, Math.min(10 * dt, wantY - ride.y));
+        if (left < 0.3 && ride.y < 2) {
+          ride.x = ride.to.x; ride.z = ride.to.z; ride.y = 1.5;
+          if (ride.phase === 'coming') { ride.phase = 'waiting'; say('Your WYRD Air flyer has landed. Walk over and press E.'); }
+          else arrive();
+        }
+      }
+      if (ride && ride.phase === 'riding') { me.x = ride.x; me.z = ride.z; me.moving = false; }
+    };
+    const rideStatus = (): RideStatus | null => {
+      if (!ride || ride.phase === 'leaving') return null;
+      const R = ride.route;
+      const m = ride.kind === 'road' ? (R ? R.len - ride.s : 0) : Math.hypot(ride.to.x - ride.x, ride.to.z - ride.z);
+      const sp = (ride.kind === 'road' ? (ride.phase === 'coming' ? 12 : 13) : 35) * (ride.fast ? 4 : 1);
+      return { kind: ride.kind, phase: ride.phase, dest: ride.dest.name, metres: Math.round(m / 50) * 50, seconds: Math.round(m / sp / 5) * 5, fast: ride.fast };
+    };
     let storyTarget: { x: number; z: number } | null = null, lastArrive = 0;
     // ---- loop ----
     let last = performance.now(), hudTick = 0, raf = 0;
@@ -583,7 +767,7 @@ function Game({ onExit }: { onExit: () => void }) {
       raf = requestAnimationFrame(frame);
       // the world runs on real time, however long a frame takes to draw (turning the camera redraws the whole city):
       // a slow frame advances it in several small steps instead of slowing it down -- up to a quarter-second at once
-      const realDt = Math.min(0.25, (now - last) / 1000); last = now;
+      const realDt = Math.max(0, Math.min(0.25, (now - last) / 1000)); last = Math.max(last, now); // (never backwards)
       const steps = Math.max(1, Math.ceil(realDt / 0.05));
       let dt = realDt / steps;
       // sharpness that keeps up: full device resolution while frames are quick; standard resolution on slower
@@ -615,7 +799,8 @@ function Game({ onExit }: { onExit: () => void }) {
         // move
         const ax = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
         const az = (keys.has('s') || keys.has('arrowdown') ? 1 : 0) - (keys.has('w') || keys.has('arrowup') ? 1 : 0);
-        if (!boardRef.current) {
+        const riding = ride?.phase === 'riding';
+        if (!boardRef.current && !riding) {
           if (me.car) {
             const c = me.car;
             const wrecked = c.hp <= 0; // (wrecked: it won't go -- get out and take another)
@@ -654,8 +839,9 @@ function Game({ onExit }: { onExit: () => void }) {
           }
           me.moving = !me.car && !!(ax || az);
         }
+        stepRide(dt);
         world.around(me.x, me.z, 800);
-      traffic.update(world, me.x, me.z);
+        traffic.update(world, me.x, me.z);
         if (arriving && world.tiles.has(`${Math.floor(me.x / 500)}_${Math.floor(me.z / 500)}`)) {
           const n = world.nearestRoad(me.x, me.z, 400, KIND.residential);
           if (n) { const side = n.r.w / 2 + 1.5; const a = along(n.r.p, n.r.cum, n.s); me.x = n.x - a.dz * side; me.z = n.z + a.dx * side; cam.x = me.x; cam.z = me.z; }
@@ -678,7 +864,8 @@ function Game({ onExit }: { onExit: () => void }) {
           const look = (ox: number, oz: number) => { const dx = ox - c.x, dz = oz - c.z, al = dx * hx + dz * hz; if (al > 0 && al < 20 && Math.abs(dx * hz - dz * hx) < 2.1) gap = Math.min(gap, al); };
           for (const o of cars) if (o !== c) look(o.x, o.z);
           if (me.car) look(me.x, me.z);
-          let want = !me.car && Math.hypot(c.x - me.x, c.z - me.z) < 5 ? 0 : cruise;
+          if (ride?.kind === 'road' && ride.phase !== 'leaving') look(ride.x, ride.z);
+          let want = !me.car && !riding && Math.hypot(c.x - me.x, c.z - me.z) < 5 ? 0 : cruise;
           if (!thief) {
             if (gap < Infinity) want = Math.min(want, gap < 6.5 ? 0 : cruise * Math.min(1, (gap - 6.5) / 9));
             const line = traffic.stopFor(c.r, c.dir, c.s, now);
@@ -783,9 +970,12 @@ function Game({ onExit }: { onExit: () => void }) {
       // boats: the water taxi, seen from every side and camera height like the cars (it moves along (cos a, sin a); a heading h moves along (sin h, cos h))
       for (const b of boats) spr.push({ s: 'boat-taxi', x: b.x, z: b.z, veh: true, heading: Math.atan2(Math.cos(b.a), Math.sin(b.a)) });
       for (const c of cars) spr.push({ s: c.sprite, x: c.x, z: c.z, veh: true, heading: c.rot });
+      const inRide = ride?.phase === 'riding';
+      if (ride?.kind === 'road') spr.push({ s: ride.sprite, x: ride.x, z: ride.z, veh: true, heading: ride.h });
       for (const w of walkers) spr.push({ s: w.sprite, x: w.x, z: w.z, look: w.look, heading: w.heading, walk: (w.s / 0.7) % 2 });
       let playerSprite: Sprite | null = null;
       if (me.car) { playerSprite = { s: me.car.sprite, x: me.x, z: me.z, veh: true, heading: me.car.rot }; spr.push(playerSprite); }
+      else if (inRide) { if (ride!.kind === 'road') playerSprite = spr[spr.length - 1]; } // (you're in it: it's the one to keep in sight)
       else {
         // TEN himself: his motion-captured walk, run and idle, played by how far he has moved
         const running = me.moving && keys.has('shift');
@@ -851,16 +1041,17 @@ function Game({ onExit }: { onExit: () => void }) {
         else { ctx.fillStyle = t < 0.5 ? '#FFF3B0' : '#FFB23D'; ctx.beginPath(); ctx.arc(q.sx, q.sy, Math.max(1, 0.12 * cam.scale), 0, Math.PI * 2); ctx.fill(); }
       }
       // flying cars, over the roofs, far ones first
-      for (const f of [...flyers].sort((p, q) => depth(cam, p.x, p.z) - depth(cam, q.x, q.z))) drawFlyer(ctx, cam, { s: f.sprite, x: f.x, z: f.z, veh: true, heading: f.h, lift: f.y }, night);
+      const sky = ride?.kind === 'air' ? [...flyers, ride] : flyers;
+      for (const f of [...sky].sort((p, q) => depth(cam, p.x, p.z) - depth(cam, q.x, q.z))) drawFlyer(ctx, cam, { s: f.sprite, x: f.x, z: f.z, veh: true, heading: f.h, lift: f.y }, night);
       // the job's target: a bouncing marker
-      const tgt = !job ? storyTarget : job.type === 'delivery' ? (job.carrying ? job.drop : job.pick) : job.type === 'danfo' ? job.stops[job.at] : job.thief;
+      const tgt = ride && ride.phase !== 'leaving' ? (ride.phase === 'riding' ? ride.dest : ride) : !job ? storyTarget : job.type === 'delivery' ? (job.carrying ? job.drop : job.pick) : job.type === 'danfo' ? job.stops[job.at] : job.thief;
       if (tgt) {
         const { sx, sy } = toScreen(cam, tgt.x, tgt.z, 4 + Math.sin(now / 200));
         ctx.fillStyle = '#F2C94C'; ctx.beginPath(); ctx.moveTo(sx, sy + 10); ctx.lineTo(sx - 9, sy - 6); ctx.lineTo(sx + 9, sy - 6); ctx.closePath(); ctx.fill();
         ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
       }
       // the player's marker, as in the poster
-      if (!me.car) {
+      if (!me.car && !inRide) {
         const { sx, sy } = toScreen(cam, me.x, me.z, 3.4);
         ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.moveTo(sx, sy + 6); ctx.lineTo(sx - 6, sy - 5); ctx.lineTo(sx + 6, sy - 5); ctx.closePath(); ctx.fill();
       }
@@ -893,8 +1084,11 @@ function Game({ onExit }: { onExit: () => void }) {
         const beat = mission ? mission.beats[step] : undefined;
         const tag = mission ? `${mission.id}:${step}` : '';
         storyTarget = beat ? beatPoint(beat, marks) : null;
-        if (!job) setHud(beat && mission ? { kind: step === '' ? 'offer' : 'mission', head: mission.title, title: beat.objective, target: beat.place } : null);
-        if (beat && mission && storyTarget && !job) {
+        setRide(rideStatus());
+        const rs = rideStatus();
+        if (rs && !job) setHud({ kind: 'job', head: rs.kind === 'air' ? 'WYRD Air' : 'WYRD Ride', title: rs.phase === 'coming' ? 'Your ride is on its way' : rs.phase === 'waiting' ? 'Your ride is here — walk to it, press E' : 'Riding to', target: rs.dest, time: rs.phase === 'waiting' ? undefined : rs.seconds < 60 ? `${rs.seconds}s` : `${Math.round(rs.seconds / 60)} min` });
+        else if (!job) setHud(beat && mission ? { kind: step === '' ? 'offer' : 'mission', head: mission.title, title: beat.objective, target: beat.place } : null);
+        if (beat && mission && storyTarget && !job && !ride) {
           const near = Math.hypot(storyTarget.x - me.x, storyTarget.z - me.z) < beat.radius;
           if (!near && dismissed.current === tag) dismissed.current = null;
           if (near && beat.arriveMove) {
@@ -1026,12 +1220,13 @@ function Game({ onExit }: { onExit: () => void }) {
 
       {/* controls, bottom right: each with its key */}
       <View style={s.controls}>
-        <Text style={s.hint}>{driving ? 'W/S DRIVE · A/D STEER · E GET OUT' : 'WASD WALK · SHIFT RUN · E TAKE A CAR · SCROLL ZOOM · DRAG TURN'}</Text>
+        <Text style={s.hint}>{rideStatus?.phase === 'riding' ? 'RIDING · P PHONE (SKIP / ×4) · SCROLL ZOOM · DRAG TURN' : rideStatus?.phase === 'waiting' ? 'WALK TO YOUR RIDE · E GET IN' : driving ? 'W/S DRIVE · A/D STEER · E GET OUT' : 'WASD WALK · SHIFT RUN · E TAKE A CAR · P PHONE · SCROLL ZOOM · DRAG TURN'}</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
           {([
             ['TAB', 'MAP', () => setCityMap(true), CY.cyan],
             ['M', 'JOBS', () => setBoard(true), CY.cyan],
             ['R', 'STANDING', () => { setStanding('standing'); api.cityStory().then(setStory).catch(() => {}); }, CY.cyan],
+            ['P', 'PHONE', () => setPhone((v) => !v), CY.yellow],
             ['T', 'WYRD', () => setWyrdOpen((v) => !v), CY.magenta],
             ['Q', onAir ? onAir.freq : 'RADIO', () => tuneRadio(), CY.green],
             ['N', night ? 'DAY' : 'NIGHT', () => setNight((v) => !v), CY.yellow],
@@ -1057,6 +1252,12 @@ function Game({ onExit }: { onExit: () => void }) {
         </View>
       </View>
 
+      {phone ? (
+        <Phone wallet={wallet} me={mapData.current.me} ride={rideStatus}
+          onOrder={(f, k) => rideCtl.current.order(f, k)} onCancel={() => rideCtl.current.cancel()} onSkip={() => rideCtl.current.skip()} onFast={() => rideCtl.current.fast()}
+          stations={STATIONS} onAir={onAir} onTune={tuneTo} live={wyrdLines}
+          onMap={() => { setPhone(false); setCityMap(true); }} onWyrd={() => { setPhone(false); setWyrdOpen(true); }} onClose={() => setPhone(false)} />
+      ) : null}
       {toast ? <View style={s.toast}><Text style={s.toastText}>{toast}</Text></View> : null}
       {wyrdOpen ? <WyrdPanel lines={wyrdLines} onLine={addWyrd} night={night} situation={() => situationRef.current()} onClose={() => setWyrdOpen(false)} /> : null}
       {wyrd && !wyrdOpen ? <View style={s.wyrd}><Text style={s.wyrdWho}>WYRD://CITY.MIND{wyrdLive ? <Text style={{ color: CY.red }}>  ● LIVE{online > 1 ? `  ·  ${online} ON THE STREETS` : ''}</Text> : null}</Text><Text style={s.wyrdText}>{wyrd.replace(/^WYRD city bulletin: /, '')}</Text></View> : null}

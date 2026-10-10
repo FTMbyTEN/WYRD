@@ -456,7 +456,7 @@ export const api = {
   cityJobFinish: (id: string, dist: number, passengers: number, limitS: number) => callEndpoint<string>('city', 'jobFinish', { id, dist, passengers, limitS }).then((j) => JSON.parse(j) as (CityWallet & { paid: number; note: string }) | { error: string }),
   cityGuideMark: (step: string) => callEndpoint<string>('city', 'guideMark', { step }).then((j) => JSON.parse(j) as { guide: string[]; paid: number; naira: number } | { error: string }),
   cityGuideSkip: () => callEndpoint<string>('city', 'guideSkip', {}).then((j) => JSON.parse(j) as { guide: string[]; paid: number; naira: number }),
-  cityPay: (reason: 'maglev' | 'danfo') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
+  cityPay: (reason: 'maglev' | 'danfo' | 'ride' | 'air') => callEndpoint<string>('city', 'pay', { reason }).then((j) => JSON.parse(j) as CityWallet | { error: string }),
   /** NAIJA 2099's story: reputation and branching missions (the server decides every step). */
   cityStory: () => callEndpoint<string>('city', 'story', {}).then((j) => JSON.parse(j) as Story),
   cityStoryAct: (mission: string, move: string) => callEndpoint<string>('city', 'storyAct', { mission, move }).then((j) => JSON.parse(j) as { ok?: boolean; error?: string; say?: string; step?: string; naira?: number; paid?: number; cost?: number; bulletin?: string | null; story?: Story }),
