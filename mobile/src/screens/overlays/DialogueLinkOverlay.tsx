@@ -12,7 +12,7 @@ import { Glyph } from '../../components/glyph/Glyph';
 import { DustThinking } from '../../components/dust/DustThinking';
 import type { GlyphName } from '../../components/glyph/glyphs';
 import { api, ApiError } from '../../api/client';
-import { useConversations, useMind } from '../../api/hooks';
+import { onChatSwitch, useChats, useConversations, useMind } from '../../api/hooks';
 import { wyrdStream } from '../../api/stream';
 import type { ChatAction } from '../../api/types';
 import { speakAsWyrd } from '../../util/ttsVoice';
@@ -106,6 +106,8 @@ const ATTACHED = /^📎 ([^\n]+)\n*/;
  *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
 export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks }: Props) {
   const { turns } = useConversations(60);
+  // the chat this is (picked in the side bar), named in the header
+  const openChat = useChats().chats.find((c) => c.current && c.turns > 0);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
   const [staged, setStaged] = useState<Staged | null>(null);
@@ -125,6 +127,14 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   const openDoc = useRef<OpenDoc | null>(null);
   const reading = useRef(0); // which read is current, so a removed file's read is ignored
   const sending = pending !== null;
+
+  // another chat opened (from the side bar): the file and the reply belonged to the one left
+  useEffect(() => onChatSwitch(() => {
+    openDoc.current = null;
+    reading.current++;
+    setStaged(null);
+    setReplyTo(null);
+  }), []);
 
   const handleAction = useCallback((action: ChatAction) => {
     if (!action) return;
@@ -390,7 +400,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
             <Mono style={styles.presenceMood}>{mind?.mood ?? 'online'}</Mono>
           </View>
           <Mono numberOfLines={1} style={styles.presenceSub}>
-            {mind?.focusTopic ? `thinking about ${mind.focusTopic}` : 'always thinking'}
+            {openChat ? `${openChat.title} · ` : ''}{mind?.focusTopic ? `thinking about ${mind.focusTopic}` : 'always thinking'}
           </Mono>
         </View>
         <View style={styles.privatePill}>
@@ -720,8 +730,9 @@ const HAIRLINE = StyleSheet.hairlineWidth;
 
 const styles = StyleSheet.create({
   presence: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: HAIRLINE, borderBottomColor: colors.greenBorder,
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, marginHorizontal: 12, marginTop: 10,
+    borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 16, backgroundColor: colors.panelBg,
+    maxWidth: 780, width: '100%', alignSelf: 'center',
   },
   presenceFace: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.green },
   presenceTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -753,7 +764,10 @@ const styles = StyleSheet.create({
   avatar: { width: 28, height: 28, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.green, marginTop: 1 },
   who: { fontSize: 10, letterSpacing: 1.8, color: colors.green, marginBottom: 6 },
   whoTime: { fontSize: 9, letterSpacing: 0, color: colors.greenBorder },
-  theirs: { borderLeftWidth: 2, borderLeftColor: colors.green, paddingLeft: 13, paddingVertical: 2, gap: 10 },
+  theirs: {
+    backgroundColor: colors.panelBg, borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 18, borderTopLeftRadius: 6,
+    paddingHorizontal: 15, paddingVertical: 12, gap: 10,
+  },
   metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8, paddingLeft: 15 },
   badge: { fontSize: 9.5, color: colors.greenDim, borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   thumbs: { flexDirection: 'row', alignItems: 'center', gap: 2 },

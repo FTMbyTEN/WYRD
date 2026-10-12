@@ -10,19 +10,18 @@ import type { Mind } from '../api/types';
 
 interface Props {
   mind: Mind | null;
-  tts: boolean;
-  onToggleTts: () => void;
   alertCount: number;
   onOpenAlerts: () => void;
   onOpenCop: () => void;
   taskCount: number;
   onOpenTasks: () => void;
+  showTasks?: boolean; // off on the desktop home page, where the tasks are the left column
 }
 
 /** The bar across the top of every screen: WYRD's mark and name, whether its mind is live and
- *  what it's doing, how it feels, its vitals at a glance, and the three switches (voice,
- *  oversight, alerts). */
-export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpenCop, taskCount, onOpenTasks }: Props) {
+ *  what it's doing, how it feels, its vitals at a glance, and the switches (tasks,
+ *  oversight, alerts; spoken replies are in Settings). */
+export function Header({ mind, alertCount, onOpenAlerts, onOpenCop, taskCount, onOpenTasks, showTasks = true }: Props) {
   const owner = useDroneAccess(); // COP oversight is the owner's alone
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -67,12 +66,11 @@ export function Header({ mind, tts, onToggleTts, alertCount, onOpenAlerts, onOpe
 
         {/* switches */}
         <View style={styles.right}>
-          <Switch label="VOICE" on={tts} onPress={onToggleTts} hint={tts ? 'Spoken replies on' : 'Spoken replies off'} compact={narrow}>
-            <Glyph name={tts ? "voice" : "voiceOff"} size={17} active={tts} />
-          </Switch>
+          {showTasks ? (
           <Switch label="TASKS" onPress={onOpenTasks} hint="WYRD's tasks" badge={taskCount} compact={narrow}>
             <Glyph name="spark" size={17} active={taskCount > 0} />
           </Switch>
+          ) : null}
           {owner ? (
             <Switch label="COP" onPress={onOpenCop} hint="COP oversight" compact={narrow}>
               <Glyph name="cop" size={17} />

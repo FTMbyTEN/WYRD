@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Header } from './Header';
 import { FirstRunTour } from '../components/FirstRunTour';
 import { TabBar, type TabKey } from './TabBar';
+import { AppsSheet } from './AppsSheet';
 import { WyrdTab } from './tabs/WyrdTab';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { prefetchBrain, prefetchDialogue, useAgentBadge, useDroneAccess, useMind } from '../api/hooks';
@@ -72,18 +73,26 @@ export function AppShell() {
   const setTts = (f: (v: boolean) => boolean) => { unlock(); setSound({ voice: f(tts) }); };
   const [globeFocus, setGlobeFocus] = useState<string | null>(null);
   const [appPreviewHtml, setAppPreviewHtml] = useState<string | null>(null);
+  // a task picked in the home page's left column: the TASKS panel opens straight on it
+  const [taskFocus, setTaskFocus] = useState<number | null>(null);
 
   const { mind } = useMind();
   const desktop = useIsDesktop();
   const unread = useUnreadAlertCount();
 
+  // a panel Dialogue Link opened (an app preview, the globe, tasks) goes back to the chat when it closes
+  const [backTo, setBackTo] = useState<Overlay>(null);
   const open = (o: Overlay) => {
     if (o === 'link') setLinkOpened(true);
     if (o !== overlay) sfx('open');
+    setBackTo(null);
     setOverlay(o);
   };
+  const openFromChat = (o: Overlay) => { open(o); setBackTo('link'); };
   const openAlerts = () => { open('alerts'); markAllAlertsRead(); };
-  const close = () => { if (overlay) sfx('close'); setOverlay(null); };
+  const [appsOpen, setAppsOpen] = useState(false);
+  const openApps = () => { sfx('open'); setAppsOpen(true); };
+  const close = () => { if (overlay) sfx('close'); setOverlay(backTo); setBackTo(null); };
   const changeTab = (t: TabKey) => { if (t !== tab) sfx('tab'); setTab(t); };
   // the tour brings each tab forward as it describes it (a stable callback, so it doesn't re-run)
   const tourTab = useCallback((t: string) => setTab(t as TabKey), []);
@@ -137,23 +146,22 @@ export function AppShell() {
       <ScreenEffects />
 
       <View style={[styles.content, desktop && styles.contentDesktop]}>
-        {desktop && <TabBar active={tab} onChange={changeTab} vertical drone={droneAccess} />}
+        {desktop && <TabBar active={tab} onChange={changeTab} vertical onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
         <View style={{ flex: 1, minWidth: 0 }}>
         <Header
           mind={mind}
-          tts={tts}
-          onToggleTts={() => setTts((v) => !v)}
           alertCount={unread}
           onOpenAlerts={openAlerts}
           onOpenCop={() => open('cop')}
           taskCount={taskBadge}
-          onOpenTasks={() => open('tasks')}
+          onOpenTasks={() => { setTaskFocus(null); open('tasks'); }}
+          showTasks={!(desktop && tab === 'wyrd')}
         />
 
         <View style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={<Loading />}>
             {tab === 'wyrd' && (
-              <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} />
+              <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} onOpenTask={(id) => { setTaskFocus(id); open('tasks'); }} />
             )}
             {tab === 'journal' && droneAccess && (
               <JournalTab
@@ -170,23 +178,32 @@ export function AppShell() {
           </Suspense>
         </View>
 
-        {!desktop && <TabBar active={tab} onChange={changeTab} drone={droneAccess} />}
+        {!desktop && <TabBar active={tab} onChange={changeTab} onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
         </View>
       </View>
 
       <Suspense fallback={null}>
         {/* first time only: a short tour of the place */}
         <FirstRunTour onTab={tourTab} />
+        {/* APPS: Drone, Journal, Games (and on phones your chats) in one glass pop-up */}
+        <AppsSheet
+          visible={appsOpen}
+          onClose={() => setAppsOpen(false)}
+          onPick={changeTab}
+          drone={droneAccess}
+          withChats={!desktop}
+          onOpenChat={() => open('link')}
+        />
         {overlay === 'alerts' && <AlertsOverlay visible onClose={close} />}
         {linkOpened && (
           <DialogueLinkOverlay
             visible={overlay === 'link'}
             onClose={close}
             tts={tts}
-            onOpenGlobe={(country) => { setGlobeFocus(country); open('globe'); }}
-            onOpenAppPreview={(html) => { setAppPreviewHtml(html); open('appPreview'); }}
+            onOpenGlobe={(country) => { setGlobeFocus(country); openFromChat('globe'); }}
+            onOpenAppPreview={(html) => { setAppPreviewHtml(html); openFromChat('appPreview'); }}
             onOpenDrone={() => { setOverlay(null); changeTab('drone'); }}
-            onOpenTasks={() => { setOverlay('tasks'); void refreshTasks(); }}
+            onOpenTasks={() => { setTaskFocus(null); openFromChat('tasks'); void refreshTasks(); }}
             onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
           />
         )}
@@ -196,7 +213,7 @@ export function AppShell() {
         {overlay === 'growth' && <GrowthOverlay visible onClose={close} />}
         {overlay === 'appPreview' && <AppPreviewOverlay visible onClose={close} html={appPreviewHtml} />}
         {overlay === 'cop' && <CopOverlay visible onClose={close} />}
-        {overlay === 'tasks' && <TasksOverlay visible onClose={() => { close(); void refreshTasks(); }} />}
+        {overlay === 'tasks' && <TasksOverlay visible openId={taskFocus} onClose={() => { close(); void refreshTasks(); }} />}
       </Suspense>
     </View>
   );

@@ -31,7 +31,10 @@ type Block =
   | { kind: 'p' | 'quote'; text: string }
   | { kind: 'h'; level: number; text: string }
   | { kind: 'li'; marker: string; text: string; depth: number }
-  | { kind: 'rule' };
+  | { kind: 'rule' }
+  | { kind: 'table'; rows: string[][] };
+
+const cells = (line: string) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 
 function blocks(text: string): Block[] {
   const out: Block[] = [];
@@ -41,6 +44,15 @@ function blocks(text: string): Block[] {
     const line = raw.trimEnd();
     let m: RegExpMatchArray | null;
     if (!line.trim()) { flush(); continue; }
+    // a table: rows of | cells |, the |---| line under the header skipped
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      flush();
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) continue;
+      const last = out[out.length - 1];
+      if (last?.kind === 'table') last.rows.push(cells(line));
+      else out.push({ kind: 'table', rows: [cells(line)] });
+      continue;
+    }
     if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flush(); out.push({ kind: 'rule' }); continue; }
     if ((m = line.match(/^(#{1,4})\s+(.+)$/))) { flush(); out.push({ kind: 'h', level: m[1].length, text: m[2].replace(/\s*#+$/, '') }); continue; }
     if ((m = line.match(/^(\s*)([-*•+])\s+(.+)$/))) { flush(); out.push({ kind: 'li', marker: '•', text: m[3], depth: Math.min(2, Math.floor(m[1].length / 2)) }); continue; }
@@ -74,6 +86,18 @@ export const RichText = React.memo(function RichText({ text, style }: { text: st
             return <View key={k} style={styles.quote}><Text style={[base, styles.italic]}>{inline(b.text, k)}</Text></View>;
           case 'rule':
             return <View key={k} style={styles.rule} />;
+          case 'table':
+            return (
+              <View key={k} style={styles.table}>
+                {b.rows.map((row, r) => (
+                  <View key={`${k}-${r}`} style={[styles.tr, r === 0 && styles.th, r > 0 && r % 2 === 0 && styles.trAlt]}>
+                    {row.map((c, ci) => (
+                      <Text key={ci} style={[base, styles.td, r === 0 && styles.bold]}>{inline(c, `${k}-${r}-${ci}`)}</Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            );
           default:
             return <Text key={k} style={base}>{inline(b.text, k)}</Text>;
         }
@@ -96,4 +120,9 @@ const styles = StyleSheet.create({
   liText: { flex: 1 },
   quote: { borderLeftWidth: 2, borderLeftColor: colors.greenBorder, paddingLeft: 10 },
   rule: { height: StyleSheet.hairlineWidth, backgroundColor: colors.greenBorder, marginVertical: 4 },
+  table: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 8, overflow: 'hidden' },
+  tr: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.greenBorderDim },
+  th: { backgroundColor: colors.signalSoft, borderTopWidth: 0 },
+  trAlt: { backgroundColor: 'rgba(42,31,23,0.03)' },
+  td: { flex: 1, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, lineHeight: 18 },
 });

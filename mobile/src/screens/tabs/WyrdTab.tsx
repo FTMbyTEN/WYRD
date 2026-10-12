@@ -22,6 +22,7 @@ import { countdown, timeAgo } from '../../util/time';
 import { firstLineFromMarkdown } from '../../util/text';
 import { noteLine } from '../../api/types';
 import { useIsDesktop } from '../../util/layout';
+import { TasksBoard, useTasks } from '../overlays/TasksOverlay';
 
 const BRAIN_ZOOM = 1.6;
 
@@ -72,7 +73,7 @@ function Greeting() {
   );
 }
 
-export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; onOpenLink: () => void }) {
+export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask }: { onOpenBrain: () => void; onOpenLink: () => void; onOpenTask?: (id: number) => void }) {
   const { mind } = useMind();
   const { items: feed } = useFeed();
   const feedNext = useFeedNext();
@@ -153,6 +154,8 @@ export function WyrdTab({ onOpenBrain, onOpenLink }: { onOpenBrain: () => void; 
   );
   return (
     <View style={[{ flex: 1 }, desktop && styles.desktopRow]}>
+      {/* desktop: your tasks, down the left of the home page */}
+      {desktop && onOpenTask ? <TasksColumn onOpenTask={onOpenTask} /> : null}
       <View style={styles.heroWrap}>
         {/* The brain itself is the open/close target. The chips, cards and ENTER 3D below are
             siblings layered on top, not children -- nested pressables let this outer target
@@ -346,7 +349,18 @@ function Enter3DButton({ onPress }: { onPress: () => void }) {
 // secondary, greenBorder = hairline), no glows or shadows -- contrast and spacing do the work.
 const HAIRLINE = StyleSheet.hairlineWidth;
 
+/** The home page's left column on desktop: your tasks, always in view; one opens in full in the TASKS panel. */
+function TasksColumn({ onOpenTask }: { onOpenTask: (id: number) => void }) {
+  const { tasks, error, added } = useTasks();
+  return (
+    <ScrollView style={styles.tasksCol} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <TasksBoard tasks={tasks} error={error} onOpen={onOpenTask} onCreated={added} />
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
+  tasksCol: { width: 380, flexGrow: 0, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.greenBorder, backgroundColor: colors.panelBg },
   desktopRow: { flexDirection: 'row' },
   heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   center: { alignItems: 'center', justifyContent: 'center' },

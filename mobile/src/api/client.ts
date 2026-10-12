@@ -290,6 +290,13 @@ export const api = {
     callEndpoint<SpChatReply>('photo', 'describe', { imageBase64Jpeg, caption: caption || null, trackingNote: trackingNote || null, thumb: thumb || null }).then(adaptChatResult),
   /** 👍 1, 👎 -1, or 0 to clear, on one of WYRD's replies to you. */
   rateReply: (turnId: number, rating: 1 | -1 | 0) => callEndpoint<void>('chat', 'rate', { turnId, rating }),
+  /** Your chats in Dialogue Link, most recent first; the current one is where messages go. */
+  chats: () => callEndpoint<string>('chat', 'chats', {}).then((j) => JSON.parse(j) as { id: number; title: string; updatedAt: string; turns: number; current: boolean }[]),
+  /** Start a new chat (it becomes current; WYRD keeps what it knows about you). */
+  newChat: () => callEndpoint<void>('chat', 'newChat', {}),
+  /** Go back to one of your chats. */
+  openChat: (chatId: number) => callEndpoint<void>('chat', 'openChat', { chatId }),
+  /** The current chat's turns. */
   conversations: async (limit = 50) => {
     const turns = await callEndpoint<SpConversationTurn[]>('chat', 'getHistory', { limit });
     return { total: turns.length, turns: turns.map(adaptConversationTurn) };
@@ -517,6 +524,11 @@ export const api = {
 
   // ---- owner ---- (operator accounts only; the server checks)
   ownerUserStats: () => callEndpoint<string>('owner', 'userStats', {}),
+  /** The owner's dashboard (#dashboard): AI spend, test-question runs, the agent, the city. */
+  dashboard: () => callEndpoint<string>('dashboard', 'get', {}).then((j) => JSON.parse(j) as Dashboard),
+  /** Run WYRD's test questions now (a fraction of a cent); the run with every answer. */
+  dashboardRunEval: () => callEndpoint<string>('dashboard', 'runEval', {}).then((j) => JSON.parse(j) as EvalRunDetail),
+  dashboardEvalRun: (id: number) => callEndpoint<string>('dashboard', 'evalRun', { id }).then((j) => JSON.parse(j) as EvalRunDetail),
 
   // ---- games ---- (the server holds every position and checks every move)
   gameRatings: () => callEndpoint<PlayerRating[]>('games', 'myRatings', {}),
@@ -547,3 +559,17 @@ export type Citation = {
   amount: number; paid: number; owed: number; confidence: number; evidence: { source: string; id: string; confidence: number; detail: string }[];
   settledBy: string | null; appealResult: string | null; at: string; appealable: boolean;
 };
+
+export interface EvalRunSummary { id: number; at: string; model: string; passed: number; total: number; usd: number; ms: number }
+export interface EvalRunDetail extends EvalRunSummary {
+  results: { id: string; ask: string; answer: string | null; pass: boolean; why: string[]; ms: number }[];
+}
+export interface Dashboard {
+  ai: { model: string; spentTodayUsd: number; capUsd: number; callsToday: number; days: { day: string; usd: number; calls: number }[] };
+  evals: EvalRunSummary[];
+  agent: { waiting: number; running: number; scheduled: number; failedThisWeek: number };
+  city: {
+    players: number; activeToday: number; naira: number; debt: number; booksBalance: boolean; unbalanced: number;
+    disputesQueued: number; appealsQueued: number; finesPending: number;
+  };
+}

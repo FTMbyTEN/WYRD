@@ -10,6 +10,8 @@ const loadShell = () => import('./screens/AppShell');
 const AppShell = lazy(() => loadShell().then((m) => ({ default: m.AppShell })));
 // the owner's partner-API page (#partners): keys, staging, a live test
 const PartnerKeys = lazy(() => import('./screens/PartnerKeys').then((m) => ({ default: m.PartnerKeys })));
+// the owner's dashboard (#dashboard): AI spend, test questions, what's waiting, the city
+const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
 
 function Loading() {
   return (
@@ -26,6 +28,7 @@ const BakeVehicles = lazy(() => import('./world2d/BakeVehicles').then((m) => ({ 
 function Root() {
   const { status } = useAuth();
   const [partners, setPartners] = useState(() => typeof location !== 'undefined' && location.hash.startsWith('#partners'));
+  const [dashboard, setDashboard] = useState(() => typeof location !== 'undefined' && location.hash.startsWith('#dashboard'));
   const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));
   // while someone is on the gate typing their details, fetch the app in the background so
   // signing in opens it at once instead of waiting on a download after the server says yes
@@ -48,7 +51,9 @@ function Root() {
   return (
     <Suspense fallback={<Loading />}>
       {status === 'signedIn'
-        ? (partners ? <PartnerKeys onClose={() => { history.replaceState(null, '', location.pathname); setPartners(false); }} /> : <AppShell />)
+        ? (partners ? <PartnerKeys onClose={() => { history.replaceState(null, '', location.pathname); setPartners(false); }} />
+          : dashboard ? <Dashboard onClose={() => { history.replaceState(null, '', location.pathname); setDashboard(false); }} />
+          : <AppShell />)
         : <GateScreen />}
     </Suspense>
   );

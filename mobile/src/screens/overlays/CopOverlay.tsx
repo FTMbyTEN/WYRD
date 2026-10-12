@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
@@ -74,9 +74,14 @@ function CopPanel() {
   const lastChange = history[history.length - 1];
   const nextWindowAt = lastChange ? new Date(lastChange.timestamp).getTime() + SELF_MODIFY_MIN_GAP_MS : null;
   const windowOpen = !nextWindowAt || nextWindowAt <= now;
+  const { width } = useWindowDimensions();
+  const wide = width >= 1000; // two columns: the state on the left, the reviews on the right
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
+    <ScrollView contentContainerStyle={[styles.page, wide && styles.pageWide]}>
+      <View style={[styles.cols, wide && styles.colsWide]}>
+      {/* left: how COP stands and what WYRD has set for itself */}
+      <View style={[styles.col, wide && styles.colLeft]}>
       <View style={styles.status}>
         <View style={styles.pulseWrap}><View style={styles.pulse} /></View>
         <View style={{ flex: 1 }}>
@@ -117,6 +122,10 @@ function CopPanel() {
       <View style={styles.dials}>
         {(Object.keys(DIALS) as DialKey[]).map((k) => <Dial key={k} k={k} config={config} history={history} />)}
       </View>
+      </View>
+
+      {/* right: every change WYRD made to itself, and what COP made of it */}
+      <View style={[styles.col, wide && styles.colRight]}>
 
       <View style={styles.timelineHead}>
         <Mono style={styles.section}>REVIEW TIMELINE</Mono>
@@ -136,6 +145,8 @@ function CopPanel() {
         {shown.map((e, i) => <Review key={e.timestamp} e={e} last={i === shown.length - 1} />)}
       </View>
 
+      </View>
+      </View>
       <Mono style={styles.foot}>COP RUNS WITH NO SHARED CONTEXT WITH THE PROCESS IT REVIEWS</Mono>
     </ScrollView>
   );
@@ -249,41 +260,47 @@ function Review({ e, last }: { e: CopLogEntry; last: boolean }) {
 
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40, gap: 12, maxWidth: 980, width: '100%', alignSelf: 'center' },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.green, padding: 12 },
+  pageWide: { maxWidth: 1280, padding: 24 },
+  cols: { gap: 12 },
+  colsWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 24 },
+  col: { gap: 12 },
+  colLeft: { flex: 5, minWidth: 0 },
+  colRight: { flex: 6, minWidth: 0 },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.ink, borderRadius: 14, padding: 14, backgroundColor: 'rgba(36,49,107,0.05)' },
   pulseWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
-  pulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.signal, boxShadow: '0 0 0 4px rgba(42,31,23,0.08)' } as object,
-  statusTitle: { fontSize: 12, letterSpacing: 2.5, color: colors.green },
+  pulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.ink, boxShadow: '0 0 0 4px rgba(42,31,23,0.08)' } as object,
+  statusTitle: { fontSize: 12, letterSpacing: 2.5, color: colors.ink },
   statusSub: { fontSize: 11, lineHeight: 16, color: colors.greenDim, marginTop: 2 },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  stat: { flexGrow: 1, flexBasis: 120, borderWidth: 1, borderColor: colors.greenBorder, padding: 10 },
+  stat: { flexGrow: 1, flexBasis: 110, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 12, padding: 12, backgroundColor: colors.panelBg },
   statV: { fontSize: 22, color: colors.mint },
   statK: { fontSize: 9.5, color: colors.greenDim, marginTop: 2 },
   flow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: 6 },
-  flowStep: { flexGrow: 1, flexBasis: 200, borderWidth: 1, borderColor: colors.greenBorderDim, padding: 10, gap: 3 },
+  flowStep: { flexGrow: 1, flexBasis: 150, borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 12, padding: 12, gap: 3 },
   flowArrow: { alignSelf: 'center', color: colors.greenDim, fontSize: 14 },
-  flowN: { fontSize: 18, color: colors.green },
-  flowT: { fontSize: 10, letterSpacing: 1.8, color: colors.green },
+  flowN: { fontSize: 18, color: colors.ink },
+  flowT: { fontSize: 10, letterSpacing: 1.8, color: colors.ink },
   flowD: { fontSize: 10.5, lineHeight: 15, color: colors.greenDim },
   section: { fontSize: 10, letterSpacing: 2, color: colors.greenDim, marginTop: 6 },
   dials: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  dial: { flexGrow: 1, flexBasis: 240, borderWidth: 1, borderColor: colors.greenBorder, padding: 12, gap: 6 },
+  dial: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 14, gap: 6, backgroundColor: colors.panelBg },
   dialName: { fontSize: 10, letterSpacing: 2, color: colors.greenDim },
   dialValue: { fontSize: 20, color: colors.mint },
   levels: { flexDirection: 'row', gap: 6 },
   levelCol: { flex: 1, gap: 3 },
-  levelBar: { height: 6, backgroundColor: colors.greenBorderDim },
-  levelOn: { backgroundColor: colors.signal },
+  levelBar: { height: 6, borderRadius: 3, backgroundColor: colors.greenBorderDim },
+  levelOn: { backgroundColor: colors.ink },
   levelText: { fontSize: 9.5, color: colors.greenDim, textAlign: 'center' },
-  levelTextOn: { color: colors.signal, fontWeight: 'bold' },
+  levelTextOn: { color: colors.ink, fontWeight: 'bold' },
   gauge: { flexDirection: 'row', gap: 3 },
-  tick: { flex: 1, height: 12, backgroundColor: colors.greenBorderDim },
-  tickOn: { backgroundColor: colors.signal },
+  tick: { flex: 1, height: 12, borderRadius: 2, backgroundColor: colors.greenBorderDim },
+  tickOn: { backgroundColor: colors.ink },
   dialExplain: { fontSize: 11, lineHeight: 16, color: colors.greenDim },
   dialMeta: { fontSize: 10, color: colors.greenDim, borderTopWidth: 1, borderTopColor: colors.greenBorderDim, paddingTop: 6 },
   timelineHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   filters: { flexDirection: 'row', gap: 4, flexWrap: 'wrap' },
-  filterBtn: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 9, paddingVertical: 5 },
-  filterOn: { backgroundColor: colors.signal, borderColor: colors.signal },
+  filterBtn: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
+  filterOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   filterText: { fontSize: 9.5, letterSpacing: 1, color: colors.greenDim },
   filterTextOn: { color: colors.black },
   empty: { fontSize: 12, color: colors.greenDim, textAlign: 'center', paddingVertical: 20 },
@@ -291,11 +308,11 @@ const styles = StyleSheet.create({
   rail: { width: 14, alignItems: 'center' },
   node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, marginTop: 14, backgroundColor: colors.black },
   railLine: { flex: 1, width: 2, backgroundColor: colors.greenBorderDim, marginVertical: 2 },
-  card: { flex: 1, borderWidth: 1, borderColor: colors.greenBorder, padding: 12, gap: 8, marginBottom: 10 },
+  card: { flex: 1, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 14, gap: 8, marginBottom: 10, backgroundColor: colors.panelBg },
   cardConcern: { borderStyle: 'dashed', borderColor: colors.green },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   cardMeta: { fontSize: 9.5, letterSpacing: 1.5, color: colors.greenDim },
-  badge: { fontSize: 9, letterSpacing: 1.5, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
+  badge: { fontSize: 9, letterSpacing: 1.5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   badgeConcern: { borderStyle: 'dashed' },
   change: { gap: 4 },
   changeName: { fontSize: 18, color: colors.mint },
@@ -307,6 +324,6 @@ const styles = StyleSheet.create({
   detail: { borderTopWidth: 1, borderTopColor: colors.greenBorderDim, paddingTop: 10 },
   detailLabel: { fontSize: 9, letterSpacing: 1.8, color: colors.greenDim },
   detailText: { fontSize: 12, lineHeight: 18, color: colors.mint, marginTop: 4 },
-  more: { fontSize: 10, color: colors.greenDim },
+  more: { fontSize: 10, color: colors.ink },
   foot: { textAlign: 'center', fontSize: 9.5, color: colors.greenBorderDim, padding: 10 },
 });

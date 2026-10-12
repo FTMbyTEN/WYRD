@@ -8,21 +8,30 @@ import { Avatar } from '../components/Avatar';
 import { useProfile } from '../api/hooks';
 import { useAuth } from '../api/AuthContext';
 import type { GlyphName } from '../components/glyph/glyphs';
+import { ChatsList } from './AppsSheet';
 
 export type TabKey = 'wyrd' | 'journal' | 'academy' | 'games' | 'drone' | 'you' | 'settings';
 
-const TABS: { key: TabKey; label: string; glyph: GlyphName }[] = [
+// Drone, Journal and Games live in APPS (a glass pop-up, see AppsSheet), which isn't a page itself
+const TABS: { key: TabKey | 'apps'; label: string; glyph: GlyphName }[] = [
   { key: 'wyrd', label: 'WYRD', glyph: 'mind' },
-  { key: 'journal', label: 'JOURNAL', glyph: 'journal' },
   { key: 'academy', label: 'ACADEMY', glyph: 'academy' },
-  { key: 'games', label: 'GAMES', glyph: 'games' },
-  { key: 'drone', label: 'DRONE', glyph: 'drone' },
+  { key: 'apps', label: 'APPS', glyph: 'games' },
   { key: 'you', label: 'YOU', glyph: 'you' },
 ];
+const IN_APPS: TabKey[] = ['drone', 'journal', 'games'];
 
 /** The tabs, each a HUD glyph over a label; the live one turns cobalt and its ring turns. Bottom bar
- *  on phones/tablets; `vertical` is the desktop sidebar (icon beside label, full-height rail). */
-export function TabBar({ active, onChange, vertical, drone }: { active: TabKey; onChange: (t: TabKey) => void; vertical?: boolean; drone?: boolean }) {
+ *  on phones/tablets; `vertical` is the desktop sidebar (icon beside label, full-height rail), with
+ *  your chats under APPS. */
+export function TabBar({ active, onChange, vertical, onApps, appsOpen, onOpenChat }: {
+  active: TabKey;
+  onChange: (t: TabKey) => void;
+  vertical?: boolean;
+  onApps: () => void;
+  appsOpen?: boolean;
+  onOpenChat: () => void; // a chat picked in the side bar: open Dialogue Link on it
+}) {
   const insets = useSafeAreaInsets();
   const { profile } = useProfile();
   const { email } = useAuth();
@@ -34,13 +43,13 @@ export function TabBar({ active, onChange, vertical, drone }: { active: TabKey; 
         : [styles.bar, { paddingBottom: Math.max(10, insets.bottom + 4) }]}
     >
       <View style={vertical ? styles.column : styles.row}>
-        {TABS.filter((t) => ((t.key !== 'drone' && t.key !== 'journal') || drone) && !(vertical && t.key === 'you')).map(({ key, label, glyph }) => {
-          const on = key === active;
+        {TABS.filter((t) => !(vertical && t.key === 'you')).map(({ key, label, glyph }) => {
+          const on = key === 'apps' ? !!appsOpen || IN_APPS.includes(active) : key === active;
           const ink = on ? colors.onSignal : colors.greenDim; // the active tab: cream on a terracotta pill
           return (
             <Pressable
               key={key}
-              onPress={() => onChange(key)}
+              onPress={() => (key === 'apps' ? onApps() : onChange(key))}
               style={({ pressed }) => [vertical ? styles.railBtn : styles.btn, on && styles.btnOn, pressed && !on && styles.btnPressed]}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
@@ -52,6 +61,8 @@ export function TabBar({ active, onChange, vertical, drone }: { active: TabKey; 
           );
         })}
       </View>
+      {/* desktop: your chats, under APPS */}
+      {vertical ? <View style={styles.chats}><ChatsList onOpen={onOpenChat} /></View> : null}
       {/* desktop: settings sits apart, at the foot of the rail */}
       {vertical ? (() => {
         const on = active === 'settings' || active === 'you'; // desktop: you and your settings are one page
@@ -86,6 +97,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black, paddingHorizontal: 12,
   },
   column: { gap: 6 },
+  chats: { marginTop: 22, flexShrink: 1, minHeight: 0 },
   railBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999 },
   settingsBtn: { marginTop: 'auto', paddingLeft: 8 },
   railSub: { fontSize: 10, letterSpacing: 0.3, opacity: 0.8 },

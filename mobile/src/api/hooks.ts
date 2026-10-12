@@ -276,6 +276,33 @@ export function useDrone() {
   };
 }
 
+// told when the open chat changes (a new chat, or an old one reopened), so Dialogue Link can let go
+// of the file and the reply that belonged to the chat it left
+const chatSwitch = new Set<() => void>();
+export function onChatSwitch(f: () => void) {
+  chatSwitch.add(f);
+  return () => { chatSwitch.delete(f); };
+}
+
+export type ChatSummary = Awaited<ReturnType<typeof api.chats>>[number];
+
+/** Your chats (the side bar's list), and switching between them: the thread in Dialogue Link
+ *  follows at once, wherever it's shown. */
+export function useChats() {
+  const { data, reload } = usePolled(api.chats, null, [], 'chats');
+  // a message sent changes the list (a new title, a chat moved to the top)
+  useEffect(() => wyrdStream.subscribe('chat', () => { void reload(); }), [reload]);
+  const switched = async () => {
+    chatSwitch.forEach((f) => f());
+    await Promise.all([shared('conversations:60', () => api.conversations(60)), reload()]);
+  };
+  return {
+    chats: data ?? [],
+    newChat: async () => { await api.newChat(); await switched(); },
+    openChat: async (id: number) => { await api.openChat(id); await switched(); },
+  };
+}
+
 /** DIALOGUE_LINK's history, fetched ahead so the chat opens already filled. */
 export function prefetchDialogue() {
   prefetch('conversations:60', () => api.conversations(60));
