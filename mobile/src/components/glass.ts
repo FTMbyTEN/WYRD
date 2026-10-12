@@ -9,6 +9,8 @@ export const frosted = Platform.OS === 'web'
 
 export const glass = StyleSheet.create({
   scrim: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: colors.scrim },
+  // the scrim's colour alone, as its own layer (so it can fade on its own)
+  scrimFill: { backgroundColor: colors.scrim },
   pane: {
     width: '100%', borderRadius: 24, overflow: 'hidden',
     backgroundColor: Platform.OS === 'web' ? colors.glassBg : colors.glassBgSolid,

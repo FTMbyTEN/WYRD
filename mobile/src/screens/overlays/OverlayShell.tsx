@@ -7,7 +7,7 @@ import { colors } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import type { GlyphName } from '../../components/glyph/glyphs';
 import { frosted, glass } from '../../components/glass';
-import { useEnter } from '../../components/motion';
+import { useElastic, useEnter } from '../../components/motion';
 
 // each panel's glyph, live while the panel is open
 const PANEL_GLYPH: Record<string, GlyphName> = {
@@ -23,13 +23,16 @@ interface Props {
   footer?: React.ReactNode;
   black?: boolean; // overlays that fill with pure black instead of the 94%-black scrim
   glassWidth?: number; // a glass pop-up this wide at most (COP, ALERTS), instead of a full-screen panel
+  // a big glass pop-up that fills this much of the screen's height (BRAIN_3D), springing in and out
+  glassHeight?: number;
   // desktop: docked to the right of the page as a resizable glass panel instead of a pop-up
   dock?: { width: number; onResize: (w: number) => void; minWidth: number; maxWidth: number };
 }
 
-export function OverlayShell({ visible, title, onClose, children, footer, black, glassWidth, dock }: Props) {
+export function OverlayShell({ visible, title, onClose, children, footer, black, glassWidth, glassHeight, dock }: Props) {
   const insets = useSafeAreaInsets();
   const enter = useEnter(visible); // every panel arrives the same way: a short fade, rise and settle
+  const elastic = useElastic(visible && !!glassHeight);
   // docked: Escape closes it (a modal gets this from onRequestClose)
   useEffect(() => {
     if (!dock || !visible || Platform.OS !== 'web') return;
@@ -64,6 +67,33 @@ export function OverlayShell({ visible, title, onClose, children, footer, black,
         <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
         {footer}
       </SidePanel>
+    );
+  }
+  if (glassWidth && glassHeight) {
+    // a big glass pop-up (BRAIN_3D) over the app, which shows through, blurred: it springs in, and
+    // closing (✕, a tap outside, Escape) plays its exit before it goes
+    const close = () => elastic.leave(onClose);
+    return (
+      <Modal visible={visible} transparent animationType="none" onRequestClose={close}>
+        <Animated.View style={[StyleSheet.absoluteFill, glass.scrimFill, frosted, elastic.scrim]} />
+        <Pressable style={[glass.scrim, { backgroundColor: 'transparent', paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]} onPress={close} accessibilityLabel={`Close ${title}`}>
+          <Animated.View style={[{ width: '100%', maxWidth: glassWidth, height: '100%', maxHeight: glassHeight }, elastic.pane]}>
+            <Pressable style={[glass.pane, frosted, { flex: 1 }]} onPress={() => {}}>
+              <View style={[styles.header, styles.glassHeader]}>
+                <View style={styles.titleRow}>
+                  {PANEL_GLYPH[title] ? <Glyph name={PANEL_GLYPH[title]} size={30} color={colors.signal} active /> : null}
+                  <Display style={styles.title}>{title}</Display>
+                </View>
+                <Pressable onPress={close} hitSlop={12} accessibilityLabel="Close">
+                  <Glyph name="close" size={18} color={colors.greenDim} />
+                </Pressable>
+              </View>
+              <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
+              {footer}
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     );
   }
   if (glassWidth) {

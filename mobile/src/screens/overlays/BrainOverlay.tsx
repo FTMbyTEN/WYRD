@@ -104,7 +104,8 @@ export function BrainOverlay({ visible, onClose }: { visible: boolean; onClose: 
   );
 
   return (
-    <OverlayShell visible={visible} title="BRAIN_3D" onClose={onClose} black>
+    // a big glass pop-up over the home screen (it springs in and out), not a page of its own
+    <OverlayShell visible={visible} title="BRAIN_3D" onClose={onClose} glassWidth={1180} glassHeight={880}>
       <View style={[{ flex: 1 }, desktop && { flexDirection: 'row' }]}>
         {brain}
         <View style={[{ flex: 1 }, desktop && styles.detailsDesktop]}>{details}</View>
