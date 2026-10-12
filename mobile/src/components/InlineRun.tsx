@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Mono } from './ui';
-import { colors } from '../theme';
+import { CodeText } from './CodeText';
+import { colors, fonts } from '../theme';
 
 /** What WYRD drew (show_visual) or the Python it ran for them (run_python), inside its reply.
  *  Both arrive as one kept string, marked by kind (see the server's visual_tools.dart). They run
@@ -151,7 +152,7 @@ export function InlineRun({ kept, onOpen }: { kept: string; onOpen?: (html: stri
         ) : null}
       </View>
       {python && showCode ? (
-        <ScrollView style={styles.code} nestedScrollEnabled><Mono style={styles.codeText} selectable>{body}</Mono></ScrollView>
+        <ScrollView style={styles.code} nestedScrollEnabled><CodeText code={body} lang="python" style={styles.codeText} /></ScrollView>
       ) : null}
       {run ? (
         <View style={styles.frame}>
@@ -177,6 +178,6 @@ const styles = StyleSheet.create({
   btnMain: { backgroundColor: colors.signal },
   btnText: { fontSize: 10.5, letterSpacing: 1, color: colors.signal },
   code: { maxHeight: 260, paddingHorizontal: 12, paddingBottom: 10 },
-  codeText: { fontSize: 11.5, lineHeight: 17, color: colors.mint },
+  codeText: { fontSize: 11.5, lineHeight: 17, color: colors.mint, fontFamily: fonts.code },
   frame: { backgroundColor: '#FFFAF2' },
 });

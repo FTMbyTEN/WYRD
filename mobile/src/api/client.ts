@@ -91,6 +91,7 @@ function adaptProfile(p: SpUserProfile): Profile {
     username: p.username,
     avatar: p.avatar ?? null,
     facts: p.facts.map((f) => f.text),
+    memories: p.facts.map((f) => ({ text: f.text, kind: f.category === 'task' || f.category === 'city' ? f.category : 'fact' })),
     visitCount: p.visitCount,
     firstSeen: p.firstSeen,
     lastSeen: p.lastSeen,
@@ -309,6 +310,7 @@ export const api = {
   // ---- profile / account ----
   profile: () => callEndpoint<SpUserProfile>('profile', 'getProfile', {}).then(adaptProfile),
   // records a visit; also creates the WYRD profile row and stores the sign-in email on it
+  forgetFact: (text: string) => callEndpoint<SpUserProfile>('profile', 'forgetFact', { text }).then(adaptProfile),
   setName: (username: string) => callEndpoint<SpUserProfile>('profile', 'setUsername', { username }).then(adaptProfile),
   setAvatar: (dataUrl: string | null) => callEndpoint<SpUserProfile>('profile', 'setAvatar', { dataUrl }).then(adaptProfile),
   touchVisit: () => callEndpoint<SpUserProfile>('profile', 'touchVisit', {}).then(adaptProfile),

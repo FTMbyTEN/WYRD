@@ -209,8 +209,8 @@ export function YouTab({ tts, onToggleTts, onOpenCop, view = 'all' }: Props) {
       <Section title="WHEN YOU TALK" note={turns.length ? `your last ${turns.length} messages` : undefined}>
         <Activity stamps={turns.map((t) => t.timestamp)} />
       </Section>
-      <Section title="WHAT WYRD KNOWS ABOUT YOU" note={`${facts.length} ${facts.length === 1 ? 'fact' : 'facts'} · private to you`}>
-        <Facts facts={facts} />
+      <Section title="WHAT WYRD KNOWS ABOUT YOU" note={`${facts.length} ${facts.length === 1 ? 'memory' : 'memories'} · one memory in chat, tasks and the city · private to you`}>
+        <Facts memories={profile?.memories ?? []} onForget={async (text) => { saved(await api.forgetFact(text)); }} />
       </Section>
     </>
   );
@@ -433,7 +433,12 @@ function Activity({ stamps }: { stamps: string[] }) {
 }
 
 /** Facts as index cards: "Name: Dana" becomes a labelled card; anything else stands on its own. */
-function Facts({ facts }: { facts: string[] }) {
+/** The one memory WYRD keeps of them -- what they told it, tasks it finished, missions done in the
+ *  city -- each with a ✕ that forgets it everywhere at once. */
+function Facts({ memories, onForget }: { memories: { text: string; kind: 'fact' | 'task' | 'city' }[]; onForget: (text: string) => Promise<void> }) {
+  const facts = memories.map((m) => m.text);
+  const kindOf = new Map(memories.map((m) => [m.text, m.kind]));
+  const [busy, setBusy] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   if (!facts.length) {
     return <Mono style={styles.muted}>Nothing yet. Tell WYRD about yourself in Dialogue Link — your name, what you study, what you love — and it will remember, privately.</Mono>;
@@ -446,7 +451,17 @@ function Facts({ facts }: { facts: string[] }) {
           const m = f.match(/^([A-Za-z][\w '’-]{1,24}):\s*(.+)$/);
           return (
             <View key={`${i}-${f}`} style={[styles.factCard, i % 5 === 0 && styles.factCardTilt]}>
-              <Mono style={styles.factLabel}>{m ? m[1].toUpperCase() : `NOTE ${String(i + 1).padStart(2, '0')}`}</Mono>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Mono style={[styles.factLabel, { flex: 1 }]}>{kindOf.get(f) === 'task' ? 'A TASK FOR YOU' : kindOf.get(f) === 'city' ? 'NAIJA 2099' : m ? m[1].toUpperCase() : `NOTE ${String(i + 1).padStart(2, '0')}`}</Mono>
+                <Pressable
+                  onPress={async () => { if (busy) return; setBusy(f); try { await onForget(f); } finally { setBusy(null); } }}
+                  hitSlop={8}
+                  accessibilityLabel={`Forget: ${f}`}
+                  style={{ opacity: busy === f ? 0.4 : 0.7 }}
+                >
+                  <Mono style={styles.factLabel}>✕</Mono>
+                </Pressable>
+              </View>
               <Text style={[styles.factText, { fontFamily: serif }]}>{m ? m[2] : f}</Text>
             </View>
           );

@@ -664,7 +664,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
                   <Mono style={styles.codeLang}>{(p.lang ?? 'code').toUpperCase()}</Mono>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 12 }}>
-                  <CodeText code={p.body} style={[styles.codeText, { fontFamily: fonts.code }]} />
+                  <CodeText code={p.body} lang={p.lang} style={[styles.codeText, { fontFamily: fonts.code }]} />
                 </ScrollView>
               </View>
             ) : (

@@ -50,7 +50,7 @@ export function Passage({ text, font, size, color, muted, rtl, dropCap }: {
           return (
             <View key={i} style={{ borderRadius: 8, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: colors.codeBg }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 12 }}>
-                <CodeText code={p} style={{ fontFamily: 'ShareTechMono_400Regular', fontSize: size * 0.82, lineHeight: size * 1.35, color: colors.codeFn }} />
+                <CodeText code={p} style={{ fontFamily: 'ShareTechMono_400Regular', fontSize: size * 0.82, lineHeight: size * 1.35, color: colors.green }} />
               </ScrollView>
             </View>
           );

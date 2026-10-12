@@ -298,6 +298,8 @@ export interface Profile {
   /** their profile picture, as a data URL */
   avatar?: string | null;
   facts: string[];
+  /** the one memory chat, tasks and the city share: what they told WYRD, a task it finished, a mission done */
+  memories: { text: string; kind: 'fact' | 'task' | 'city' }[];
   visitCount: number;
   firstSeen: string;
   lastSeen: string;

@@ -32,10 +32,14 @@ const light = {
   sand: '#EEDFC8',
   cream: '#F7EFE2',
   card: '#FFFAF2',
-  // code
-  codeString: '#2F6B4C',
-  codeNumber: '#B4471C',
-  codeFn: '#2A1F17',
+  // code: one distinct colour per kind of token, so code reads at a glance
+  codeKeyword: '#8E3DB8', // violet
+  codeString: '#2E7D46', // green
+  codeNumber: '#C2410C', // orange
+  codeFn: '#1F5FBF', // blue
+  codeType: '#0E7C86', // teal: Classes, Types
+  codeTag: '#B3262F', // red: <html> tags
+  codeAttr: '#A16207', // amber: attributes, properties
   codeComment: '#8A7868',
   codeBg: '#F2E8D8',
   // glass (pop-ups, side panels, the header) and what's behind it
@@ -74,9 +78,13 @@ const dark: Palette = {
   sand: '#2A241F',
   cream: '#14110E',
   card: '#1D1915',
-  codeString: '#7FCB9C',
-  codeNumber: '#F28B5E',
-  codeFn: '#F1E6D6',
+  codeKeyword: '#C792EA',
+  codeString: '#A5D98B',
+  codeNumber: '#F78C6C',
+  codeFn: '#82AAFF',
+  codeType: '#7FDBCA',
+  codeTag: '#F07178',
+  codeAttr: '#FFCB6B',
   codeComment: '#8C7A68',
   codeBg: '#221D18',
   glassBg: 'rgba(29,25,21,0.58)',
