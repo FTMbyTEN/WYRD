@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Display, Mono } from '../../components/ui';
 import { SidePanel } from '../../components/SidePanel';
@@ -7,6 +7,7 @@ import { colors } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import type { GlyphName } from '../../components/glyph/glyphs';
 import { frosted, glass } from '../../components/glass';
+import { useEnter } from '../../components/motion';
 
 // each panel's glyph, live while the panel is open
 const PANEL_GLYPH: Record<string, GlyphName> = {
@@ -28,6 +29,7 @@ interface Props {
 
 export function OverlayShell({ visible, title, onClose, children, footer, black, glassWidth, dock }: Props) {
   const insets = useSafeAreaInsets();
+  const enter = useEnter(visible); // every panel arrives the same way: a short fade, rise and settle
   // docked: Escape closes it (a modal gets this from onRequestClose)
   useEffect(() => {
     if (!dock || !visible || Platform.OS !== 'web') return;
@@ -69,7 +71,8 @@ export function OverlayShell({ visible, title, onClose, children, footer, black,
     return (
       <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
         <Pressable style={[glass.scrim, frosted, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]} onPress={onClose} accessibilityLabel={`Close ${title}`}>
-          <Pressable style={[glass.pane, frosted, { maxWidth: glassWidth, maxHeight: '100%', flexShrink: 1 }]} onPress={() => {}}>
+          <Animated.View style={[{ width: '100%', maxWidth: glassWidth, maxHeight: '100%', flexShrink: 1 }, enter]}>
+          <Pressable style={[glass.pane, frosted, { maxHeight: '100%', flexShrink: 1 }]} onPress={() => {}}>
             <View style={[styles.header, styles.glassHeader]}>
               <View style={styles.titleRow}>
                 {PANEL_GLYPH[title] ? <Glyph name={PANEL_GLYPH[title]} size={30} color={colors.signal} active /> : null}
@@ -82,13 +85,14 @@ export function OverlayShell({ visible, title, onClose, children, footer, black,
             <View style={{ flexShrink: 1, minHeight: 0 }}>{children}</View>
             {footer}
           </Pressable>
+          </Animated.View>
         </Pressable>
       </Modal>
     );
   }
   return (
     <Modal visible={visible} animationType="fade" transparent={!black} onRequestClose={onClose}>
-      <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom, backgroundColor: black ? '#FFFAF2' : 'rgba(255,250,242,0.94)' }]}>
+      <Animated.View style={[styles.root, !black && frosted, { paddingTop: insets.top + 8, paddingBottom: insets.bottom, backgroundColor: black ? colors.panelBg : Platform.OS === 'web' ? colors.glassBg : colors.glassBgSolid }, enter]}>
         <View style={styles.header}>
           <View style={styles.titleRow}>
             {PANEL_GLYPH[title] ? <Glyph name={PANEL_GLYPH[title]} size={34} color={colors.signal} active /> : null}
@@ -100,7 +104,7 @@ export function OverlayShell({ visible, title, onClose, children, footer, black,
         </View>
         <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
         {footer}
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -113,10 +117,10 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   title: { fontSize: 22, lineHeight: 24, letterSpacing: 1 },
-  glassHeader: { borderBottomColor: 'rgba(42,31,23,0.12)' },
+  glassHeader: { borderBottomColor: colors.glassLine },
   dockHeader: { paddingVertical: 12, paddingHorizontal: 16 },
   dockTitle: { fontSize: 20, lineHeight: 22, letterSpacing: 1 },
   dockBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  dockBtnOn: { backgroundColor: 'rgba(255,255,255,0.7)' },
+  dockBtnOn: { backgroundColor: colors.glassTileOn },
   dockBtnText: { fontSize: 13, color: colors.greenDim, letterSpacing: -1 },
 });

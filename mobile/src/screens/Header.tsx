@@ -4,7 +4,7 @@ import { Glyph } from '../components/glyph/Glyph';
 import { FaceMark } from '../components/FaceMark';
 import { Display, Mono } from '../components/ui';
 import { useDroneAccess } from '../api/hooks';
-import { colors, fonts } from '../theme';
+import { colors, fonts, isDark, setThemeMode } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Mind } from '../api/types';
 
@@ -73,6 +73,15 @@ export function Header({ mind, alertCount, onOpenAlerts, onOpenCop, taskCount, o
               <Glyph name="cop" size={17} />
             </Switch>
           ) : null}
+          {/* light / dark: the new colours burst in as dust from the button */}
+          <Pressable
+            onPress={(e) => setThemeMode(isDark ? 'light' : 'dark', { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
+            accessibilityRole="button"
+            accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.switch, styles.round, hovered && styles.switchHover, pressed && { opacity: 0.7 }]}
+          >
+            <Glyph name={isDark ? 'sun' : 'moon'} size={18} color={colors.mint} />
+          </Pressable>
           {/* just the bell: the badge says how many are waiting */}
           <Switch label="ALERTS" onPress={onOpenAlerts} hint={alertCount ? `Alerts: ${alertCount} new` : 'Alerts'} badge={alertCount} compact round>
             <Glyph name="alerts" size={19} active={alertCount > 0} />
@@ -100,8 +109,8 @@ function Switch({ label, on, onPress, hint, badge, compact, round, children }: {
         pressed && { opacity: 0.7 },
       ]}
     >
-      {React.isValidElement(children) ? React.cloneElement(children as React.ReactElement<{ color?: string }>, { color: on ? '#FFFAF2' : colors.mint }) : children}
-      {!compact && <Mono style={[styles.switchText, on && { color: '#FFFAF2' }]}>{label}</Mono>}
+      {React.isValidElement(children) ? React.cloneElement(children as React.ReactElement<{ color?: string }>, { color: on ? colors.onSignal : colors.mint }) : children}
+      {!compact && <Mono style={[styles.switchText, on && { color: colors.onSignal }]}>{label}</Mono>}
       {badge ? (
         <View style={styles.badge}>
           <Mono style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Mono>
@@ -112,7 +121,7 @@ function Switch({ label, on, onPress, hint, badge, compact, round, children }: {
 }
 
 const styles = StyleSheet.create({
-  wrap: { backgroundColor: 'rgba(247,239,226,0.94)', borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim },
+  wrap: { backgroundColor: colors.barBg, borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingBottom: 10, paddingTop: 2 },
   barWide: { paddingHorizontal: 24, gap: 28 },
 

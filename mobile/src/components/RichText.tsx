@@ -123,6 +123,6 @@ const styles = StyleSheet.create({
   table: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 8, overflow: 'hidden' },
   tr: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.greenBorderDim },
   th: { backgroundColor: colors.signalSoft, borderTopWidth: 0 },
-  trAlt: { backgroundColor: 'rgba(42,31,23,0.03)' },
+  trAlt: { backgroundColor: colors.glassTile },
   td: { flex: 1, paddingHorizontal: 10, paddingVertical: 7, fontSize: 12.5, lineHeight: 18 },
 });

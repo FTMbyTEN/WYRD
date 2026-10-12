@@ -157,5 +157,5 @@ const s = StyleSheet.create({
   runRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 8, padding: 10 },
   result: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 10, padding: 12, gap: 6 },
   btn: { backgroundColor: colors.green, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9 },
-  btnText: { fontFamily: fonts.mono, fontSize: 14, color: colors.onSignal },
+  btnText: { fontFamily: fonts.mono, fontSize: 14, color: colors.black },
 });

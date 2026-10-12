@@ -306,7 +306,7 @@ function SearchBar({ value, onChange, onSubmit, busy, placeholder, rtl }: {
       />
       {onSubmit && (
         <Pressable onPress={onSubmit} style={({ pressed }) => [styles.find, pressed && { opacity: 0.7 }]}>
-          {busy ? <ActivityIndicator size="small" color="#FFFAF2" /> : <Mono style={styles.findText}>FIND</Mono>}
+          {busy ? <ActivityIndicator size="small" color={colors.black} /> : <Mono style={styles.findText}>FIND</Mono>}
         </Pressable>
       )}
     </View>
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     fontSize: 13, color: colors.mint, backgroundColor: '#FFFAF2', fontFamily: 'ShareTechMono_400Regular',
   },
   find: { backgroundColor: colors.mint, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', minWidth: 72 },
-  findText: { color: '#FFFAF2', fontSize: 11, letterSpacing: 1.8 },
+  findText: { color: colors.black, fontSize: 11, letterSpacing: 1.8 },
   results: { borderWidth: 1, borderColor: colors.greenBorder, padding: 10, gap: 6, backgroundColor: '#FFFAF2', borderRadius: 16 },
   hitRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim },
   hitTitle: { fontSize: 13, color: colors.mint },

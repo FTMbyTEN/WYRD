@@ -4,6 +4,7 @@ import { Header } from './Header';
 import { FirstRunTour } from '../components/FirstRunTour';
 import { TabBar, type TabKey } from './TabBar';
 import { AppsSheet } from './AppsSheet';
+import { Enter } from '../components/motion';
 import { WyrdTab } from './tabs/WyrdTab';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { prefetchBrain, prefetchDialogue, useAgentBadge, useDroneAccess, useMind } from '../api/hooks';
@@ -187,6 +188,8 @@ export function AppShell() {
         />
 
         <View style={{ flex: 1, minHeight: 0 }}>
+          {/* each tab arrives with a short fade and rise */}
+          <Enter key={tab} k={tab}>
           <Suspense fallback={<Loading />}>
             {tab === 'wyrd' && (
               <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} onOpenTask={(id) => { setTaskFocus(id); open('tasks'); }} showTasks={tasksColumn} onCloseTasks={() => setTasksColumn(false)} />
@@ -204,6 +207,7 @@ export function AppShell() {
             {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
             {tab === 'settings' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
           </Suspense>
+          </Enter>
           {/* desktop: Dialogue Link docked on the right, over the page */}
           {desktop ? <Suspense fallback={null}>{dialogue}</Suspense> : null}
         </View>

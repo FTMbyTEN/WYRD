@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './api/AuthContext';
 import { colors } from './theme';
+import { revealArrival } from './util/themeTransition';
 
 // The entry screen (with its vortex) and the app itself are loaded separately: someone already
 // signed in never downloads the gate, and the gate never waits for the whole app.
@@ -29,6 +30,12 @@ function Root() {
   const { status } = useAuth();
   const [partners, setPartners] = useState(() => typeof location !== 'undefined' && location.hash.startsWith('#partners'));
   const [dashboard, setDashboard] = useState(() => typeof location !== 'undefined' && location.hash.startsWith('#dashboard'));
+  // after a change of theme, the cover fades away once the first screen is drawn
+  useEffect(() => {
+    if (status === 'checking') return;
+    const t = setTimeout(revealArrival, 350);
+    return () => clearTimeout(t);
+  }, [status]);
   const [play, setPlay] = useState(() => typeof location !== 'undefined' && /^#(play|naija)/i.test(location.hash));
   // while someone is on the gate typing their details, fetch the app in the background so
   // signing in opens it at once instead of waiting on a download after the server says yes
@@ -74,5 +81,5 @@ export default function AppRoot() {
 
 const styles = StyleSheet.create({
   game: { flex: 1, backgroundColor: '#0d0f14' },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff' },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
 });

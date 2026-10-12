@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { Mono } from './ui';
-import { colors, fonts } from '../theme';
+import { colors, fonts, isDark } from '../theme';
 import { Glyph } from './glyph/Glyph';
 
 const TYPE_MS = 45;
@@ -125,17 +125,18 @@ function useTypewriter(prompts: string[]) {
 }
 
 const styles = StyleSheet.create({
-  shell: { backgroundColor: colors.green, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, gap: 6, borderRadius: 24 },
+  // (at night a deep warm card with a terracotta edge, not an inverted cream bar)
+  shell: { backgroundColor: isDark ? '#28211B' : colors.green, borderWidth: isDark ? 1 : 0, borderColor: colors.signal, paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12, gap: 6, borderRadius: 24 },
   pressed: { opacity: 0.85 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   liveWrap: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.black },
-  ring: { position: 'absolute', width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: colors.black },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: isDark ? colors.signal : colors.black },
+  ring: { position: 'absolute', width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: isDark ? colors.signal : colors.black },
   label: { fontSize: 10, letterSpacing: 1.2, color: colors.ochre, fontFamily: fonts.bodyBold },
   promptRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  chevron: { fontSize: 16, color: colors.black },
+  chevron: { fontSize: 16, color: isDark ? colors.mint : colors.black },
   typed: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
-  typedText: { flexShrink: 1, fontSize: 15, color: colors.sand },
+  typedText: { flexShrink: 1, fontSize: 15, color: isDark ? colors.mintBright : colors.sand },
   cursor: { width: 2, height: 17, marginLeft: 2, backgroundColor: colors.ochre },
   send: {
     width: 38, height: 38, borderRadius: 19, backgroundColor: colors.signal,

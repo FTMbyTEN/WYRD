@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Mono } from '../components/ui';
 import { Glyph } from '../components/glyph/Glyph';
 import type { GlyphName } from '../components/glyph/glyphs';
@@ -7,6 +7,7 @@ import { useChats } from '../api/hooks';
 import { colors, fonts } from '../theme';
 import type { TabKey } from './TabBar';
 import { frosted } from '../components/glass';
+import { useEnter } from '../components/motion';
 
 export const APPS: { key: TabKey; label: string; glyph: GlyphName; blurb: string; owner?: boolean }[] = [
   { key: 'drone', label: 'Drone', glyph: 'drone', blurb: 'Fly, watch, plan', owner: true },
@@ -29,10 +30,12 @@ export function AppsSheet({ visible, onClose, onPick, drone, onOpenChat, withCha
   // small phones: the three apps side by side in a row, smaller, and the whole sheet scrolls
   const win = useWindowDimensions();
   const small = win.width < 420 || win.height < 700;
+  const enter = useEnter(visible);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={[styles.scrim, frosted]} onPress={onClose} accessibilityLabel="Close apps">
         {/* (a tap on the glass itself doesn't close it) */}
+        <Animated.View style={[{ width: '100%', maxWidth: 520, maxHeight: '100%' }, enter]}>
         <Pressable style={[styles.glass, frosted, small && styles.glassSmall]} onPress={() => {}}>
           <ScrollView contentContainerStyle={small ? styles.bodySmall : styles.body} showsVerticalScrollIndicator={false}>
           <View style={styles.head}>
@@ -62,6 +65,7 @@ export function AppsSheet({ visible, onClose, onPick, drone, onOpenChat, withCha
           ) : null}
           </ScrollView>
         </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   );
@@ -100,12 +104,12 @@ export function ChatsList({ onOpen, max = 12 }: { onOpen: () => void; max?: numb
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: 'rgba(20,16,10,0.18)' },
+  scrim: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: colors.scrim },
   glass: {
     width: '100%', maxWidth: 520, maxHeight: '100%', borderRadius: 24, overflow: 'hidden',
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255,250,242,0.55)' : 'rgba(255,250,242,0.94)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)',
-    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 30, shadowOffset: { width: 0, height: 12 },
+    backgroundColor: Platform.OS === 'web' ? colors.glassBg : colors.glassBgSolid,
+    borderWidth: 1, borderColor: colors.glassBorder,
+    shadowColor: colors.shadow, shadowOpacity: 0.18, shadowRadius: 30, shadowOffset: { width: 0, height: 12 },
   },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 2.4, color: colors.greenDim },
@@ -117,9 +121,9 @@ const styles = StyleSheet.create({
   tileLabelSmall: { fontSize: 12.5 },
   tile: {
     flexGrow: 1, flexBasis: 130, alignItems: 'center', gap: 6, paddingVertical: 18, paddingHorizontal: 10, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: colors.glassTile, borderWidth: 1, borderColor: colors.glassBorder,
   },
-  tileOn: { backgroundColor: 'rgba(255,255,255,0.75)' },
+  tileOn: { backgroundColor: colors.glassTileOn },
   tileLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.green },
   tileBlurb: { fontSize: 10.5, color: colors.greenDim, textAlign: 'center' },
   chats: { gap: 4 },

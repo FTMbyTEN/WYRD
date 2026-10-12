@@ -30,6 +30,20 @@
     <meta name="apple-mobile-web-app-title" content="WYRD" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=face2" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=face2" />
+    <!-- Light or dark from the very first frame (the app's own theme.ts decides the same way):
+         no white flash before the app is drawn at night -->
+    <script>
+      (function () {
+        var m = null;
+        try { m = localStorage.getItem('wyrd.theme'); } catch (e) {}
+        var dark = m === 'dark' || (m !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+        var bg = dark ? '#14110E' : '#F7EFE2';
+        document.documentElement.style.background = bg;
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        var t = document.querySelector('meta[name="theme-color"]');
+        if (t) t.setAttribute('content', bg);
+      })();
+    </script>
     <!-- Speed: start the ~3 MB graphics engine (CanvasKit) downloading with the page, alongside the
          app's scripts -- not after them, which kept the first screen waiting about a second longer.
          Not for the game link (#play), which doesn't use it. -->
@@ -45,7 +59,7 @@
       body {
         height: 100%;
         margin: 0;
-        background: #ffffff;
+        background: transparent; /* the html background is set by the script above */
         overscroll-behavior: none;
       }
       body {

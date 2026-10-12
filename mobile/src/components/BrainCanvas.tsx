@@ -3,6 +3,7 @@ import { View, type LayoutChangeEvent } from 'react-native';
 import { PointMode, Skia, type SkCanvas } from '@shopify/react-native-skia';
 import { useSkiaLoop } from '../vortex/skiaLoop';
 import { SkiaLoopView } from '../vortex/SkiaLoopView';
+import { isDark } from '../theme';
 
 interface BrainPoint { x: number; y: number; z: number; s: number; ph: number; region: 'left' | 'right' | 'cerebellum' }
 interface Edge { a: number; b: number; speed: number; phase: number }
@@ -68,15 +69,18 @@ function buildBrain(nodeCount: number): BrainPoint[] {
 
 // Shades of ink, quantized: each made once and reused every frame.
 const SHADES = 32;
+// at night the indigo and terracotta are the lit versions (the dark palette), or the brain fades into it
+const INK_RGB = isDark ? '154,168,242' : '36,49,107';
+const SIGNAL_RGB = isDark ? '229,116,63' : '196,87,46';
 // Warm Lagos: the brain is Adire indigo; the packets travelling the mesh (WYRD thinking) are terracotta,
 // and a burst of learning flares ochre
 const signals: ReturnType<typeof Skia.Color>[] = [];
 function signalInk(bucket: number) {
-  return (signals[bucket] ??= Skia.Color(`rgba(196,87,46,${((bucket + 0.5) / SHADES).toFixed(3)})`));
+  return (signals[bucket] ??= Skia.Color(`rgba(${SIGNAL_RGB},${((bucket + 0.5) / SHADES).toFixed(3)})`));
 }
 const inks: ReturnType<typeof Skia.Color>[] = [];
 function ink(bucket: number) {
-  return (inks[bucket] ??= Skia.Color(`rgba(36,49,107,${((bucket + 0.5) / SHADES).toFixed(3)})`));
+  return (inks[bucket] ??= Skia.Color(`rgba(${INK_RGB},${((bucket + 0.5) / SHADES).toFixed(3)})`));
 }
 const shade = (alpha: number) => Math.max(0, Math.min(SHADES - 1, Math.floor(alpha * SHADES)));
 function shadeBuckets<T>(): T[][] {

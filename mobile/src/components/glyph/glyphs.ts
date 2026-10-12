@@ -17,6 +17,9 @@ export const GLYPHS = {
   voiceOff: { code: 'VOX-00', d: ['M4 9.5h3l5-4v13l-5-4H4z', 'M16 9.5l5 5', 'M21 9.5l-5 5'] },
   cop: { code: 'COP-11', d: ['M12 3l7 3v5.5c0 4.6-3 8-7 9.5-4-1.5-7-4.9-7-9.5V6z', 'M9 12l2.2 2.2L15.5 10'] },
   // a bell: a rounded dome with a flared rim, its knob and clapper, and a ring either side
+  // the theme toggle: the sun (light) and the moon (dark)
+  sun: { code: 'SUN-30', d: ['M12 2.5v2.2', 'M12 19.3v2.2', 'M2.5 12h2.2', 'M19.3 12h2.2', 'M5.3 5.3l1.6 1.6', 'M17.1 17.1l1.6 1.6', 'M18.7 5.3l-1.6 1.6', 'M6.9 17.1l-1.6 1.6'], o: [[12, 12, 4.2]] },
+  moon: { code: 'MON-31', d: ['M15.2 3.8a8.2 8.2 0 1 0 5 13.9A9.2 9.2 0 0 1 15.2 3.8z'] },
   alerts: { code: 'ALR-12', d: ['M7 16.2v-4.7a5 5 0 0 1 10 0v4.7l1.8 2H5.2z', 'M12 4.8V6.5', 'M3.6 10.2a8.6 8.6 0 0 1 2.2-4.3', 'M20.4 10.2a8.6 8.6 0 0 0-2.2-4.3'], o: [[12, 20.4, 1.3]] },
   globe: { code: 'WLD-13', d: ['M3.5 12h17', 'M12 3.5c2.6 2.6 3.6 5.4 3.6 8.5s-1 5.9-3.6 8.5c-2.6-2.6-3.6-5.4-3.6-8.5s1-5.9 3.6-8.5z'], o: [[12, 12, 8.5]] },
   feed: { code: 'NET-14', d: ['M5 5a14 14 0 0 1 14 14', 'M5 10.5a8.5 8.5 0 0 1 8.5 8.5'], o: [[6, 18, 1.6]] },

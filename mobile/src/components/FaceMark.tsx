@@ -7,6 +7,7 @@ import { disposeSoon, withArena } from '../vortex/arena';
 import { faceProject } from '../face/faceProject';
 import { FACE_FACES } from '../face/faceMeshData';
 import { draw2d } from '../vortex/canvas2d';
+import { isDark } from '../theme';
 
 // Web: a still mark is drawn once per mode and size into a plain image and shared by every copy.
 // (A Skia canvas each meant one GPU surface per chat reply -- hundreds in a long conversation.)
@@ -77,7 +78,7 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
   } else {
     const s = Math.max(1, W > 300 ? 1.7 : 1);
     const paint = Skia.Paint();
-    paint.setColor(Skia.Color('rgba(42,31,23,0.33)'));
+    paint.setColor(Skia.Color(isDark ? 'rgba(241,230,214,0.42)' : 'rgba(42,31,23,0.33)')); // ink, faint (light at night)
     paint.setStrokeWidth(s);
     paint.setStrokeCap(0); // butt — original drew flat squares, round would soften the look
     canvas.drawPoints(PointMode.Points, P.map((p) => ({ x: p.x, y: p.y })), paint);

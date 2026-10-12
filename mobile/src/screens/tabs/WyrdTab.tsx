@@ -6,7 +6,7 @@ import { BrainCanvas } from '../../components/BrainCanvas';
 import { LearningStream } from '../../components/LearningStream';
 import { DialogueLauncher } from '../../components/DialogueLauncher';
 import { Display, Mono } from '../../components/ui';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, isDark } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import {
   useBrainActivitySignal,
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   // no box: the brain shows through and fires behind the words; a soft white halo keeps them readable
   hero: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 22 },
-  halo: { textShadowColor: 'rgba(255,250,242,0.95)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
+  halo: { textShadowColor: colors.bg, textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
   eyebrow: { fontSize: 9, letterSpacing: 3, color: colors.greenDim },
   moodValue: { fontSize: 54, lineHeight: 56, color: colors.green, marginTop: 2 },
   moodCompact: { fontSize: 38, lineHeight: 40 },
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black, borderTopWidth: HAIRLINE, borderTopColor: colors.greenBorder,
   },
   // phones: translucent cream over the brain, so it fires behind the last thought
-  panelOver: { backgroundColor: 'rgba(247,239,226,0.78)' },
+  panelOver: { backgroundColor: colors.barBg },
   // desktop: the panel becomes a right-hand column
   panelDesktop: {
     width: 360, borderTopWidth: 0, borderLeftWidth: HAIRLINE, borderLeftColor: colors.greenBorder,
@@ -462,8 +462,8 @@ const styles = StyleSheet.create({
   greetLang: { fontSize: 10.5, letterSpacing: 1.2, color: colors.signal, fontFamily: fonts.bodyBold, marginTop: 2 },
   greetSub: { fontSize: 14, lineHeight: 20, color: colors.greenDim },
   thoughtCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 22, padding: 18, gap: 10 },
-  city: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#F7E1B0', borderRadius: 22, paddingHorizontal: 18, paddingVertical: 16 },
-  cityHover: { backgroundColor: '#F4D99A' },
+  city: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: isDark ? 'rgba(237,181,74,0.14)' : '#F7E1B0', borderRadius: 22, paddingHorizontal: 18, paddingVertical: 16 },
+  cityHover: { backgroundColor: isDark ? 'rgba(237,181,74,0.22)' : '#F4D99A' },
   cityBadge: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.signal },
   cityTitle: { fontSize: 18, color: colors.mint, fontFamily: fonts.displayBold },
   citySub: { fontSize: 12.5, color: colors.greenDim, marginTop: 2 },

@@ -3,15 +3,21 @@ import { ActivityIndicator, Platform, StatusBar, StyleSheet, View } from 'react-
 import { useFonts, VT323_400Regular } from '@expo-google-fonts/vt323';
 import { ShareTechMono_400Regular } from '@expo-google-fonts/share-tech-mono';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { colors } from './src/theme';
+import { colors, isDark } from './src/theme';
 
 // Web: fill exactly the visible viewport on every device -- 100dvh tracks mobile browsers'
 // collapsing address bar (plain 100vh overshoots it) -- and never scroll the page itself.
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent =
-    'html,body{margin:0;height:100%;overflow:hidden;background:#fff;overscroll-behavior:none}' +
-    '#root{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw}';
+    `html,body{margin:0;height:100%;overflow:hidden;background:${colors.bg};overscroll-behavior:none;color-scheme:${isDark ? 'dark' : 'light'}}` +
+    '#root{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw}' +
+    // modern scrollbars everywhere: thin, rounded, in the theme's colours, brighter on hover
+    `*{scrollbar-width:thin;scrollbar-color:${colors.greenBorder} transparent}` +
+    '*::-webkit-scrollbar{width:9px;height:9px}*::-webkit-scrollbar-track{background:transparent}' +
+    `*::-webkit-scrollbar-thumb{background:${colors.greenBorder};border-radius:999px;border:2px solid transparent;background-clip:content-box}` +
+    `*::-webkit-scrollbar-thumb:hover{background:${colors.greenDim};border:2px solid transparent;background-clip:content-box}` +
+    '*::-webkit-scrollbar-corner{background:transparent}';
   document.head.appendChild(style);
   let viewport = document.querySelector('meta[name="viewport"]');
   if (!viewport) {
@@ -66,8 +72,8 @@ export default function App() {
   if (!fontsLoaded) return <Loading />;
 
   return (
-    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#F7EFE2' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: colors.bg }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
       <Suspense fallback={<Loading />}>
         {gameOnly ? <GameOnly /> : <AppRoot />}
       </Suspense>
@@ -76,5 +82,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7EFE2' },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
 });

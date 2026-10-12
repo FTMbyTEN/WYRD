@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextI
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { notify } from '../../util/dialog';
 import { Display, Mono } from '../../components/ui';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, isDark, setThemeMode, themeMode } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import { FaceMark } from '../../components/FaceMark';
 import { Avatar } from '../../components/Avatar';
@@ -240,6 +240,9 @@ export function YouTab({ tts, onToggleTts, onOpenCop, view = 'all' }: Props) {
         <Setting icon={<SpeakerIcon />} title="Spoken replies" detail="WYRD reads its chat replies aloud">
           <Switch value={tts} onValueChange={onToggleTts} trackColor={{ false: colors.greenBorderDim, true: colors.signal }} thumbColor="#FFFAF2" />
         </Setting>
+        <Setting icon={<Mono style={styles.themeIcon}>{isDark ? '☾' : '☀'}</Mono>} title="Appearance" detail="Light, dark, or the same as your device">
+          <ThemePicker />
+        </Setting>
         {owner ? <Setting icon={<ShieldIcon />} title="COP oversight" detail="Every change WYRD made to itself, independently reviewed" onPress={onOpenCop} /> : null}
       </Section>
 
@@ -293,7 +296,7 @@ export function YouTab({ tts, onToggleTts, onOpenCop, view = 'all' }: Props) {
                   <Avatar uri={profile?.avatar} name={name} size={96} ring={dropping ? colors.ochre : colors.signal} />
                   {hovered || pressed || dropping ? (
                     <View style={styles.picOverlay}>
-                      <Glyph name="camera" size={22} color="#FFFAF2" />
+                      <Glyph name="camera" size={22} color={colors.onSignal} />
                       <Mono style={styles.picOverlayText}>{dropping ? 'Drop it' : profile?.avatar ? 'Change' : 'Add photo'}</Mono>
                     </View>
                   ) : (
@@ -396,7 +399,7 @@ function Activity({ stamps }: { stamps: string[] }) {
   start.setDate(start.getDate() - start.getDay());
   const hourMax = Math.max(1, ...byHour);
   // a terracotta scale: pale sand for quiet days, deep terracotta for the busiest
-  const shade = (n: number) => (n === 0 ? '#F0E4D0' : n / max > 0.66 ? colors.signal : n / max > 0.33 ? '#DC8A66' : '#EDC3AC');
+  const shade = (n: number) => (n === 0 ? colors.greenBorderDim : n / max > 0.66 ? colors.signal : n / max > 0.33 ? '#DC8A66' : '#EDC3AC');
 
   return (
     <View style={{ gap: 14 }}>
@@ -416,7 +419,7 @@ function Activity({ stamps }: { stamps: string[] }) {
           {byHour.map((n, h) => (
             <Rect key={h} x={h * 10 + 1} y={46 - (n / hourMax) * 44} width={8} height={Math.max(1, (n / hourMax) * 44)} fill={h === peak ? colors.signal : '#E6CDB0'} />
           ))}
-          <Rect x={0} y={47} width={240} height={1} fill="#d0d0d0" />
+          <Rect x={0} y={47} width={240} height={1} fill={colors.greenBorder} />
         </Svg>
         <View style={styles.hourAxis}>
           {['00', '06', '12', '18', '24'].map((l) => <Mono key={l} style={styles.axis}>{l}</Mono>)}
@@ -458,6 +461,27 @@ function Facts({ facts }: { facts: string[] }) {
   );
 }
 
+/** Auto (the device's setting), Light or Dark: the change arrives in dust (see theme.setThemeMode). */
+function ThemePicker() {
+  const current = themeMode();
+  return (
+    <View style={styles.themePicker}>
+      {([['auto', 'AUTO'], ['light', 'LIGHT'], ['dark', 'DARK']] as const).map(([m, label]) => (
+        <Pressable
+          key={m}
+          onPress={() => { if (m !== current) setThemeMode(m); }}
+          style={[styles.themeOpt, m === current && styles.themeOptOn]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: m === current }}
+          accessibilityLabel={`Appearance: ${label.toLowerCase()}`}
+        >
+          <Mono style={[styles.themeOptText, m === current && { color: colors.black }]}>{label}</Mono>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 function Setting({ icon, title, detail, onPress, danger, children }: {
   icon: React.ReactNode; title: string; detail: string; onPress?: () => void; danger?: boolean; children?: React.ReactNode;
 }) {
@@ -482,7 +506,7 @@ function Rings() {
   return (
     <Svg width={128} height={128} style={StyleSheet.absoluteFill}>
       <Circle cx={64} cy={64} r={62} stroke={colors.mint} strokeWidth={1} fill="none" />
-      <Circle cx={64} cy={64} r={56} stroke="#cfcfcf" strokeWidth={1} fill="none" strokeDasharray="2 4" />
+      <Circle cx={64} cy={64} r={56} stroke={colors.greenBorder} strokeWidth={1} fill="none" strokeDasharray="2 4" />
       {[...Array(24)].map((_, i) => {
         const a = (i / 24) * Math.PI * 2;
         return <Path key={i} d={`M${64 + Math.cos(a) * 62} ${64 + Math.sin(a) * 62} L${64 + Math.cos(a) * (i % 6 === 0 ? 54 : 58)} ${64 + Math.sin(a) * (i % 6 === 0 ? 54 : 58)}`} stroke={colors.mint} strokeWidth={1} />;
@@ -516,12 +540,12 @@ const styles = StyleSheet.create({
   avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: colors.ochre, borderWidth: 4, borderColor: colors.signal, alignItems: 'center', justifyContent: 'center' },
   camBadge: { position: 'absolute', right: 0, bottom: 0, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.cream },
   picOverlay: { position: 'absolute', inset: 0, borderRadius: 48, backgroundColor: 'rgba(42,31,23,0.55)', alignItems: 'center', justifyContent: 'center', gap: 2 } as object,
-  picOverlayText: { fontSize: 11, color: '#FFFAF2', fontFamily: fonts.bodyBold },
+  picOverlayText: { fontSize: 11, color: colors.onSignal, fontFamily: fonts.bodyBold },
   removePic: { fontSize: 11, color: colors.greenDim, textAlign: 'center', marginTop: 4, textDecorationLine: 'underline' },
   editHint: { fontSize: 12, color: colors.greenDim, textDecorationLine: 'underline' },
   nameInput: { borderBottomWidth: 2, borderBottomColor: colors.signal, paddingVertical: 0 },
   avatarInitial: { fontSize: 44, lineHeight: 50, color: colors.indigo, fontFamily: fonts.displayBold },
-  mark: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFAF2' },
+  mark: { width: 96, height: 96, borderRadius: 48, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.panelBg },
   name: { fontSize: 38, lineHeight: 42, color: colors.mint },
   email: { fontSize: 11, color: colors.greenDim },
   since: { fontSize: 15, lineHeight: 22, color: colors.greenDim, fontFamily: fonts.displayItalic, marginTop: 4 },
@@ -546,9 +570,9 @@ const styles = StyleSheet.create({
 
   cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   factCard: {
-    flexGrow: 1, flexBasis: 150, maxWidth: 260, backgroundColor: '#FFFAF2', borderWidth: 1, borderColor: colors.greenBorderDim,
+    flexGrow: 1, flexBasis: 150, maxWidth: 260, backgroundColor: colors.panelBg, borderWidth: 1, borderColor: colors.greenBorderDim,
     borderTopWidth: 3, borderTopColor: colors.mint, padding: 10, gap: 4,
-    shadowColor: '#2A1F17', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+    shadowColor: colors.shadow, shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
   },
   factCardTilt: { transform: [{ rotate: '-1deg' }] },
   factLabel: { fontSize: 8.5, letterSpacing: 1.6, color: colors.greenDim },
@@ -565,6 +589,11 @@ const styles = StyleSheet.create({
   settingIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center' },
   settingTitle: { fontSize: 14, color: colors.mint, fontFamily: fonts.bodyMedium },
   settingDetail: { marginTop: 2, fontSize: 10.5, lineHeight: 15, color: colors.greenDim },
+  themeIcon: { fontSize: 16, color: colors.signal },
+  themePicker: { flexDirection: 'row', borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, padding: 2, gap: 2 },
+  themeOpt: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
+  themeOptOn: { backgroundColor: colors.green },
+  themeOptText: { fontSize: 9.5, letterSpacing: 1, color: colors.greenDim },
   chevron: { fontSize: 20, color: colors.greenDim },
   pressed: { opacity: 0.6 },
 
@@ -572,7 +601,7 @@ const styles = StyleSheet.create({
   confirmText: { fontSize: 11.5, lineHeight: 17, color: colors.danger },
   confirmRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   deleteBtn: { backgroundColor: colors.danger, paddingHorizontal: 14, paddingVertical: 11 },
-  deleteText: { color: '#FFFAF2', fontSize: 10.5, letterSpacing: 1.6 },
+  deleteText: { color: colors.onSignal, fontSize: 10.5, letterSpacing: 1.6 },
   keepBtn: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 14, paddingVertical: 10 },
   keepText: { color: colors.mint, fontSize: 10.5, letterSpacing: 1.6 },
   logout: { borderWidth: 1.5, borderColor: colors.signal, borderRadius: 999, paddingVertical: 13, alignItems: 'center' },

@@ -96,13 +96,13 @@ export function SidePanel({ open, side, width, onResize, minWidth = 340, maxWidt
 const styles = StyleSheet.create({
   panel: {
     position: 'absolute', top: 10, bottom: 10, zIndex: 20,
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255,250,242,0.44)' : 'rgba(255,250,242,0.95)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.75)', borderRadius: 22,
-    shadowColor: '#2A1F17', shadowOpacity: 0.16, shadowRadius: 28, shadowOffset: { width: 0, height: 10 },
+    backgroundColor: Platform.OS === 'web' ? colors.glassBg : colors.glassBgSolid,
+    borderWidth: 1, borderColor: colors.glassBorder, borderRadius: 22,
+    shadowColor: colors.shadow, shadowOpacity: 0.16, shadowRadius: 28, shadowOffset: { width: 0, height: 10 },
   },
   right: { right: 10 },
   left: { left: 10 },
   handle: { position: 'absolute', top: 0, bottom: 0, width: 12, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  grip: { width: 4, height: 44, borderRadius: 2, backgroundColor: 'rgba(42,31,23,0.18)' },
+  grip: { width: 4, height: 44, borderRadius: 2, backgroundColor: colors.glassLine },
   gripOn: { backgroundColor: colors.signal, height: 64 },
 });

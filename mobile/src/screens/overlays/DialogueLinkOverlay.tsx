@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
   },
   errorText: { flexShrink: 1, fontSize: 11, color: colors.danger },
   composer: {
-    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, backgroundColor: '#FFFAF2',
+    borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, backgroundColor: colors.panelBg,
     paddingHorizontal: 8, paddingTop: 6, paddingBottom: 6, boxShadow: '0 6px 24px rgba(42,31,23,0.07)',
   } as object,
   composerFocused: { borderColor: colors.signal },
@@ -915,7 +915,7 @@ const styles = StyleSheet.create({
   } as object,
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   tool: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  toolHover: { backgroundColor: 'rgba(42,31,23,0.05)' },
+  toolHover: { backgroundColor: colors.glassTile },
   toolOn: { backgroundColor: colors.signal },
   hint: { flex: 1, textAlign: 'right', fontSize: 9, color: colors.greenBorderDim, marginRight: 8 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.signal, alignItems: 'center', justifyContent: 'center' },
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
 
   staged: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 2, marginTop: 2, marginBottom: 2,
-    borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 12, padding: 8, backgroundColor: '#FAF3E8',
+    borderWidth: 1, borderColor: colors.greenBorderDim, borderRadius: 12, padding: 8, backgroundColor: colors.bg,
   },
   stagedName: { fontSize: 12.5, color: colors.mint },
   stagedMeta: { marginTop: 2, fontSize: 10, color: colors.greenDim },
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
   stagedReady: { color: colors.signal },
   spinner: {
     position: 'absolute', right: -5, bottom: -3, width: 14, height: 14, borderRadius: 7,
-    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.signal, backgroundColor: '#FAF3E8',
+    borderWidth: 2, borderColor: colors.greenBorderDim, borderTopColor: colors.signal, backgroundColor: colors.bg,
   },
   bar: { marginTop: 6, height: 3, borderRadius: 2, backgroundColor: colors.greenBorderDim, overflow: 'hidden' },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2, backgroundColor: colors.signal },

@@ -165,5 +165,5 @@ const s = StyleSheet.create({
   key: { fontFamily: fonts.code, fontSize: 15, color: colors.mint, backgroundColor: colors.signalSoft, padding: 10, borderRadius: 8 },
   keyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.greenBorderDim },
   btn: { backgroundColor: colors.green, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, alignSelf: 'flex-start' },
-  btnText: { fontFamily: fonts.mono, fontSize: 14, color: colors.onSignal },
+  btnText: { fontFamily: fonts.mono, fontSize: 14, color: colors.black },
 });

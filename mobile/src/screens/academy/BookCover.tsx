@@ -164,5 +164,5 @@ const styles = StyleSheet.create({
   title: { color: colors.mint, letterSpacing: 0.4, lineHeight: undefined },
   author: { color: colors.greenDim, letterSpacing: 0.6 },
   badge: { position: 'absolute', top: 6, left: 10, backgroundColor: colors.mint, paddingHorizontal: 5, paddingVertical: 2 },
-  badgeText: { color: '#FFFAF2', fontSize: 8, letterSpacing: 1.2 },
+  badgeText: { color: colors.black, fontSize: 8, letterSpacing: 1.2 },
 });
