@@ -57,8 +57,9 @@ export function useTasks() {
 
 /** TASKS, the list: give WYRD a goal, and see each task's state at a glance. On desktop it's the
  *  home page's left column; on phones it's inside the TASKS panel. */
-export function TasksBoard({ tasks, onOpen, onCreated, error: loadError }: {
+export function TasksBoard({ tasks, onOpen, onCreated, error: loadError, onClose }: {
   tasks: AgentTask[] | null;
+  onClose?: () => void; // the home page's column has its own close
   onOpen: (id: number) => void;
   onCreated: (t: AgentTask) => void;
   error?: string | null;
@@ -90,7 +91,10 @@ export function TasksBoard({ tasks, onOpen, onCreated, error: loadError }: {
     <View style={styles.board}>
       <View style={styles.boardHead}>
         <Display style={styles.boardTitle}>TASKS</Display>
-        {working ? <View style={[styles.pill, styles.pillLive]}><Mono style={[styles.pillText, { color: colors.onSignal }]}>{working} WORKING</Mono></View> : null}
+        <View style={styles.row}>
+          {working ? <View style={[styles.pill, styles.pillLive]}><Mono style={[styles.pillText, { color: colors.onSignal }]}>{working} WORKING</Mono></View> : null}
+          {onClose ? <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close tasks"><Mono style={styles.close}>✕</Mono></Pressable> : null}
+        </View>
       </View>
 
       <View style={styles.composer}>
@@ -362,6 +366,7 @@ const styles = StyleSheet.create({
   board: { gap: 12 },
   boardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   boardTitle: { fontSize: 28, lineHeight: 30, color: colors.mint },
+  close: { fontSize: 14, color: colors.greenDim, paddingHorizontal: 4 },
   label: { fontSize: 10, letterSpacing: 2.4, color: colors.greenDim },
   muted: { fontSize: 12, lineHeight: 18, color: colors.greenDim, flexShrink: 1 },
   composer: { borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 12, gap: 10, backgroundColor: colors.bg },

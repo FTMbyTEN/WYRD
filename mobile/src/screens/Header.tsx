@@ -15,13 +15,12 @@ interface Props {
   onOpenCop: () => void;
   taskCount: number;
   onOpenTasks: () => void;
-  showTasks?: boolean; // off on the desktop home page, where the tasks are the left column
 }
 
 /** The bar across the top of every screen: WYRD's mark and name, whether its mind is live and
  *  what it's doing, how it feels, its vitals at a glance, and the switches (tasks,
  *  oversight, alerts; spoken replies are in Settings). */
-export function Header({ mind, alertCount, onOpenAlerts, onOpenCop, taskCount, onOpenTasks, showTasks = true }: Props) {
+export function Header({ mind, alertCount, onOpenAlerts, onOpenCop, taskCount, onOpenTasks }: Props) {
   const owner = useDroneAccess(); // COP oversight is the owner's alone
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -66,18 +65,17 @@ export function Header({ mind, alertCount, onOpenAlerts, onOpenCop, taskCount, o
 
         {/* switches */}
         <View style={styles.right}>
-          {showTasks ? (
           <Switch label="TASKS" onPress={onOpenTasks} hint="WYRD's tasks" badge={taskCount} compact={narrow}>
             <Glyph name="spark" size={17} active={taskCount > 0} />
           </Switch>
-          ) : null}
           {owner ? (
             <Switch label="COP" onPress={onOpenCop} hint="COP oversight" compact={narrow}>
               <Glyph name="cop" size={17} />
             </Switch>
           ) : null}
-          <Switch label="ALERTS" onPress={onOpenAlerts} hint="Alerts" badge={alertCount} compact={narrow}>
-            <Glyph name="alerts" size={17} active={alertCount > 0} />
+          {/* just the bell: the badge says how many are waiting */}
+          <Switch label="ALERTS" onPress={onOpenAlerts} hint={alertCount ? `Alerts: ${alertCount} new` : 'Alerts'} badge={alertCount} compact round>
+            <Glyph name="alerts" size={19} active={alertCount > 0} />
           </Switch>
         </View>
       </View>
@@ -85,8 +83,8 @@ export function Header({ mind, alertCount, onOpenAlerts, onOpenCop, taskCount, o
   );
 }
 
-function Switch({ label, on, onPress, hint, badge, compact, children }: {
-  label: string; on?: boolean; onPress: () => void; hint: string; badge?: number; compact?: boolean; children: React.ReactNode;
+function Switch({ label, on, onPress, hint, badge, compact, round, children }: {
+  label: string; on?: boolean; onPress: () => void; hint: string; badge?: number; compact?: boolean; round?: boolean; children: React.ReactNode;
 }) {
   return (
     <Pressable
@@ -96,6 +94,7 @@ function Switch({ label, on, onPress, hint, badge, compact, children }: {
       accessibilityState={on != null ? { checked: on } : undefined}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         styles.switch,
+        round && styles.round,
         on && styles.switchOn,
         hovered && !on && styles.switchHover,
         pressed && { opacity: 0.7 },
@@ -145,6 +144,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, paddingHorizontal: 10,
     borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 999, backgroundColor: colors.card, position: 'relative',
   },
+  round: { width: 34, paddingHorizontal: 0, justifyContent: 'center' },
   switchOn: { backgroundColor: colors.signal, borderColor: colors.signal },
   switchHover: { borderColor: colors.mint },
   switchText: { fontSize: 12, letterSpacing: 0.3, color: colors.mint, fontFamily: fonts.bodyMedium },

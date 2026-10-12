@@ -73,7 +73,13 @@ function Greeting() {
   );
 }
 
-export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask }: { onOpenBrain: () => void; onOpenLink: () => void; onOpenTask?: (id: number) => void }) {
+export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onCloseTasks }: {
+  onOpenBrain: () => void;
+  onOpenLink: () => void;
+  onOpenTask?: (id: number) => void;
+  showTasks?: boolean; // desktop: the tasks column, open only once TASKS is pressed
+  onCloseTasks?: () => void;
+}) {
   const { mind } = useMind();
   const { items: feed } = useFeed();
   const feedNext = useFeedNext();
@@ -155,7 +161,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask }: { onOpenBrain: 
   return (
     <View style={[{ flex: 1 }, desktop && styles.desktopRow]}>
       {/* desktop: your tasks, down the left of the home page */}
-      {desktop && onOpenTask ? <TasksColumn onOpenTask={onOpenTask} /> : null}
+      {desktop && showTasks && onOpenTask ? <TasksColumn onOpenTask={onOpenTask} onClose={onCloseTasks} /> : null}
       <View style={styles.heroWrap}>
         {/* The brain itself is the open/close target. The chips, cards and ENTER 3D below are
             siblings layered on top, not children -- nested pressables let this outer target
@@ -349,12 +355,12 @@ function Enter3DButton({ onPress }: { onPress: () => void }) {
 // secondary, greenBorder = hairline), no glows or shadows -- contrast and spacing do the work.
 const HAIRLINE = StyleSheet.hairlineWidth;
 
-/** The home page's left column on desktop: your tasks, always in view; one opens in full in the TASKS panel. */
-function TasksColumn({ onOpenTask }: { onOpenTask: (id: number) => void }) {
+/** The home page's left column on desktop, opened with TASKS: your tasks; one opens in full in the TASKS panel. */
+function TasksColumn({ onOpenTask, onClose }: { onOpenTask: (id: number) => void; onClose?: () => void }) {
   const { tasks, error, added } = useTasks();
   return (
     <ScrollView style={styles.tasksCol} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-      <TasksBoard tasks={tasks} error={error} onOpen={onOpenTask} onCreated={added} />
+      <TasksBoard tasks={tasks} error={error} onOpen={onOpenTask} onCreated={added} onClose={onClose} />
     </ScrollView>
   );
 }

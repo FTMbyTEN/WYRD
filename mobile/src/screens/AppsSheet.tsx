@@ -6,6 +6,7 @@ import type { GlyphName } from '../components/glyph/glyphs';
 import { useChats } from '../api/hooks';
 import { colors, fonts } from '../theme';
 import type { TabKey } from './TabBar';
+import { frosted } from '../components/glass';
 
 export const APPS: { key: TabKey; label: string; glyph: GlyphName; blurb: string; owner?: boolean }[] = [
   { key: 'drone', label: 'Drone', glyph: 'drone', blurb: 'Fly, watch, plan', owner: true },
@@ -13,10 +14,7 @@ export const APPS: { key: TabKey; label: string; glyph: GlyphName; blurb: string
   { key: 'games', label: 'Games', glyph: 'games', blurb: 'Chess, NAIJA 2099', },
 ];
 
-// frosted glass on the web (the app's home); a plain translucent pane elsewhere
-const frosted = Platform.OS === 'web'
-  ? ({ backdropFilter: 'blur(22px) saturate(160%)', WebkitBackdropFilter: 'blur(22px) saturate(160%)' } as object)
-  : {};
+// the glass look is shared with COP and ALERTS (components/glass)
 
 /** APPS: Drone, Journal and Games in one glass pop-up (and, on phones, your chats too -- on desktop
  *  they're in the side bar). */

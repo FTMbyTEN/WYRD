@@ -56,7 +56,7 @@ export function AlertsOverlay({ visible, onClose }: { visible: boolean; onClose:
   }, [alerts, filter]);
 
   return (
-    <OverlayShell visible={visible} title="ALERTS" onClose={onClose}>
+    <OverlayShell visible={visible} title="ALERTS" onClose={onClose} glassWidth={560}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.inner}>
           {/* summary */}

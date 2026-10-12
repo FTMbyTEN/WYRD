@@ -75,6 +75,8 @@ export function AppShell() {
   const [appPreviewHtml, setAppPreviewHtml] = useState<string | null>(null);
   // a task picked in the home page's left column: the TASKS panel opens straight on it
   const [taskFocus, setTaskFocus] = useState<number | null>(null);
+  // the home page's tasks column (desktop): closed until TASKS is pressed
+  const [tasksColumn, setTasksColumn] = useState(false);
 
   const { mind } = useMind();
   const desktop = useIsDesktop();
@@ -154,14 +156,14 @@ export function AppShell() {
           onOpenAlerts={openAlerts}
           onOpenCop={() => open('cop')}
           taskCount={taskBadge}
-          onOpenTasks={() => { setTaskFocus(null); open('tasks'); }}
-          showTasks={!(desktop && tab === 'wyrd')}
+          // desktop home: TASKS opens and closes the left column; elsewhere it opens the TASKS panel
+          onOpenTasks={() => { if (desktop && tab === 'wyrd') setTasksColumn((v) => !v); else { setTaskFocus(null); open('tasks'); } }}
         />
 
         <View style={{ flex: 1, minHeight: 0 }}>
           <Suspense fallback={<Loading />}>
             {tab === 'wyrd' && (
-              <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} onOpenTask={(id) => { setTaskFocus(id); open('tasks'); }} />
+              <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} onOpenTask={(id) => { setTaskFocus(id); open('tasks'); }} showTasks={tasksColumn} onCloseTasks={() => setTasksColumn(false)} />
             )}
             {tab === 'journal' && droneAccess && (
               <JournalTab

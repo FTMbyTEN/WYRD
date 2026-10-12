@@ -52,7 +52,7 @@ function parse(v: unknown): unknown {
  *  button, or YOU > COP oversight). */
 export function CopOverlay({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
-    <OverlayShell visible={visible} title="COP" onClose={onClose} black>
+    <OverlayShell visible={visible} title="COP" onClose={onClose} glassWidth={1180}>
       <CopPanel />
     </OverlayShell>
   );
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   statusTitle: { fontSize: 12, letterSpacing: 2.5, color: colors.ink },
   statusSub: { fontSize: 11, lineHeight: 16, color: colors.greenDim, marginTop: 2 },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  stat: { flexGrow: 1, flexBasis: 110, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 12, padding: 12, backgroundColor: colors.panelBg },
+  stat: { flexGrow: 1, flexBasis: 110, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 12, padding: 12, backgroundColor: 'rgba(255,255,255,0.5)' },
   statV: { fontSize: 22, color: colors.mint },
   statK: { fontSize: 9.5, color: colors.greenDim, marginTop: 2 },
   flow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: 6 },
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   flowD: { fontSize: 10.5, lineHeight: 15, color: colors.greenDim },
   section: { fontSize: 10, letterSpacing: 2, color: colors.greenDim, marginTop: 6 },
   dials: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  dial: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 14, gap: 6, backgroundColor: colors.panelBg },
+  dial: { flexGrow: 1, flexBasis: 220, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 14, gap: 6, backgroundColor: 'rgba(255,255,255,0.5)' },
   dialName: { fontSize: 10, letterSpacing: 2, color: colors.greenDim },
   dialValue: { fontSize: 20, color: colors.mint },
   levels: { flexDirection: 'row', gap: 6 },
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   rail: { width: 14, alignItems: 'center' },
   node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, marginTop: 14, backgroundColor: colors.black },
   railLine: { flex: 1, width: 2, backgroundColor: colors.greenBorderDim, marginVertical: 2 },
-  card: { flex: 1, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 14, gap: 8, marginBottom: 10, backgroundColor: colors.panelBg },
+  card: { flex: 1, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 14, padding: 14, gap: 8, marginBottom: 10, backgroundColor: 'rgba(255,255,255,0.5)' },
   cardConcern: { borderStyle: 'dashed', borderColor: colors.green },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   cardMeta: { fontSize: 9.5, letterSpacing: 1.5, color: colors.greenDim },
