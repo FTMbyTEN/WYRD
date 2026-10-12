@@ -192,7 +192,7 @@ export function AppShell() {
           <Enter key={tab} k={tab}>
           <Suspense fallback={<Loading />}>
             {tab === 'wyrd' && (
-              <WyrdTab onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} onOpenTask={(id) => { setTaskFocus(id); open('tasks'); }} showTasks={tasksColumn} onCloseTasks={() => setTasksColumn(false)} />
+              <WyrdTab onPlayChess={() => setTab('games')} onOpenBrain={() => open('brain')} onOpenLink={() => open('link')} onOpenTask={(id) => { setTaskFocus(id); open('tasks'); }} showTasks={tasksColumn} onCloseTasks={() => setTasksColumn(false)} />
             )}
             {tab === 'journal' && droneAccess && (
               <JournalTab

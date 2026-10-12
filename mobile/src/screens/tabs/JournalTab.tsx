@@ -137,8 +137,8 @@ function Diary({ entries, wide }: { entries: DiaryEntry[]; wide: boolean }) {
             const on = k === i;
             return (
               <Pressable key={e.timestamp} onPress={() => setI(k)} style={({ pressed }) => [styles.indexRow, on && styles.indexRowOn, pressed && { opacity: 0.7 }]}>
-                <Mono style={[styles.indexDate, on && { color: '#FFFAF2' }]}>{dateOf(e).toLocaleDateString(undefined, { day: '2-digit', month: 'short' }).toUpperCase()}</Mono>
-                <Text numberOfLines={1} style={[styles.indexLine, { fontFamily: serif }, on && { color: '#FFFAF2' }]}>{e.content.split(/(?<=[.!?])\s/)[0]}</Text>
+                <Mono style={[styles.indexDate, on && { color: colors.onSignal }]}>{dateOf(e).toLocaleDateString(undefined, { day: '2-digit', month: 'short' }).toUpperCase()}</Mono>
+                <Text numberOfLines={1} style={[styles.indexLine, { fontFamily: serif }, on && { color: colors.onSignal }]}>{e.content.split(/(?<=[.!?])\s/)[0]}</Text>
               </Pressable>
             );
           })}
@@ -332,15 +332,15 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 4, paddingLeft: 8, alignItems: 'flex-end' },
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderBottomWidth: 0, borderColor: colors.greenBorderDim, backgroundColor: '#f1f1ef',
+    borderWidth: 1, borderBottomWidth: 0, borderColor: colors.greenBorderDim, backgroundColor: colors.sand,
     borderTopLeftRadius: 8, borderTopRightRadius: 8, marginBottom: -1, flexShrink: 1,
   },
-  tabOn: { backgroundColor: '#FFFAF2', borderColor: colors.signal, zIndex: 2, paddingVertical: 12 },
+  tabOn: { backgroundColor: colors.card, borderColor: colors.signal, zIndex: 2, paddingVertical: 12 },
   tabName: { fontSize: 10.5, letterSpacing: 2, color: colors.greenDim },
   tabWhat: { fontSize: 9, color: colors.greenBorder },
   count: { fontSize: 9, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorderDim, paddingHorizontal: 5, borderRadius: 8 },
-  countOn: { color: '#FFFAF2', backgroundColor: colors.signal, borderColor: colors.signal },
-  sheet: { borderWidth: 1, borderColor: colors.greenBorder, backgroundColor: '#FFFAF2', padding: 16, minHeight: 420, borderRadius: 16 },
+  countOn: { color: colors.onSignal, backgroundColor: colors.signal, borderColor: colors.signal },
+  sheet: { borderWidth: 1, borderColor: colors.greenBorder, backgroundColor: colors.card, padding: 16, minHeight: 420, borderRadius: 16 },
   embed: { minHeight: 560 },
 
   diary: { gap: 18 },
@@ -348,10 +348,10 @@ const styles = StyleSheet.create({
   side: { width: 300, gap: 18 },
 
   notebook: {
-    backgroundColor: '#fdfdfb', borderWidth: 1, borderColor: colors.greenBorderDim, paddingLeft: 76, paddingRight: 28, paddingTop: 22, paddingBottom: 26,
-    overflow: 'hidden', shadowColor: '#2A1F17', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 },
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorderDim, paddingLeft: 76, paddingRight: 28, paddingTop: 22, paddingBottom: 26,
+    overflow: 'hidden', shadowColor: colors.shadow, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 5 },
   },
-  hole: { position: 'absolute', left: 18, width: 14, height: 14, borderRadius: 7, backgroundColor: '#eeeeec', borderWidth: 1, borderColor: '#d6d6d4' },
+  hole: { position: 'absolute', left: 18, width: 14, height: 14, borderRadius: 7, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.greenBorder },
   pageHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 90 },
   bigDate: { fontSize: 36, lineHeight: 40, color: colors.mint },
   stamp: { borderWidth: 2, borderColor: colors.greenBorder, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', transform: [{ rotate: '4deg' }] },
@@ -370,12 +370,12 @@ const styles = StyleSheet.create({
 
   cal: { flexDirection: 'row', gap: 3 },
   calCol: { gap: 3 },
-  calDay: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: '#FFFAF2', borderRadius: 4 },
+  calDay: { width: 18, height: 18, borderWidth: 1, borderColor: colors.greenBorderDim, backgroundColor: colors.card, borderRadius: 4 },
   calDayOn: { backgroundColor: '#E8A88A', borderColor: '#E8A88A' },
   calDaySel: { backgroundColor: colors.signal, borderColor: colors.signal },
   legend: { fontSize: 9, color: colors.greenDim, marginLeft: -6 },
 
-  indexRow: { flexDirection: 'row', gap: 10, paddingVertical: 7, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#efefed', alignItems: 'center' },
+  indexRow: { flexDirection: 'row', gap: 10, paddingVertical: 7, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: colors.greenBorderDim, alignItems: 'center' },
   indexRowOn: { backgroundColor: colors.signal },
   indexDate: { fontSize: 9.5, letterSpacing: 1, color: colors.greenDim, width: 52 },
   indexLine: { flex: 1, fontSize: 13, color: colors.mint },

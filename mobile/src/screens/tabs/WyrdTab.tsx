@@ -5,6 +5,7 @@ import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { BrainCanvas } from '../../components/BrainCanvas';
 import { LearningStream } from '../../components/LearningStream';
 import { DialogueLauncher } from '../../components/DialogueLauncher';
+import { ChessChallenge } from '../../components/ChessChallenge';
 import { Display, Mono } from '../../components/ui';
 import { colors, fonts, isDark } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
@@ -74,8 +75,9 @@ function Greeting() {
   );
 }
 
-export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onCloseTasks }: {
+export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onCloseTasks, onPlayChess }: {
   onOpenBrain: () => void;
+  onPlayChess?: () => void;
   onOpenLink: () => void;
   onOpenTask?: (id: number) => void;
   showTasks?: boolean; // desktop: the tasks column, open only once TASKS is pressed
@@ -264,6 +266,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
         </View>
         </View>
         <DialogueLauncher onPress={onOpenLink} focus={mind?.focusTopic} />
+        {onPlayChess ? <ChessChallenge onPlay={onPlayChess} /> : null}
         {desktop ? (
           <Pressable onPress={() => { location.hash = 'play'; location.reload(); }} style={({ pressed }) => [styles.city, pressed && styles.cityHover]} accessibilityLabel="Play NAIJA 2099">
             <View style={styles.cityBadge} />

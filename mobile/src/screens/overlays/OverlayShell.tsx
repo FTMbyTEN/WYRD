@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Display, Mono } from '../../components/ui';
@@ -33,6 +33,15 @@ export function OverlayShell({ visible, title, onClose, children, footer, black,
   const insets = useSafeAreaInsets();
   const enter = useEnter(visible); // every panel arrives the same way: a short fade, rise and settle
   const elastic = useElastic(visible && !!glassHeight);
+  // a big pop-up's contents (BRAIN_3D's 3D brain) take a moment to build and hold the page while they
+  // do: they're built once the spring has played, not during it, so the arrival stays smooth
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!visible || !glassHeight) return;
+    setSettled(false);
+    const t = setTimeout(() => setSettled(true), 480);
+    return () => clearTimeout(t);
+  }, [visible, glassHeight]);
   // docked: Escape closes it (a modal gets this from onRequestClose)
   useEffect(() => {
     if (!dock || !visible || Platform.OS !== 'web') return;
@@ -88,7 +97,13 @@ export function OverlayShell({ visible, title, onClose, children, footer, black,
                   <Glyph name="close" size={18} color={colors.greenDim} />
                 </Pressable>
               </View>
-              <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
+              <View style={{ flex: 1, minHeight: 0 }}>
+                {settled ? children : (
+                  <View style={styles.waiting}>
+                    <Mono style={styles.waitingText}>{title === 'BRAIN_3D' ? 'WAKING THE BRAIN…' : 'OPENING…'}</Mono>
+                  </View>
+                )}
+              </View>
               {footer}
             </Pressable>
           </Animated.View>
@@ -152,5 +167,7 @@ const styles = StyleSheet.create({
   dockTitle: { fontSize: 20, lineHeight: 22, letterSpacing: 1 },
   dockBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   dockBtnOn: { backgroundColor: colors.glassTileOn },
+  waiting: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  waitingText: { fontSize: 10, letterSpacing: 2.4, color: colors.greenDim },
   dockBtnText: { fontSize: 13, color: colors.greenDim, letterSpacing: -1 },
 });

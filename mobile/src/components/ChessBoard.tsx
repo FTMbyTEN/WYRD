@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Chess, type Square } from 'chess.js';
-import { colors } from '../theme';
+import { colors, isDark } from '../theme';
 
 const FILES = 'abcdefgh';
 // U+FE0E asks for the text form: without it the pawn (♟) renders as a fixed-colour emoji on many
@@ -91,8 +91,9 @@ const styles = StyleSheet.create({
   board: { borderWidth: 1, borderColor: colors.mint, overflow: 'hidden' },
   row: { flexDirection: 'row', flex: 1 },
   sq: { alignItems: 'center', justifyContent: 'center' },
-  light: { backgroundColor: '#ffffff' },
-  dark: { backgroundColor: '#e9ebf1' },
+  // the board follows the theme: paper by day, warm walnut at night (white glyphs keep their outline)
+  light: { backgroundColor: isDark ? '#3D332B' : '#ffffff' },
+  dark: { backgroundColor: isDark ? '#28211C' : '#e9ebf1' },
   last: { backgroundColor: 'rgba(42,70,255,0.16)' },
   picked: { backgroundColor: colors.signal },
   // symbol fonts first: an emoji font would ignore the colour

@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: colors.mint, paddingBottom: 14 },
   callsign: { fontSize: 36, lineHeight: 40, color: colors.mint, letterSpacing: 2 },
-  link: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 18, paddingVertical: 12, gap: 3, minWidth: 210, backgroundColor: '#FFFAF2', borderRadius: 999 },
+  link: { borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 18, paddingVertical: 12, gap: 3, minWidth: 210, backgroundColor: colors.card, borderRadius: 999 },
   linkLive: { backgroundColor: colors.palm, borderColor: colors.palm }, // live: the palm of a good link
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   linkDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: '#A8957F' },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   deck: { flexDirection: 'row', gap: 18, alignItems: 'stretch' },
   mapFrame: { borderWidth: 1, borderColor: colors.greenBorder, padding: 8, backgroundColor: colors.sand, borderRadius: 24, overflow: 'hidden' },
   instruments: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  readout: { flexGrow: 1, flexBasis: '46%', minHeight: 132, padding: 18, gap: 6, backgroundColor: '#FFFAF2', borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, justifyContent: 'space-between' },
+  readout: { flexGrow: 1, flexBasis: '46%', minHeight: 132, padding: 18, gap: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 20, justifyContent: 'space-between' },
   readoutWarn: { borderColor: colors.danger, backgroundColor: 'rgba(184,58,38,0.06)' },
   readoutLabel: { fontSize: 11, letterSpacing: 1.4, color: colors.greenDim },
   readoutRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   readoutTrack: { height: 6, borderRadius: 3, backgroundColor: colors.sand, overflow: 'hidden' },
   readoutFill: { height: '100%', borderRadius: 3 },
 
-  card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 18, gap: 10, backgroundColor: '#FFFAF2', borderRadius: 20 },
+  card: { borderWidth: 1, borderColor: colors.greenBorder, padding: 18, gap: 10, backgroundColor: colors.card, borderRadius: 20 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   readyTag: { fontSize: 9, letterSpacing: 1.6, color: colors.greenDim, borderWidth: 1, borderColor: colors.greenBorder, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 16 },
   readyOn: { color: '#FFFAF2', backgroundColor: colors.signal, borderColor: colors.signal },
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   log: { borderTopWidth: 2, borderTopColor: colors.mint, paddingTop: 12, gap: 12 },
   logRow: { flexDirection: 'row', gap: 12 },
   rail: { width: 14, alignItems: 'center' },
-  node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.greenBorder, backgroundColor: '#FFFAF2', marginTop: 2 },
+  node: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.greenBorder, backgroundColor: colors.card, marginTop: 2 },
   nodeLive: { borderColor: colors.signal, backgroundColor: colors.signal },
   nodeDone: { borderColor: colors.greenBorder },
   nodeBad: { borderColor: colors.danger },

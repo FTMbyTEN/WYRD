@@ -546,6 +546,7 @@ export const api = {
   gameResign: (matchId: number) => callEndpoint<GameMatch>('games', 'resign', { matchId }),
   gameStart: (game: string, side: 'w' | 'b' | 'random') => callEndpoint<GameMatch>('games', 'start', { game, side }),
   gameMove: (matchId: number, move: string) => callEndpoint<GameMatch>('games', 'move', { matchId, move }),
+  gameWyrdChallenge: () => callEndpoint<GameMatch>('games', 'wyrdChallenge', {}),
   gameChallenge: (game: string) => callEndpoint<GameMatch>('games', 'challenge', { game }),
   gameOpenChallenges: (game: string) => callEndpoint<GameMatch[]>('games', 'openChallenges', { game }),
   gameAccept: (matchId: number) => callEndpoint<GameMatch>('games', 'accept', { matchId }),

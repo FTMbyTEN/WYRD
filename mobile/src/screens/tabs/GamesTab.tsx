@@ -12,7 +12,7 @@ import { api, ApiError } from '../../api/client';
 import type { GameMatch, PlayerRating } from '../../api/types';
 import { sfx } from '../../util/sound';
 
-type GameKey = 'chess' | 'connect4' | 'reversi' | 'tictactoe';
+import { loadRoom, saveRoom, type GameKey, type GameRoom } from '../../util/gameRoom';
 
 // the open world loads only when someone walks in: its 3D engine stays out of everyone else's download
 /** On a phone the game plays landscape: fullscreen, then lock sideways (Android); iOS can't lock, so it asks. */
@@ -71,11 +71,7 @@ const NAME: Record<string, string> = Object.fromEntries(CATALOG.map((g) => [g.ke
 const LEVEL = ['', 'GENTLE', 'EASY', 'STEADY', 'SHARP', 'STRONG', 'FULL STRENGTH'];
 const POLL_MS = 2500; // pvp: how often to look for the other side's move, only while waiting on it
 
-// where you were: a refresh brings you back to the same game, mode and match instead of the arcade
-const ROOM_KEY = 'wyrd.gameRoom';
-type Saved = { game: GameKey; mode: 'wyrd' | 'pvp'; matchId?: number };
-const loadRoom = (): Saved | null => { try { return JSON.parse(sessionStorage.getItem(ROOM_KEY) ?? 'null') as Saved | null; } catch { return null; } };
-const saveRoom = (r: Saved | null) => { try { if (r) sessionStorage.setItem(ROOM_KEY, JSON.stringify(r)); else sessionStorage.removeItem(ROOM_KEY); } catch { /* fine */ } };
+type Saved = GameRoom;
 
 /** A game as the app uses it: if the server didn't say which side you are (an older server), it's
  *  worked out here -- against WYRD you always play the player's side. Without this the board
@@ -511,7 +507,7 @@ const styles = StyleSheet.create({
   worldName: { fontSize: 30, lineHeight: 32, color: '#FFFAF2' },
   worldBlurb: { fontSize: 13, lineHeight: 19, color: '#EEDFC8' },
   worldGo: { fontSize: 13, letterSpacing: 1, color: '#E2A32B' },
-  card: { width: '100%', borderWidth: 1, borderColor: colors.greenBorderDim, padding: 14, gap: 6, backgroundColor: '#FFFAF2', borderRadius: 16 },
+  card: { width: '100%', borderWidth: 1, borderColor: colors.greenBorderDim, padding: 14, gap: 6, backgroundColor: colors.card, borderRadius: 16 },
   cardWide: { width: '32%', minWidth: 260, flexGrow: 1 },
   cardSoon: { opacity: 0.55 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -537,7 +533,7 @@ const styles = StyleSheet.create({
   play: { gap: 18 },
   playWide: { flexDirection: 'row', alignItems: 'flex-start', gap: 28 },
   side: { gap: 14, flexShrink: 1 },
-  empty: { borderWidth: 1, borderColor: colors.greenBorderDim, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FAF3E8', maxWidth: '100%', padding: 16 },
+  empty: { borderWidth: 1, borderColor: colors.greenBorderDim, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.card, maxWidth: '100%', padding: 16 },
   emptyTitle: { fontSize: 36, color: colors.mint },
   speech: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderLeftWidth: 2, borderLeftColor: colors.signal, paddingLeft: 12, paddingVertical: 4 },
   speechText: { flex: 1, fontSize: 14, lineHeight: 20, color: colors.mint },
