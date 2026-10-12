@@ -8,6 +8,7 @@ import { FaceMark } from '../../components/FaceMark';
 import { RichText } from '../../components/RichText';
 import { colors, fonts } from '../../theme';
 import { CodeText } from '../../components/CodeText';
+import { freshRuns, InlineRun, isInline } from '../../components/InlineRun';
 import { Glyph } from '../../components/glyph/Glyph';
 import { DustThinking } from '../../components/dust/DustThinking';
 import type { GlyphName } from '../../components/glyph/glyphs';
@@ -193,9 +194,13 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
       if (result.judgement) setJudged((m) => new Map(m).set(result.reply, result.judgement!));
+      // an app, a visual or a program is kept on the turn; a program that just arrived runs now
+      const a = result.action;
+      const kept = a && (a.type === 'preview_app' || a.type === 'show_visual' || a.type === 'run_python') ? a.html : null;
+      if (a?.type === 'run_python') freshRuns.add(a.html);
       wyrdStream.publish('chat', {
         id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null,
-        thinking: result.thinking ?? null, appHtml: result.action?.type === 'preview_app' ? result.action.html : null,
+        thinking: result.thinking ?? null, appHtml: kept,
       });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
@@ -667,7 +672,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
             ),
           )}
         </View>
-        {appHtml ? <AppCard html={appHtml} onOpen={onOpenApp} /> : null}
+        {isInline(appHtml) ? <InlineRun kept={appHtml} onOpen={onOpenApp} /> : appHtml ? <AppCard html={appHtml} onOpen={onOpenApp} /> : null}
         <View style={styles.metaRow}>
           {recalled && <Mono style={styles.badge}>↺ from memory · no AI call</Mono>}
           {judged && <Mono style={styles.badge}>⚖ {judged === 'softened' ? 'worth double-checking' : judged === 'corrected' ? 'corrected' : 'held back'}</Mono>}

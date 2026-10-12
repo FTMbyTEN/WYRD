@@ -245,6 +245,8 @@ export interface CountryDetail {
 export type ChatAction =
   | { type: 'open_world_map'; country: string | null }
   | { type: 'preview_app'; html: string }
+  | { type: 'show_visual'; html: string }
+  | { type: 'run_python'; html: string }
   | { type: 'open_drone' }
   | { type: 'open_book'; readingItemId: number }
   | { type: 'open_tasks' }

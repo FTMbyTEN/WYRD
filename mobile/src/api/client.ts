@@ -115,7 +115,7 @@ function adaptConversationTurn(t: SpConversationTurn): ConversationTurn {
 interface SpChatAction {
   type: string;
   country: string | null;
-  html: string | null; // preview_app only
+  html: string | null; // preview_app, show_visual, run_python
 }
 interface SpChatReply {
   reply: string;
@@ -139,7 +139,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     chosenPath: 'serverpod',
     mind: adaptMind(r.mind),
     netFetched: false,
-    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'open_drone' || r.action.type === 'open_book' || r.action.type === 'open_tasks')
+    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'show_visual' || r.action.type === 'run_python' || r.action.type === 'open_drone' || r.action.type === 'open_book' || r.action.type === 'open_tasks')
       ? (r.action as ChatResult['action'])
       : null,
   };
