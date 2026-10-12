@@ -89,7 +89,14 @@ function usePolled<T>(fetcher: () => Promise<T>, pollMs: number | null, deps: un
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload, pollMs, ...deps]);
 
-  return { data, loading, error, reload, setData };
+  // a change made here (a streamed turn) leaves what the server last said behind: forget it, so
+  // the next fetch always shows -- even when it's the same as before (a new, empty chat again)
+  const set = useCallback((u: React.SetStateAction<T | null>) => {
+    lastJson.current = null;
+    setData(u);
+  }, []);
+
+  return { data, loading, error, reload, setData: set };
 }
 
 /** Prepend a streamed entry, skipping it if the list already has one with the same timestamp
