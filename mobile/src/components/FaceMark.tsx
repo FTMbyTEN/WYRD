@@ -30,6 +30,9 @@ function stillImage(mode: Mode, w: number, h: number): string | null {
 
 type Mode = 'wire' | 'scan' | 'points';
 
+// the mark's ink: dark on a light page, lit cream at night (it vanished against the dark before)
+const INK = isDark ? '241,230,214' : '42,31,23';
+
 interface Props {
   mode?: Mode;
   spin?: boolean;
@@ -50,7 +53,7 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
       const paint = Skia.Paint();
       paint.setStyle(1); // Stroke
       paint.setStrokeWidth(0.6);
-      paint.setColor(Skia.Color(`rgba(42,31,23,${(0.08 + d * 0.45).toFixed(3)})`));
+      paint.setColor(Skia.Color(`rgba(${INK},${(0.08 + d * (isDark ? 0.6 : 0.45)).toFixed(3)})`));
       const tri = Skia.Path.Make();
       tri.moveTo(a.x, a.y); tri.lineTo(b.x, b.y); tri.lineTo(c.x, c.y); tri.close();
       canvas.drawPath(tri, paint);
@@ -69,7 +72,7 @@ function drawFace(canvas: SkCanvas, W: number, H: number, mode: Mode, yaw: numbe
       paint.setStyle(1);
       paint.setStrokeWidth(1.5);
       paint.setStrokeCap(1); // round
-      paint.setColor(Skia.Color(`rgba(42,31,23,${alpha.toFixed(3)})`));
+      paint.setColor(Skia.Color(`rgba(${INK},${(isDark ? Math.min(0.95, alpha * 1.7) : alpha).toFixed(3)})`));
       const midY = (y0 + y1) / 2;
       const linePath = Skia.Path.Make();
       row.forEach((p, i) => (i ? linePath.lineTo(p.x, midY) : linePath.moveTo(p.x, midY)));

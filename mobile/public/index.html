@@ -42,6 +42,11 @@
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         var t = document.querySelector('meta[name="theme-color"]');
         if (t) t.setAttribute('content', bg);
+        // the tab's icon too: lit lines on the night background
+        if (dark) {
+          var ic = document.querySelector('link[rel="icon"]');
+          if (ic) ic.setAttribute('href', '/icon-192-dark.png?v=face2');
+        }
       })();
     </script>
     <!-- Speed: start the ~3 MB graphics engine (CanvasKit) downloading with the page, alongside the
