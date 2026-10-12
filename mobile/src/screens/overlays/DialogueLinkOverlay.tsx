@@ -31,6 +31,8 @@ interface Props {
   onOpenDrone: () => void;
   onOpenTasks?: () => void;
   onOpenBook: (readingItemId: number) => void;
+  // desktop: docked to the right of the page, resizable (see OverlayShell)
+  dock?: { width: number; onResize: (w: number) => void; minWidth: number; maxWidth: number };
 }
 
 const SUGGESTIONS: { tag: string; text: string }[] = [
@@ -104,7 +106,7 @@ const ATTACHED = /^📎 ([^\n]+)\n*/;
  *  from chat.getHistory kept live by the stream's `chat` event, and the tool hand-offs routed to
  *  the real overlays. A file you attach waits in the composer until you send your message with
  *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
-export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks }: Props) {
+export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks, dock }: Props) {
   const { turns } = useConversations(60);
   // the chat this is (picked in the side bar), named in the header
   const openChat = useChats().chats.find((c) => c.current && c.turns > 0);
@@ -336,7 +338,8 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       visible={visible}
       title="DIALOGUE_LINK"
       onClose={onClose}
-      black
+      black={!dock}
+      dock={dock}
       footer={
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.dock}>

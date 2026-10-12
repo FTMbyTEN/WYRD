@@ -1,7 +1,8 @@
-import React from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Display } from '../../components/ui';
+import { Display, Mono } from '../../components/ui';
+import { SidePanel } from '../../components/SidePanel';
 import { colors } from '../../theme';
 import { Glyph } from '../../components/glyph/Glyph';
 import type { GlyphName } from '../../components/glyph/glyphs';
@@ -21,10 +22,48 @@ interface Props {
   footer?: React.ReactNode;
   black?: boolean; // overlays that fill with pure black instead of the 94%-black scrim
   glassWidth?: number; // a glass pop-up this wide at most (COP, ALERTS), instead of a full-screen panel
+  // desktop: docked to the right of the page as a resizable glass panel instead of a pop-up
+  dock?: { width: number; onResize: (w: number) => void; minWidth: number; maxWidth: number };
 }
 
-export function OverlayShell({ visible, title, onClose, children, footer, black, glassWidth }: Props) {
+export function OverlayShell({ visible, title, onClose, children, footer, black, glassWidth, dock }: Props) {
   const insets = useSafeAreaInsets();
+  // docked: Escape closes it (a modal gets this from onRequestClose)
+  useEffect(() => {
+    if (!dock || !visible || Platform.OS !== 'web') return;
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [dock, visible, onClose]);
+  if (dock) {
+    // a glass panel docked to the right of the page (desktop), sliding in and out, resizable
+    const wide = dock.width >= (dock.minWidth + dock.maxWidth) / 2;
+    return (
+      <SidePanel open={visible} side="right" width={dock.width} onResize={dock.onResize} minWidth={dock.minWidth} maxWidth={dock.maxWidth}>
+        <View style={[styles.header, styles.glassHeader, styles.dockHeader]}>
+          <View style={styles.titleRow}>
+            {PANEL_GLYPH[title] ? <Glyph name={PANEL_GLYPH[title]} size={26} color={colors.signal} active /> : null}
+            <Display style={styles.dockTitle}>{title}</Display>
+          </View>
+          <View style={styles.titleRow}>
+            <Pressable
+              onPress={() => dock.onResize(wide ? dock.minWidth : dock.maxWidth)}
+              hitSlop={10}
+              accessibilityLabel={wide ? 'Make the panel narrower' : 'Make the panel wider'}
+              style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.dockBtn, hovered && styles.dockBtnOn]}
+            >
+              <Mono style={styles.dockBtnText}>{wide ? '›‹' : '‹›'}</Mono>
+            </Pressable>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close" style={({ hovered }: { pressed: boolean; hovered?: boolean }) => [styles.dockBtn, hovered && styles.dockBtnOn]}>
+              <Glyph name="close" size={16} color={colors.greenDim} />
+            </Pressable>
+          </View>
+        </View>
+        <View style={{ flex: 1, minHeight: 0 }}>{children}</View>
+        {footer}
+      </SidePanel>
+    );
+  }
   if (glassWidth) {
     // a glass pop-up over the app (like APPS): a tap outside closes it
     return (
@@ -75,4 +114,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   title: { fontSize: 22, lineHeight: 24, letterSpacing: 1 },
   glassHeader: { borderBottomColor: 'rgba(42,31,23,0.12)' },
+  dockHeader: { paddingVertical: 12, paddingHorizontal: 16 },
+  dockTitle: { fontSize: 20, lineHeight: 22, letterSpacing: 1 },
+  dockBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  dockBtnOn: { backgroundColor: 'rgba(255,255,255,0.7)' },
+  dockBtnText: { fontSize: 13, color: colors.greenDim, letterSpacing: -1 },
 });

@@ -23,6 +23,7 @@ import { firstLineFromMarkdown } from '../../util/text';
 import { noteLine } from '../../api/types';
 import { useIsDesktop } from '../../util/layout';
 import { TasksBoard, useTasks } from '../overlays/TasksOverlay';
+import { SidePanel } from '../../components/SidePanel';
 
 const BRAIN_ZOOM = 1.6;
 
@@ -161,7 +162,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
   return (
     <View style={[{ flex: 1 }, desktop && styles.desktopRow]}>
       {/* desktop: your tasks, down the left of the home page */}
-      {desktop && showTasks && onOpenTask ? <TasksColumn onOpenTask={onOpenTask} onClose={onCloseTasks} /> : null}
+      {desktop && onOpenTask ? <TasksColumn open={!!showTasks} onOpenTask={onOpenTask} onClose={onCloseTasks} /> : null}
       <View style={styles.heroWrap}>
         {/* The brain itself is the open/close target. The chips, cards and ENTER 3D below are
             siblings layered on top, not children -- nested pressables let this outer target
@@ -355,18 +356,27 @@ function Enter3DButton({ onPress }: { onPress: () => void }) {
 // secondary, greenBorder = hairline), no glows or shadows -- contrast and spacing do the work.
 const HAIRLINE = StyleSheet.hairlineWidth;
 
-/** The home page's left column on desktop, opened with TASKS: your tasks; one opens in full in the TASKS panel. */
-function TasksColumn({ onOpenTask, onClose }: { onOpenTask: (id: number) => void; onClose?: () => void }) {
+/** The home page's tasks on desktop: a glass panel that slides in from the left over the brain when
+ *  TASKS is pressed (the brain stays in view behind it); one task opens in full in the TASKS panel. */
+function TasksColumn({ open, onOpenTask, onClose }: { open: boolean; onOpenTask: (id: number) => void; onClose?: () => void }) {
+  return (
+    <SidePanel open={open} side="left" width={400}>
+      <TasksList onOpenTask={onOpenTask} onClose={onClose} />
+    </SidePanel>
+  );
+}
+
+// (inside the panel, so the list is only fetched and polled while the panel is there)
+function TasksList({ onOpenTask, onClose }: { onOpenTask: (id: number) => void; onClose?: () => void }) {
   const { tasks, error, added } = useTasks();
   return (
-    <ScrollView style={styles.tasksCol} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <TasksBoard tasks={tasks} error={error} onOpen={onOpenTask} onCreated={added} onClose={onClose} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  tasksCol: { width: 380, flexGrow: 0, borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.greenBorder, backgroundColor: colors.panelBg },
   desktopRow: { flexDirection: 'row' },
   heroWrap: { flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   center: { alignItems: 'center', justifyContent: 'center' },

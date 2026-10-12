@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Header } from './Header';
 import { FirstRunTour } from '../components/FirstRunTour';
 import { TabBar, type TabKey } from './TabBar';
@@ -82,6 +82,15 @@ export function AppShell() {
   const desktop = useIsDesktop();
   const unread = useUnreadAlertCount();
 
+  // the docked chat's width (desktop), kept between visits
+  const { width: winWidth } = useWindowDimensions();
+  const [chatWidth, setChatWidth] = useState(() => {
+    try { return Number(globalThis.localStorage?.getItem('wyrd.chatWidth')) || 460; } catch { return 460; }
+  });
+  const resizeChat = (w: number) => {
+    setChatWidth(w);
+    try { globalThis.localStorage?.setItem('wyrd.chatWidth', String(w)); } catch { /* not kept: fine */ }
+  };
   // a panel Dialogue Link opened (an app preview, the globe, tasks) goes back to the chat when it closes
   const [backTo, setBackTo] = useState<Overlay>(null);
   const open = (o: Overlay) => {
@@ -143,6 +152,23 @@ export function AppShell() {
     return () => clearTimeout(t);
   }, []);
 
+  // Dialogue Link: a full-screen panel on phones; on desktop a glass panel docked on the right,
+  // as wide as you drag it (remembered), still showing while something it opened is on top
+  const maxChat = Math.max(420, Math.min(980, Math.round(winWidth * 0.62)));
+  const dialogue = linkOpened ? (
+    <DialogueLinkOverlay
+      visible={overlay === 'link' || (desktop && backTo === 'link')}
+      onClose={close}
+      tts={tts}
+      onOpenGlobe={(country) => { setGlobeFocus(country); openFromChat('globe'); }}
+      onOpenAppPreview={(html) => { setAppPreviewHtml(html); openFromChat('appPreview'); }}
+      onOpenDrone={() => { setOverlay(null); changeTab('drone'); }}
+      onOpenTasks={() => { setTaskFocus(null); openFromChat('tasks'); void refreshTasks(); }}
+      onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
+      dock={desktop ? { width: Math.min(chatWidth, maxChat), onResize: resizeChat, minWidth: 380, maxWidth: maxChat } : undefined}
+    />
+  ) : null;
+
   return (
     <View style={styles.root}>
       <ScreenEffects />
@@ -178,6 +204,8 @@ export function AppShell() {
             {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
             {tab === 'settings' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
           </Suspense>
+          {/* desktop: Dialogue Link docked on the right, over the page */}
+          {desktop ? <Suspense fallback={null}>{dialogue}</Suspense> : null}
         </View>
 
         {!desktop && <TabBar active={tab} onChange={changeTab} onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
@@ -197,18 +225,7 @@ export function AppShell() {
           onOpenChat={() => open('link')}
         />
         {overlay === 'alerts' && <AlertsOverlay visible onClose={close} />}
-        {linkOpened && (
-          <DialogueLinkOverlay
-            visible={overlay === 'link'}
-            onClose={close}
-            tts={tts}
-            onOpenGlobe={(country) => { setGlobeFocus(country); openFromChat('globe'); }}
-            onOpenAppPreview={(html) => { setAppPreviewHtml(html); openFromChat('appPreview'); }}
-            onOpenDrone={() => { setOverlay(null); changeTab('drone'); }}
-            onOpenTasks={() => { setTaskFocus(null); openFromChat('tasks'); void refreshTasks(); }}
-            onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
-          />
-        )}
+        {!desktop && dialogue}
         {overlay === 'brain' && <BrainOverlay visible onClose={close} />}
         {overlay === 'globe' && <GlobeOverlay visible onClose={close} focusCountryName={globeFocus} />}
         {overlay === 'concept' && <ConceptMapOverlay visible onClose={close} />}
