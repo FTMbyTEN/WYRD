@@ -105,9 +105,11 @@ interface SpConversationTurn {
   botText: string;
   image?: string | null;
   timestamp: string;
+  thinking?: string | null;
+  appHtml?: string | null;
 }
 function adaptConversationTurn(t: SpConversationTurn): ConversationTurn {
-  return { id: t.id, rating: t.rating ?? null, userText: t.userText, botText: t.botText, image: t.image ?? null, timestamp: t.timestamp };
+  return { id: t.id, rating: t.rating ?? null, userText: t.userText, botText: t.botText, image: t.image ?? null, timestamp: t.timestamp, thinking: t.thinking ?? null, appHtml: t.appHtml ?? null };
 }
 
 interface SpChatAction {
@@ -117,6 +119,7 @@ interface SpChatAction {
 }
 interface SpChatReply {
   reply: string;
+  thinking?: string | null;
   fromMemory?: boolean | null;
   turnId?: number | null;
   judgement?: string | null;
@@ -129,6 +132,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     fromMemory: r.fromMemory ?? false,
     turnId: r.turnId ?? undefined,
     judgement: r.judgement ?? undefined,
+    thinking: r.thinking ?? undefined,
     block: { timestamp: r.mind.updatedAt },
     comparison: '',
     candidateCount: 1,

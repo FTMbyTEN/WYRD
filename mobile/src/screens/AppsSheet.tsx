@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Mono } from '../components/ui';
 import { Glyph } from '../components/glyph/Glyph';
 import type { GlyphName } from '../components/glyph/glyphs';
@@ -26,11 +26,15 @@ export function AppsSheet({ visible, onClose, onPick, drone, onOpenChat, withCha
   onOpenChat: () => void;
   withChats?: boolean;
 }) {
+  // small phones: the three apps side by side in a row, smaller, and the whole sheet scrolls
+  const win = useWindowDimensions();
+  const small = win.width < 420 || win.height < 700;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={[styles.scrim, frosted]} onPress={onClose} accessibilityLabel="Close apps">
         {/* (a tap on the glass itself doesn't close it) */}
-        <Pressable style={[styles.glass, frosted]} onPress={() => {}}>
+        <Pressable style={[styles.glass, frosted, small && styles.glassSmall]} onPress={() => {}}>
+          <ScrollView contentContainerStyle={small ? styles.bodySmall : styles.body} showsVerticalScrollIndicator={false}>
           <View style={styles.head}>
             <Mono style={styles.title}>APPS</Mono>
             <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
@@ -42,12 +46,12 @@ export function AppsSheet({ visible, onClose, onPick, drone, onOpenChat, withCha
               <Pressable
                 key={a.key}
                 onPress={() => { onPick(a.key); onClose(); }}
-                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.tile, (pressed || hovered) && styles.tileOn]}
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.tile, small && styles.tileSmall, (pressed || hovered) && styles.tileOn]}
                 accessibilityLabel={a.label}
               >
-                <Glyph name={a.glyph} size={40} color={colors.signal} active />
-                <Mono style={styles.tileLabel}>{a.label}</Mono>
-                <Mono style={styles.tileBlurb}>{a.blurb}</Mono>
+                <Glyph name={a.glyph} size={small ? 30 : 40} color={colors.signal} active />
+                <Mono style={[styles.tileLabel, small && styles.tileLabelSmall]}>{a.label}</Mono>
+                {small ? null : <Mono style={styles.tileBlurb}>{a.blurb}</Mono>}
               </Pressable>
             ))}
           </View>
@@ -56,6 +60,7 @@ export function AppsSheet({ visible, onClose, onPick, drone, onOpenChat, withCha
               <ChatsList onOpen={() => { onOpenChat(); onClose(); }} max={6} />
             </View>
           ) : null}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -97,7 +102,7 @@ export function ChatsList({ onOpen, max = 12 }: { onOpen: () => void; max?: numb
 const styles = StyleSheet.create({
   scrim: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: 'rgba(20,16,10,0.18)' },
   glass: {
-    width: '100%', maxWidth: 520, borderRadius: 24, padding: 20,
+    width: '100%', maxWidth: 520, maxHeight: '100%', borderRadius: 24, overflow: 'hidden',
     backgroundColor: Platform.OS === 'web' ? 'rgba(255,250,242,0.55)' : 'rgba(255,250,242,0.94)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)',
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 30, shadowOffset: { width: 0, height: 12 },
@@ -105,6 +110,11 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 2.4, color: colors.greenDim },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  body: { padding: 20 },
+  bodySmall: { padding: 14 },
+  glassSmall: { borderRadius: 20 },
+  tileSmall: { flexBasis: 0, minWidth: 0, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 14, gap: 4 },
+  tileLabelSmall: { fontSize: 12.5 },
   tile: {
     flexGrow: 1, flexBasis: 130, alignItems: 'center', gap: 6, paddingVertical: 18, paddingHorizontal: 10, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.75)',

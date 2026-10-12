@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { wyrdStream } from '../../api/stream';
-import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Ellipse } from 'react-native-svg';
 import { BrainCanvas } from '../../components/BrainCanvas';
 import { LearningStream } from '../../components/LearningStream';
@@ -92,6 +92,12 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
   // the thought crossing the brain right now: its real path, and whether it's new or recalled
   const [thought, setThought] = useState<{ path: string[]; live: boolean } | null>(null);
   const desktop = useIsDesktop();
+  // short or narrow phones (SE-size, small Androids, landscape): a smaller mood and a shorter last
+  // thought, so the brain still has room
+  const win = useWindowDimensions();
+  const compact = !desktop && (win.height < 700 || win.width < 360);
+  // a phone on its side: the brain on the left, the last thought and the chat on the right
+  const landscape = !desktop && win.width > win.height && win.height < 600;
 
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState<Detail>(null);
@@ -160,7 +166,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
     </Animated.View>
   );
   return (
-    <View style={[{ flex: 1 }, desktop && styles.desktopRow]}>
+    <View style={[{ flex: 1 }, (desktop || landscape) && styles.desktopRow]}>
       {/* desktop: your tasks, down the left of the home page */}
       {desktop && onOpenTask ? <TasksColumn open={!!showTasks} onOpenTask={onOpenTask} onClose={onCloseTasks} /> : null}
       <View style={styles.heroWrap}>
@@ -179,7 +185,7 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
 
           <Animated.View style={[styles.hero, { opacity: heroOpacity }]} pointerEvents="none">
             <Mono style={[styles.eyebrow, styles.halo]}>MOOD</Mono>
-            <Display style={[styles.moodValue, styles.halo]}>{mood}</Display>
+            <Display style={[styles.moodValue, compact && styles.moodCompact, styles.halo]}>{mood}</Display>
             {litIds.length ? <Mono style={[styles.onMind, styles.halo]} numberOfLines={1}>on your mind · {litIds.join(' · ')}</Mono> : null}
           </Animated.View>
         </Pressable>
@@ -232,27 +238,27 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
           )}
         </Animated.View>
 
-        <Enter3DButton onPress={onOpenBrain} />
+        <Enter3DButton onPress={onOpenBrain} compact={compact} />
 
         <Mono style={styles.hint} pointerEvents="none">
           {expanded ? 'TAP THE BRAIN TO CLOSE' : 'TAP THE BRAIN TO LOOK INSIDE'}
         </Mono>
       </View>
 
-      <View style={[styles.panel, !desktop && styles.panelOver, desktop && styles.panelDesktop]}>
+      <View style={[styles.panel, !desktop && styles.panelOver, compact && styles.panelCompact, desktop && styles.panelDesktop, landscape && styles.panelSide]}>
         {desktop ? (
           <View style={styles.greetBlock}>
             <Greeting />
             <Mono style={styles.greetSub}>WYRD has been thinking while you were away.</Mono>
           </View>
         ) : null}
-        <View style={styles.thoughtCard}>
+        <View style={[styles.thoughtCard, compact && styles.thoughtCompact]}>
         <View style={styles.thoughtHead}>
           <View style={styles.liveDot} />
           <Mono style={styles.eyebrow}>LAST THOUGHT · {latestNote ? timeAgo(mind?.updatedAt ?? Date.now()) : '—'}</Mono>
         </View>
         <View style={styles.quote}>
-          <Mono style={styles.quoteText} numberOfLines={desktop ? undefined : 4}>
+          <Mono style={[styles.quoteText, compact && styles.quoteCompact]} numberOfLines={desktop ? undefined : compact ? 2 : 4}>
             {latestNote ? noteLine(latestNote) : mind?.activeGoal || 'still forming one.'}
           </Mono>
         </View>
@@ -335,7 +341,7 @@ function DetailCard({ title, onClose, children }: { title: string; onClose: () =
 
 /** Door into the full 3D brain: an orbit that keeps turning, so it reads as "there's more in
  *  here" rather than a plain box. */
-function Enter3DButton({ onPress }: { onPress: () => void }) {
+function Enter3DButton({ onPress, compact }: { onPress: () => void; compact?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
@@ -343,10 +349,10 @@ function Enter3DButton({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel="Open the 3D brain"
     >
-      <Glyph name="brain" size={34} color={colors.signal} active />
+      <Glyph name="brain" size={compact ? 24 : 34} color={colors.signal} active />
       <View>
-        <Mono style={styles.enter3dLabel}>ENTER 3D</Mono>
-        <Mono style={styles.enter3dSub}>BRAIN_3D ↗</Mono>
+        <Mono style={styles.enter3dLabel}>{compact ? '3D' : 'ENTER 3D'}</Mono>
+        {compact ? null : <Mono style={styles.enter3dSub}>BRAIN_3D ↗</Mono>}
       </View>
     </Pressable>
   );
@@ -385,6 +391,7 @@ const styles = StyleSheet.create({
   halo: { textShadowColor: 'rgba(255,250,242,0.95)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
   eyebrow: { fontSize: 9, letterSpacing: 3, color: colors.greenDim },
   moodValue: { fontSize: 54, lineHeight: 56, color: colors.green, marginTop: 2 },
+  moodCompact: { fontSize: 38, lineHeight: 40 },
   focusLine: { marginTop: 6, fontSize: 11, color: colors.greenDim },
   thought: { marginTop: 8, fontSize: 10.5, letterSpacing: 0.6, color: colors.greenDim, maxWidth: 320 },
   thoughtLive: { color: colors.signal },
@@ -465,4 +472,8 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.signal },
   quote: { paddingVertical: 2 },
   quoteText: { fontSize: 18, lineHeight: 26, color: colors.mint, fontFamily: fonts.display },
+  quoteCompact: { fontSize: 15, lineHeight: 20 },
+  thoughtCompact: { padding: 12, gap: 6, borderRadius: 18 },
+  panelCompact: { paddingTop: 10, paddingBottom: 10, gap: 8 },
+  panelSide: { width: '46%', borderTopWidth: 0, borderLeftWidth: HAIRLINE, borderLeftColor: colors.greenBorder, justifyContent: 'center' },
 });

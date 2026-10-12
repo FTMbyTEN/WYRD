@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Speech from 'expo-speech';
 import { OverlayShell } from './OverlayShell';
@@ -108,6 +108,9 @@ const ATTACHED = /^📎 ([^\n]+)\n*/;
  *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
 export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks, dock }: Props) {
   const { turns } = useConversations(60);
+  // phones (under 420px): no keyboard hint (no Enter key to speak of) and no PRIVATE badge, for room
+  const { width: winW } = useWindowDimensions();
+  const narrow = winW < 420;
   // the chat this is (picked in the side bar), named in the header
   const openChat = useChats().chats.find((c) => c.current && c.turns > 0);
   const { mind } = useMind();
@@ -190,7 +193,10 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
       if (result.judgement) setJudged((m) => new Map(m).set(result.reply, result.judgement!));
-      wyrdStream.publish('chat', { id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null });
+      wyrdStream.publish('chat', {
+        id: result.turnId, userText: shown, botText: result.reply, timestamp: result.block.timestamp, nonce: null,
+        thinking: result.thinking ?? null, appHtml: result.action?.type === 'preview_app' ? result.action.html : null,
+      });
       wyrdStream.publish('mind', result.mind);
       handleAction(result.action);
       sfx('receive');
@@ -380,7 +386,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
                 <Tool label="Show WYRD a photo" glyph="camera" onPress={openCamera} disabled={sending} />
                 <Tool label="Attach a file" glyph="attach" on={!!staged} onPress={attachFile} disabled={sending} />
                 <Mono style={styles.hint} numberOfLines={1}>
-                  {Platform.OS === 'web' ? 'enter to send · shift+enter new line' : ''}
+                  {Platform.OS === 'web' && !narrow ? 'enter to send · shift+enter new line' : ''}
                 </Mono>
                 <Pressable onPress={() => send()} disabled={!canSend} style={[styles.sendBtn, !canSend && styles.sendBtnOff]} accessibilityLabel="Send">
                   <Glyph name="send" size={17} color={colors.onSignal} active={canSend} style={{ transform: [{ rotate: '-90deg' }] }} />
@@ -392,6 +398,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         </KeyboardAvoidingView>
       }
     >
+      <View style={styles.presenceWrap}>
       <View style={styles.presence}>
         <View style={styles.presenceFace}>
           <FaceMark mode="scan" />
@@ -406,10 +413,13 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
             {openChat ? `${openChat.title} · ` : ''}{mind?.focusTopic ? `thinking about ${mind.focusTopic}` : 'always thinking'}
           </Mono>
         </View>
+        {narrow ? null : (
         <View style={styles.privatePill}>
           <Glyph name="lock" size={11} color={colors.greenDim} />
           <Mono style={styles.privateText}>PRIVATE</Mono>
         </View>
+        )}
+      </View>
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.thread} keyboardShouldPersistTaps="handled">
@@ -439,7 +449,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
             <View key={`${t.timestamp}-${i}`} style={styles.turn}>
               {newDay && <DayRule iso={t.timestamp} />}
               {t.userText ? <Mine text={t.userText} at={t.timestamp} image={t.image as string | null | undefined} onReply={(x) => setReplyTo({ who: 'you', text: x })} /> : null}
-              {t.botText ? <Reply text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} onReply={(x) => setReplyTo({ who: 'WYRD', text: x })} /> : null}
+              {t.botText ? <Reply text={t.botText} at={t.timestamp} recalled={fromMemory.has(t.botText)} judged={judged.get(t.botText)} turnId={t.id} rating={t.rating ?? null} thinking={t.thinking as string | null | undefined} appHtml={t.appHtml as string | null | undefined} onOpenApp={onOpenAppPreview} onReply={(x) => setReplyTo({ who: 'WYRD', text: x })} /> : null}
             </View>
           );
         })}
@@ -629,7 +639,10 @@ const Mine = React.memo(function Mine({ text, at, image, onReply }: { text: stri
   );
 });
 
-const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, rating, onReply }: { text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null; onReply?: (text: string) => void }) {
+const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, rating, thinking, appHtml, onOpenApp, onReply }: {
+  text: string; at: string; recalled?: boolean; judged?: string; turnId?: number; rating?: number | null;
+  thinking?: string | null; appHtml?: string | null; onOpenApp?: (html: string) => void; onReply?: (text: string) => void;
+}) {
   return (
     <View style={styles.theirsRow}>
       <View style={styles.avatar}>
@@ -637,6 +650,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Mono style={styles.who}>WYRD <Mono style={styles.whoTime}>{timeLabel(at)}</Mono></Mono>
+        {thinking ? <ThoughtFold text={thinking} /> : null}
         <View style={styles.theirs}>
           {splitCode(text).map((p, i) =>
             p.code ? (
@@ -653,6 +667,7 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
             ),
           )}
         </View>
+        {appHtml ? <AppCard html={appHtml} onOpen={onOpenApp} /> : null}
         <View style={styles.metaRow}>
           {recalled && <Mono style={styles.badge}>↺ from memory · no AI call</Mono>}
           {judged && <Mono style={styles.badge}>⚖ {judged === 'softened' ? 'worth double-checking' : judged === 'corrected' ? 'corrected' : 'held back'}</Mono>}
@@ -663,6 +678,70 @@ const Reply = React.memo(function Reply({ text, at, recalled, judged, turnId, ra
     </View>
   );
 });
+
+/** What WYRD thought on the way to a reply (a summary from the model), folded away under a small
+ *  thinking mark; a tap opens it. */
+function ThoughtFold({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={styles.thought}>
+      <Pressable onPress={() => setOpen((o) => !o)} hitSlop={6} style={styles.thoughtHead} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={open ? 'Hide how WYRD thought about this' : 'Show how WYRD thought about this'}>
+        <Glyph name="spark" size={13} color={colors.signal} />
+        <Mono style={styles.thoughtLabel}>THOUGHT PROCESS</Mono>
+        <Mono style={styles.thoughtChevron}>{open ? '▾' : '▸'}</Mono>
+      </Pressable>
+      {open ? (
+        <ScrollView style={styles.thoughtBody} nestedScrollEnabled>
+          <Mono style={styles.thoughtText}>{text}</Mono>
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
+
+/** An app WYRD built in a reply: kept in the chat, to open again or download as a .zip. */
+function AppCard({ html, onOpen }: { html: string; onOpen?: (html: string) => void }) {
+  const title = /<title[^>]*>([^<]{1,80})<\/title>/i.exec(html)?.[1]?.trim() || 'App';
+  const [busy, setBusy] = useState(false);
+  const download = async () => {
+    if (Platform.OS !== 'web' || busy) return;
+    setBusy(true);
+    try {
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'app';
+      const folder = zip.folder(slug)!;
+      folder.file('index.html', html);
+      folder.file('README.txt', `${title}\n\nBuilt by WYRD. Open index.html in any web browser -- it needs nothing else.\n`);
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${slug}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={styles.appCard}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Mono style={styles.appTag}>APP · SAVED IN THIS CHAT</Mono>
+        <Mono style={styles.appTitle} numberOfLines={1}>{title}</Mono>
+      </View>
+      {onOpen ? (
+        <Pressable onPress={() => onOpen(html)} style={styles.appBtn} accessibilityLabel={`Open ${title}`}>
+          <Mono style={styles.appBtnText}>OPEN</Mono>
+        </Pressable>
+      ) : null}
+      {Platform.OS === 'web' ? (
+        <Pressable onPress={download} disabled={busy} style={[styles.appBtn, styles.appBtnMain, busy && { opacity: 0.5 }]} accessibilityLabel={`Download ${title} as a zip`}>
+          <Mono style={[styles.appBtnText, { color: colors.onSignal }]}>{busy ? '…' : '.ZIP ↓'}</Mono>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 /** 👍 / 👎 on one of WYRD's replies: trains the answer behind it (tap again to clear). */
 function Thumbs({ turnId, initial }: { turnId: number; initial: number | null }) {
@@ -732,8 +811,10 @@ function Thinking({ reading }: { reading?: boolean }) {
 const HAIRLINE = StyleSheet.hairlineWidth;
 
 const styles = StyleSheet.create({
+  // (the margin is on a wrapper: a full-width card with its own side margin ran off small screens)
+  presenceWrap: { paddingHorizontal: 10, paddingTop: 8 },
   presence: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, marginHorizontal: 12, marginTop: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10,
     borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 16, backgroundColor: colors.panelBg,
     maxWidth: 780, width: '100%', alignSelf: 'center',
   },
@@ -767,6 +848,21 @@ const styles = StyleSheet.create({
   avatar: { width: 28, height: 28, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.green, marginTop: 1 },
   who: { fontSize: 10, letterSpacing: 1.8, color: colors.green, marginBottom: 6 },
   whoTime: { fontSize: 9, letterSpacing: 0, color: colors.greenBorder },
+  thought: { marginBottom: 6 },
+  thoughtHead: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 2 },
+  thoughtLabel: { fontSize: 9, letterSpacing: 1.6, color: colors.signal },
+  thoughtChevron: { fontSize: 10, color: colors.signal },
+  thoughtBody: { maxHeight: 180, marginTop: 6, borderLeftWidth: 2, borderLeftColor: colors.signalSoft, paddingLeft: 10 },
+  thoughtText: { fontSize: 11.5, lineHeight: 17, color: colors.greenDim, fontStyle: 'italic' },
+  appCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, padding: 12, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.signal, backgroundColor: colors.signalSoft,
+  },
+  appTag: { fontSize: 8.5, letterSpacing: 1.6, color: colors.signal },
+  appTitle: { fontSize: 14, color: colors.mint, marginTop: 2 },
+  appBtn: { borderWidth: 1, borderColor: colors.signal, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 },
+  appBtnMain: { backgroundColor: colors.signal },
+  appBtnText: { fontSize: 10.5, letterSpacing: 1, color: colors.signal },
   theirs: {
     backgroundColor: colors.panelBg, borderWidth: HAIRLINE, borderColor: colors.greenBorder, borderRadius: 18, borderTopLeftRadius: 6,
     paddingHorizontal: 15, paddingVertical: 12, gap: 10,

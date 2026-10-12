@@ -258,6 +258,8 @@ export interface ChatResult {
   turnId?: number;
   /** set when the reply gate changed the reply: softened, corrected or blocked */
   judgement?: string;
+  /** a summary of what WYRD thought on the way to this reply */
+  thinking?: string;
   block: { timestamp: string; [k: string]: unknown };
   comparison: string;
   candidateCount: number;
@@ -275,6 +277,10 @@ export interface ConversationTurn {
   /** a photo they sent with this message (small JPEG data URL) */
   image?: string | null;
   timestamp: string;
+  /** a summary of what WYRD thought on the way to this reply */
+  thinking?: string | null;
+  /** an app WYRD built in this reply: open it again, or download it */
+  appHtml?: string | null;
   [k: string]: unknown;
 }
 

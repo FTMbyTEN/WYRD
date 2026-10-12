@@ -30,6 +30,16 @@
     <meta name="apple-mobile-web-app-title" content="WYRD" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=face2" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=face2" />
+    <!-- Speed: start the ~3 MB graphics engine (CanvasKit) downloading with the page, alongside the
+         app's scripts -- not after them, which kept the first screen waiting about a second longer.
+         Not for the game link (#play), which doesn't use it. -->
+    <script>
+      if (!/^#(play|naija)/i.test(location.hash)) {
+        var l = document.createElement('link');
+        l.rel = 'preload'; l.as = 'fetch'; l.type = 'application/wasm'; l.href = '/canvaskit.wasm'; l.crossOrigin = 'anonymous';
+        document.head.appendChild(l);
+      }
+    </script>
     <style id="expo-reset">
       html,
       body {
