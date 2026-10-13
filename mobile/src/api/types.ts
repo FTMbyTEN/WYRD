@@ -378,7 +378,8 @@ export interface CustomGame {
   id: number;
   title: string;
   blurb: string;
-  html: string;
+  html: string; // empty while WYRD is still writing it
+  status: 'building' | 'failed' | null; // null: ready to play
   createdAt: string;
   updatedAt: string;
 }

@@ -94,7 +94,15 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
   const [world, setWorld] = useState(false);
   const [customs, setCustoms] = useState<CustomGame[]>([]);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
-  useEffect(() => { api.myGames().then(setCustoms).catch(() => {}); }, [room]);
+  // WYRD writes a game in the background: look again every few seconds, so a new one appears (and a
+  // building one turns playable) without leaving the page
+  useEffect(() => {
+    if (room || world) return;
+    const load = () => { api.myGames().then(setCustoms).catch(() => {}); };
+    load();
+    const t = setInterval(load, 6000);
+    return () => clearInterval(t);
+  }, [room, world]);
   const remove = async (id: number) => {
     setConfirmDel(null);
     setCustoms((cs) => cs.filter((g) => g.id !== id));
@@ -184,7 +192,25 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
           <Mono style={styles.muted}>Ask WYRD for any game and it writes it, saves it here, and you play it. Ask again to change it.</Mono>
         </View>
         <View style={styles.grid}>
-          {customs.map((g) => (
+          {customs.map((g) => g.status ? (
+            <View key={g.id} style={[styles.card, wide && styles.cardWide, styles.cardSoon]}>
+              <View style={styles.cardHead}>
+                <View style={[styles.cardTitle, { flex: 1, minWidth: 0 }]}>
+                  {g.status === 'building' ? <ActivityIndicator color={colors.signal} /> : <Glyph name="spark" size={30} color={colors.greenDim} />}
+                  <Display style={styles.cardName} numberOfLines={1}>{g.title}</Display>
+                </View>
+              </View>
+              <Mono style={[styles.play_, g.status === 'failed' && { color: colors.greenDim }]}>
+                {g.status === 'building' ? 'WYRD IS PROGRAMMING IT… A MINUTE OR TWO' : "COULDN'T FINISH IT. ASK WYRD AGAIN."}
+              </Mono>
+              {g.status === 'failed' ? (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable onPress={() => onAskWyrd?.(`Make me a game: ${g.title}. ${g.blurb}`)} style={styles.chip}><Mono style={styles.chipText}>TRY AGAIN</Mono></Pressable>
+                  <Pressable onPress={() => void remove(g.id)} style={styles.chip} accessibilityLabel={`Delete ${g.title}`}><Mono style={styles.chipText}>✕</Mono></Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : (
             <Pressable
               key={g.id}
               onPress={() => { sfx('open'); onPlay?.(g.html); }}
