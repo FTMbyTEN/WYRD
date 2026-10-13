@@ -10,9 +10,11 @@ import { colors, fonts } from '../theme';
  *  in a sealed frame: scripts only -- no way into this app, its storage, its sign-in or the server. */
 export const VISUAL_MARK = '<!--wyrd:visual-->';
 export const PYTHON_MARK = '<!--wyrd:python-->';
+/** A picture WYRD drew itself (draw_picture): one SVG, already cleaned on the server. */
+export const PICTURE_MARK = '<!--wyrd:picture-->';
 
 export const isInline = (s: string | null | undefined): s is string =>
-  !!s && (s.startsWith(VISUAL_MARK) || s.startsWith(PYTHON_MARK));
+  !!s && (s.startsWith(VISUAL_MARK) || s.startsWith(PYTHON_MARK) || s.startsWith(PICTURE_MARK));
 
 /** Programs that arrived in this session run straight away; older ones wait for a tap (loading
  *  Python costs a few MB the first time). */
@@ -20,9 +22,46 @@ export const freshRuns = new Set<string>();
 
 function parse(kept: string) {
   const python = kept.startsWith(PYTHON_MARK);
-  const rest = kept.slice((python ? PYTHON_MARK : VISUAL_MARK).length);
+  const picture = kept.startsWith(PICTURE_MARK);
+  const rest = kept.slice((python ? PYTHON_MARK : picture ? PICTURE_MARK : VISUAL_MARK).length);
   const m = /^<!--([\s\S]*?)-->\n?/.exec(rest);
-  return { python, title: m?.[1]?.trim() || (python ? 'Python' : 'Visual'), body: m ? rest.slice(m[0].length) : rest };
+  return {
+    python,
+    picture,
+    title: m?.[1]?.trim() || (python ? 'Python' : picture ? 'Picture' : 'Visual'),
+    body: m ? rest.slice(m[0].length) : rest,
+  };
+}
+
+/** A picture's page: the SVG filling the frame, centred, at its own proportions. */
+function picturePage(svg: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:transparent}
+body{display:flex;align-items:center;justify-content:center}svg{width:100%;height:100%;display:block}</style></head><body>${svg}</body></html>`;
+}
+
+/** The picture as a PNG, twice the size of its viewBox, drawn in the browser. */
+function downloadPng(name: string, svg: string) {
+  if (Platform.OS !== 'web') return;
+  const vb = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(svg);
+  const w = vb ? Number(vb[1]) : 800, h = vb ? Number(vb[2]) : 600;
+  const withSize = svg.replace(/<svg\b[^>]*>/, (tag) =>
+    tag.replace(/\s(width|height)\s*=\s*("[^"]*"|'[^']*')/g, '').replace('<svg', `<svg width="${w * 2}" height="${h * 2}"`),
+  );
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = w * 2; c.height = h * 2;
+    c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob((b) => {
+      if (!b) return;
+      const url = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }, 'image/png');
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(withSize);
 }
 
 const PYODIDE = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/';
@@ -113,18 +152,18 @@ function download(name: string, text: string, type: string) {
 }
 
 export function InlineRun({ kept, onOpen }: { kept: string; onOpen?: (html: string) => void }) {
-  const { python, title, body } = parse(kept);
+  const { python, picture, title, body } = parse(kept);
   const [run, setRun] = useState(() => (python ? freshRuns.has(kept) : true));
   const [runs, setRuns] = useState(0);
   const [showCode, setShowCode] = useState(false);
   const [h, setH] = useState(python ? 120 : 380);
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || (python ? 'program' : 'visual');
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || (python ? 'program' : picture ? 'picture' : 'visual');
 
   return (
     <View style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Mono style={styles.tag}>{python ? 'PYTHON · RUNS IN YOUR BROWSER' : 'VISUAL'}</Mono>
+          <Mono style={styles.tag}>{python ? 'PYTHON · RUNS IN YOUR BROWSER' : picture ? 'A PICTURE · DRAWN BY WYRD' : 'VISUAL'}</Mono>
           <Mono style={styles.title} numberOfLines={1}>{title}</Mono>
         </View>
         {python ? (
@@ -137,11 +176,20 @@ export function InlineRun({ kept, onOpen }: { kept: string; onOpen?: (html: stri
             </Pressable>
           </>
         ) : onOpen ? (
-          <Pressable onPress={() => onOpen(body)} style={styles.btn} accessibilityLabel={`Open ${title} full screen`}>
+          <Pressable onPress={() => onOpen(picture ? picturePage(body) : body)} style={styles.btn} accessibilityLabel={`Open ${title} full screen`}>
             <Mono style={styles.btnText}>OPEN</Mono>
           </Pressable>
         ) : null}
-        {Platform.OS === 'web' ? (
+        {Platform.OS === 'web' && picture ? (
+          <>
+            <Pressable onPress={() => download(`${slug}.svg`, body, 'image/svg+xml')} style={styles.btn} accessibilityLabel={`Download ${title} as SVG`}>
+              <Mono style={styles.btnText}>.SVG ↓</Mono>
+            </Pressable>
+            <Pressable onPress={() => downloadPng(`${slug}.png`, body)} style={[styles.btn, styles.btnMain]} accessibilityLabel={`Download ${title} as PNG`}>
+              <Mono style={[styles.btnText, { color: colors.onSignal }]}>.PNG ↓</Mono>
+            </Pressable>
+          </>
+        ) : Platform.OS === 'web' ? (
           <Pressable
             onPress={() => (python ? download(`${slug}.py`, body + '\n', 'text/x-python') : download(`${slug}.html`, body, 'text/html'))}
             style={styles.btn}
@@ -158,8 +206,8 @@ export function InlineRun({ kept, onOpen }: { kept: string; onOpen?: (html: stri
         <View style={styles.frame}>
           <Frame
             key={runs}
-            html={python ? pythonPage(body) : body}
-            height={python ? Math.min(Math.max(h, 80), 900) : 380}
+            html={python ? pythonPage(body) : picture ? picturePage(body) : body}
+            height={python ? Math.min(Math.max(h, 80), 900) : picture ? 420 : 380}
             onHeight={python ? (n) => setH(n + 4) : undefined}
             label={title}
           />
