@@ -373,6 +373,16 @@ export interface DronePlanResult {
 }
 
 // ---- games ----
+/** A game WYRD programmed for them (save_game), kept in their Games tab. */
+export interface CustomGame {
+  id: number;
+  title: string;
+  blurb: string;
+  html: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PlayerRating {
   id: number;
   game: string;

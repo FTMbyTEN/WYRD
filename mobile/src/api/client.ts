@@ -35,7 +35,7 @@ import type { QuizQuestion, QuizStats, ReadingItem, ReadingSlice, WorkHit, WorkP
   GameMatch,
   AgentTask,
   AgentStep,
-  PlayerRating,
+  CustomGame, PlayerRating,
   DronePlanResult,
   DroneState,
 } from './types';
@@ -537,6 +537,8 @@ export const api = {
   dashboardEvalRun: (id: number) => callEndpoint<string>('dashboard', 'evalRun', { id }).then((j) => JSON.parse(j) as EvalRunDetail),
 
   // ---- games ---- (the server holds every position and checks every move)
+  myGames: () => callEndpoint<CustomGame[]>('games', 'myGames', {}),
+  deleteGame: (id: number) => callEndpoint<void>('games', 'deleteGame', { id }),
   gameRatings: () => callEndpoint<PlayerRating[]>('games', 'myRatings', {}),
   gameLeaderboard: (game: string) => callEndpoint<PlayerRating[]>('games', 'leaderboard', { game }),
   gameActive: (game: string) => callEndpoint<GameMatch | null>('games', 'active', { game }),

@@ -67,6 +67,7 @@ export function AppShell() {
   // a book Dialogue Link pulled up: the Academy opens it (behind the chat, which stays open)
   const [bookFocus, setBookFocus] = useState<{ id: number; at: number } | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
+  const [starter, setStarter] = useState<{ text: string; at: number } | null>(null); // a drafted request for Dialogue Link
   // Dialogue Link keeps its draft and scroll once opened; every other overlay is mounted only
   // while open, so a closed one never polls the server or holds memory
   const [linkOpened, setLinkOpened] = useState(false);
@@ -168,6 +169,7 @@ export function AppShell() {
       onOpenDrone={() => { setOverlay(null); changeTab('drone'); }}
       onOpenTasks={() => { setTaskFocus(null); openFromChat('tasks'); void refreshTasks(); }}
       onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
+      starter={starter}
       dock={desktop ? { width: Math.min(chatWidth, maxChat), onResize: resizeChat, minWidth: 380, maxWidth: maxChat } : undefined}
     />
   ) : null;
@@ -204,7 +206,12 @@ export function AppShell() {
               />
             )}
             {tab === 'academy' && <AcademyTab focus={bookFocus} onAsk={() => open('link')} />}
-            {tab === 'games' && <GamesTab />}
+            {tab === 'games' && (
+              <GamesTab
+                onAskWyrd={(text) => { setStarter({ text, at: Date.now() }); open('link'); }}
+                onPlay={(html) => { setAppPreviewHtml(html); open('appPreview'); }}
+              />
+            )}
             {tab === 'drone' && droneAccess && <DroneTab />}
             {tab === 'you' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}
             {tab === 'settings' && <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => open('cop')} />}

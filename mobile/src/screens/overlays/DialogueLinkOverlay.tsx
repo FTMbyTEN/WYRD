@@ -32,6 +32,8 @@ interface Props {
   onOpenDrone: () => void;
   onOpenTasks?: () => void;
   onOpenBook: (readingItemId: number) => void;
+  // a request drafted elsewhere (Games' "+ New game"), put in the message bar when it changes
+  starter?: { text: string; at: number } | null;
   // desktop: docked to the right of the page, resizable (see OverlayShell)
   dock?: { width: number; onResize: (w: number) => void; minWidth: number; maxWidth: number };
 }
@@ -107,7 +109,7 @@ const ATTACHED = /^📎 ([^\n]+)\n*/;
  *  from chat.getHistory kept live by the stream's `chat` event, and the tool hand-offs routed to
  *  the real overlays. A file you attach waits in the composer until you send your message with
  *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
-export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks, dock }: Props) {
+export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks, dock, starter }: Props) {
   const { turns } = useConversations(60);
   // phones (under 420px): no keyboard hint (no Enter key to speak of) and no PRIVATE badge, for room
   const { width: winW } = useWindowDimensions();
@@ -116,6 +118,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
   const openChat = useChats().chats.find((c) => c.current && c.turns > 0);
   const { mind } = useMind();
   const [draft, setDraft] = useState('');
+  useEffect(() => { if (starter) setDraft(starter.text); }, [starter]);
   const [staged, setStaged] = useState<Staged | null>(null);
   const [pending, setPending] = useState<{ text: string; at: string; image?: string } | null>(null);
   // the message being replied to, shown above the composer until sent or dismissed

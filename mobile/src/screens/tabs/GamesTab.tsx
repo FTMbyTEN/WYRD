@@ -9,7 +9,7 @@ import { Glyph } from '../../components/glyph/Glyph';
 import { Display, Mono } from '../../components/ui';
 import { colors } from '../../theme';
 import { api, ApiError } from '../../api/client';
-import type { GameMatch, PlayerRating } from '../../api/types';
+import type { CustomGame, GameMatch, PlayerRating } from '../../api/types';
 import { sfx } from '../../util/sound';
 
 import { loadRoom, saveRoom, type GameKey, type GameRoom } from '../../util/gameRoom';
@@ -83,7 +83,8 @@ function withSide(m: GameMatch | null): GameMatch | null {
 }
 
 /** GAMES: play WYRD, or another person, for a rating. */
-export function GamesTab() {
+/** onAskWyrd: open Dialogue Link with a request drafted; onPlay: a game WYRD made, full screen. */
+export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) => void; onPlay?: (html: string) => void } = {}) {
   const { width, height } = useWindowDimensions();
   const wide = width >= 1000;
   const [ratings, setRatings] = useState<PlayerRating[]>([]);
@@ -91,6 +92,14 @@ export function GamesTab() {
   const [boardGame, setBoardGame] = useState<GameKey>('chess');
   const [room, setRoom] = useState<GameKey | null>(() => loadRoom()?.game ?? null);
   const [world, setWorld] = useState(false);
+  const [customs, setCustoms] = useState<CustomGame[]>([]);
+  const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  useEffect(() => { api.myGames().then(setCustoms).catch(() => {}); }, [room]);
+  const remove = async (id: number) => {
+    setConfirmDel(null);
+    setCustoms((cs) => cs.filter((g) => g.id !== id));
+    try { await api.deleteGame(id); } catch { api.myGames().then(setCustoms).catch(() => {}); }
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -167,6 +176,53 @@ export function GamesTab() {
             </Pressable>
           );
         })}
+      </View>
+
+      <View style={{ gap: 10 }}>
+        <View style={{ gap: 2 }}>
+          <Mono style={styles.label}>YOUR GAMES · PROGRAMMED BY WYRD</Mono>
+          <Mono style={styles.muted}>Ask WYRD for any game and it writes it, saves it here, and you play it. Ask again to change it.</Mono>
+        </View>
+        <View style={styles.grid}>
+          {customs.map((g) => (
+            <Pressable
+              key={g.id}
+              onPress={() => { sfx('open'); onPlay?.(g.html); }}
+              style={({ pressed }) => [styles.card, wide && styles.cardWide, pressed && styles.pressed]}
+              accessibilityLabel={`Play ${g.title}`}
+            >
+              <View style={styles.cardHead}>
+                <View style={[styles.cardTitle, { flex: 1, minWidth: 0 }]}>
+                  <Glyph name="spark" size={30} color={colors.signal} active />
+                  <Display style={styles.cardName} numberOfLines={1}>{g.title}</Display>
+                </View>
+                <Mono style={styles.play_}>PLAY ›</Mono>
+              </View>
+              <Mono style={styles.muted} numberOfLines={2}>{g.blurb}</Mono>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                {confirmDel === g.id ? (
+                  <>
+                    <Pressable onPress={() => void remove(g.id)} style={styles.chip}><Mono style={[styles.chipText, { color: colors.signal }]}>DELETE IT</Mono></Pressable>
+                    <Pressable onPress={() => setConfirmDel(null)} style={styles.chip}><Mono style={styles.chipText}>KEEP</Mono></Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Pressable onPress={() => onAskWyrd?.(`Change my game "${g.title}": `)} style={styles.chip}><Mono style={styles.chipText}>CHANGE IT</Mono></Pressable>
+                    <Pressable onPress={() => setConfirmDel(g.id)} style={styles.chip} accessibilityLabel={`Delete ${g.title}`}><Mono style={styles.chipText}>✕</Mono></Pressable>
+                  </>
+                )}
+              </View>
+            </Pressable>
+          ))}
+          <Pressable
+            onPress={() => onAskWyrd?.('Make me a game: ')}
+            style={({ pressed }) => [styles.card, styles.newGame, wide && styles.cardWide, pressed && styles.pressed]}
+            accessibilityLabel="Ask WYRD to make a game"
+          >
+            <Display style={[styles.cardName, { color: colors.signal }]}>+ New game</Display>
+            <Mono style={styles.muted}>Snake, Ludo, Ayo, a danfo racer, a quiz: say what you want and WYRD programs it.</Mono>
+          </Pressable>
+        </View>
       </View>
 
       <View style={{ gap: 8 }}>
@@ -479,7 +535,7 @@ function sideName(game: GameKey, side: string | null) {
   if (game === 'chess') return first ? 'WHITE' : 'BLACK';
   if (game === 'reversi') return first ? 'DARK' : 'LIGHT';
   if (game === 'tictactoe') return first ? 'X' : 'O';
-  return first ? 'COBALT' : 'INK';
+  return first ? 'TERRACOTTA' : 'INDIGO'; // the first side's discs are terracotta (signal), the second's indigo (ink)
 }
 
 const signed = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`;
@@ -508,6 +564,7 @@ const styles = StyleSheet.create({
   worldBlurb: { fontSize: 13, lineHeight: 19, color: '#EEDFC8' },
   worldGo: { fontSize: 13, letterSpacing: 1, color: '#E2A32B' },
   card: { width: '100%', borderWidth: 1, borderColor: colors.greenBorderDim, padding: 14, gap: 6, backgroundColor: colors.card, borderRadius: 16 },
+  newGame: { borderStyle: 'dashed', borderColor: colors.signal, justifyContent: 'center' },
   cardWide: { width: '32%', minWidth: 260, flexGrow: 1 },
   cardSoon: { opacity: 0.55 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

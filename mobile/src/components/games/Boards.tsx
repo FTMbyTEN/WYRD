@@ -1,7 +1,11 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Mono } from '../ui';
-import { colors } from '../../theme';
+import { colors, isDark } from '../../theme';
+
+// the boards' own grounds, light by day and warm browns at night (as the chess board)
+const BOARD = isDark ? '#28211C' : '#eef0f5';
+const HOLE = isDark ? '#14110E' : '#fff';
 
 /** A board game position as the server sends it: cells -1 (empty), 0 (first player) or 1 (second),
  *  and whose turn it is. The server checks every move; the boards only offer the plausible ones. */
@@ -17,7 +21,7 @@ export function TicTacToeBoard({ state, mySide, size, disabled, last, onMove }: 
   const myTurn = s.t === mySide && !disabled;
   const cell = size / 3;
   return (
-    <View style={[styles.grid3, { width: size, height: size }]}>
+    <View style={[styles.grid3, { width: size + 2, height: size + 2 }]}>{/* + its 1px border, so every row fits */}
       {s.b.map((v, i) => (
         <Pressable
           key={i}
@@ -96,7 +100,7 @@ export function ReversiBoard({ state, mySide, size, disabled, last, onMove }: Bo
   const moves = useMemo(() => (myTurn ? reversiMoves(s.b, mySide) : new Set<number>()), [s, myTurn, mySide]);
   const cell = size / 8;
   return (
-    <View style={[styles.rev, { width: size, height: size }]}>
+    <View style={[styles.rev, { width: size + 2, height: size + 2 }]}>{/* + its 1px border, so 8 squares fit a row */}
       {s.b.map((v, i) => (
         <Pressable
           key={i}
@@ -124,17 +128,18 @@ export function reversiCount(state: string): [number, number] {
 
 const styles = StyleSheet.create({
   grid3: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: colors.mint },
-  ttt: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  ttt: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.greenBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: HOLE },
   mark: { fontWeight: '700' },
   lastCell: { backgroundColor: colors.signalSoft },
-  c4: { flexDirection: 'row', backgroundColor: '#eef0f5', borderWidth: 1, borderColor: colors.mint, overflow: 'hidden' },
+  c4: { flexDirection: 'row', backgroundColor: BOARD, borderWidth: 1, borderColor: colors.mint, overflow: 'hidden' },
   colHover: { backgroundColor: colors.signalSoft },
   hole: { alignItems: 'center', justifyContent: 'center' },
-  disc: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.greenBorderDim },
+  disc: { backgroundColor: HOLE, borderWidth: 1, borderColor: colors.greenBorderDim },
   lastMark: { position: 'absolute', top: 2, left: '40%', width: '20%', height: 3, backgroundColor: colors.signal },
-  rev: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: colors.mint, backgroundColor: '#e9ebf1' },
-  revCell: { borderWidth: StyleSheet.hairlineWidth, borderColor: '#c9cdd8', alignItems: 'center', justifyContent: 'center' },
+  rev: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: colors.mint, backgroundColor: isDark ? '#28211C' : '#e9ebf1' },
+  revCell: { borderWidth: StyleSheet.hairlineWidth, borderColor: isDark ? '#3D332B' : '#c9cdd8', alignItems: 'center', justifyContent: 'center' },
   revDisc: { borderWidth: 1 },
-  dark: { backgroundColor: colors.ink, borderColor: colors.ink },
-  light: { backgroundColor: '#fff', borderColor: colors.ink },
+  // at night the dark disc is near-black ringed in indigo, the light one cream: still dark against light
+  dark: isDark ? { backgroundColor: '#0E0B09', borderColor: colors.ink } : { backgroundColor: colors.ink, borderColor: colors.ink },
+  light: { backgroundColor: isDark ? '#FFF6EA' : '#fff', borderColor: colors.ink },
 });
