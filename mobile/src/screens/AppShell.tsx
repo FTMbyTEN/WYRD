@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-
 import { Header } from './Header';
 import { FirstRunTour } from '../components/FirstRunTour';
 import { TabBar, type TabKey } from './TabBar';
+import { OverlayShell } from './overlays/OverlayShell';
 import { AppsSheet } from './AppsSheet';
 import { Enter } from '../components/motion';
 import { WyrdTab } from './tabs/WyrdTab';
@@ -48,7 +49,7 @@ const AppPreviewOverlay = named(() => import('./overlays/AppPreviewOverlay'), 'A
 const TasksOverlay = named(() => import('./overlays/TasksOverlay'), 'TasksOverlay') as unknown as typeof import('./overlays/TasksOverlay').TasksOverlay;
 const CopOverlay = named(() => import('./overlays/CopOverlay'), 'CopOverlay') as unknown as typeof import('./overlays/CopOverlay').CopOverlay;
 
-type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | 'cop' | 'tasks' | null;
+type Overlay = 'alerts' | 'link' | 'brain' | 'globe' | 'concept' | 'growth' | 'appPreview' | 'cop' | 'tasks' | 'you' | null;
 
 function Loading() {
   return (
@@ -105,7 +106,8 @@ export function AppShell() {
   const [appsOpen, setAppsOpen] = useState(false);
   const openApps = () => { sfx('open'); setAppsOpen(true); };
   const close = () => { if (overlay) sfx('close'); setOverlay(backTo); setBackTo(null); };
-  const changeTab = (t: TabKey) => { if (t !== tab) sfx('tab'); setTab(t); };
+  // You is a glass pop-up over the page (as Dialogue Link, Tasks, Alerts and COP), not a page of its own
+  const changeTab = (t: TabKey) => { if (t === 'you') { open('you'); return; } if (t !== tab) sfx('tab'); setTab(t); };
   // the tour brings each tab forward as it describes it (a stable callback, so it doesn't re-run)
   const tourTab = useCallback((t: string) => setTab(t as TabKey), []);
 
@@ -175,7 +177,7 @@ export function AppShell() {
       <ScreenEffects />
 
       <View style={[styles.content, desktop && styles.contentDesktop]}>
-        {desktop && <TabBar active={tab} onChange={changeTab} vertical onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
+        {desktop && <TabBar active={overlay === 'you' ? 'you' : tab} onChange={changeTab} vertical onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
         <View style={{ flex: 1, minWidth: 0 }}>
         <Header
           mind={mind}
@@ -212,7 +214,7 @@ export function AppShell() {
           {desktop ? <Suspense fallback={null}>{dialogue}</Suspense> : null}
         </View>
 
-        {!desktop && <TabBar active={tab} onChange={changeTab} onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
+        {!desktop && <TabBar active={overlay === 'you' ? 'you' : tab} onChange={changeTab} onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
         </View>
       </View>
 
@@ -236,6 +238,11 @@ export function AppShell() {
         {overlay === 'growth' && <GrowthOverlay visible onClose={close} />}
         {overlay === 'appPreview' && <AppPreviewOverlay visible onClose={close} html={appPreviewHtml} />}
         {overlay === 'cop' && <CopOverlay visible onClose={close} />}
+        {overlay === 'you' && (
+          <OverlayShell visible title="YOU" onClose={close} glassWidth={860} glassHeight={880}>
+            <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => { open('cop'); setBackTo('you'); }} />
+          </OverlayShell>
+        )}
         {overlay === 'tasks' && <TasksOverlay visible openId={taskFocus} onClose={() => { close(); void refreshTasks(); }} />}
       </Suspense>
     </View>
