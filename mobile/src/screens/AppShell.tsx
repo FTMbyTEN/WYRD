@@ -177,8 +177,7 @@ export function AppShell() {
     tasks: 'the Tasks panel', you: 'the You page (profile, memories, settings)',
   };
   const where = (o: Overlay) => (o && o !== 'link' ? OVERLAY_SCREEN[o] : TAB_SCREEN[tab]) ?? TAB_SCREEN[tab];
-  const [screen, setScreen] = useState('');
-  const callWyrd = () => { setScreen(where(overlay)); open('link'); setBackTo(overlay && overlay !== 'link' ? overlay : null); };
+  const callWyrd = () => { open('link'); setBackTo(overlay && overlay !== 'link' ? overlay : null); };
   const PLACE: Record<string, () => void> = {
     wyrd: () => { setOverlay(null); changeTab('wyrd'); }, academy: () => { setOverlay(null); changeTab('academy'); },
     games: () => { setOverlay(null); changeTab('games'); }, journal: () => { setOverlay(null); changeTab('journal'); },
@@ -205,7 +204,8 @@ export function AppShell() {
       onOpenTasks={() => { setTaskFocus(null); openFromChat('tasks'); void refreshTasks(); }}
       onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
       starter={starter}
-      screen={screen || TAB_SCREEN[tab]}
+      // worked out afresh for every message: the page they're on now, not the one they called WYRD from
+      screen={where(overlay && overlay !== 'link' ? overlay : backTo && backTo !== 'link' ? backTo : null)}
       onCustomize={customize}
       dock={desktop ? { width: Math.min(chatWidth, maxChat), onResize: resizeChat, minWidth: 380, maxWidth: maxChat } : undefined}
     />
@@ -215,7 +215,7 @@ export function AppShell() {
     <View style={styles.root}>
       <ScreenEffects />
 
-      <View style={[styles.content, desktop && styles.contentDesktop]}>
+      <View nativeID="wyrd-page" style={[styles.content, desktop && styles.contentDesktop]}>
         {desktop && <TabBar active={overlay === 'you' ? 'you' : tab} onChange={changeTab} vertical onApps={openApps} appsOpen={appsOpen} onOpenChat={() => open('link')} />}
         <View style={{ flex: 1, minWidth: 0 }}>
         <Header

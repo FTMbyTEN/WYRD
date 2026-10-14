@@ -6,7 +6,7 @@ import { OverlayShell } from './OverlayShell';
 import { Display, Mono } from '../../components/ui';
 import { FaceMark } from '../../components/FaceMark';
 import { RichText } from '../../components/RichText';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, isDark } from '../../theme';
 import { CodeText } from '../../components/CodeText';
 import { freshRuns, InlineRun, isInline } from '../../components/InlineRun';
 import { Glyph } from '../../components/glyph/Glyph';
@@ -22,6 +22,18 @@ import { captureNative, WebCameraSheet } from '../../components/CameraCapture';
 import { useSpeechInput } from '../../util/speechInput';
 import { extractText, pickFile } from '../../util/fileText';
 import { buildIndex, passagesFor, sampleOf, wordCount, type DocIndex } from '../../util/docIndex';
+
+/** What WYRD is told about the screen: its name, light or dark, and the words on it (the page's
+ *  visible text, read from the content area at the moment of sending) -- so it knows where it is
+ *  and what's there. */
+function withPage(screen: string) {
+  let seen = '';
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const el = document.getElementById('wyrd-page');
+    seen = (el?.innerText ?? '').replace(/\s+\n/g, '\n').replace(/\n{2,}/g, '\n').trim().slice(0, 3500);
+  }
+  return `${screen}. The app is in ${isDark ? 'dark' : 'light'} mode.${seen ? ` The text on their screen right now:\n${seen}` : ''}`;
+}
 
 interface Props {
   visible: boolean;
@@ -201,7 +213,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         openDoc.current = file;
       }
       const open = openDoc.current;
-      const result = await api.chat(shown, open ? passagesFor(open.ix, text) : undefined, screen);
+      const result = await api.chat(shown, open ? passagesFor(open.ix, text) : undefined, screen ? withPage(screen) : undefined);
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));
