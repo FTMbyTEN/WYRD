@@ -121,10 +121,15 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
   // WATCH WYRD PLAY: straight in if the game has WYRD's play mode; else it's added (the tile shows
   // "programming" for a minute, then the same button plays)
   const watchWyrd = async (g: CustomGame) => {
-    if (g.html.includes('WYRD_LEARNS')) { watching.current = g.id; sfx('open'); onPlay?.(wyrdPlaying(g.html, g)); return; }
+    // the server says whether WYRD's player is current; an older one is rewritten first (the tile
+    // shows "programming" for a minute)
     try {
       const next = await api.readyForWyrd(g.id);
-      if (next) setCustoms((cs) => cs.map((c) => (c.id === next.id ? next : c)));
+      if (!next) return;
+      setCustoms((cs) => cs.map((c) => (c.id === next.id ? next : c)));
+      if (next.status == null && next.html.includes('WYRD_LEARNS')) {
+        watching.current = next.id; sfx('open'); onPlay?.(wyrdPlaying(next.html, next));
+      }
     } catch { /* the tile stays as it was */ }
   };
   // each round WYRD plays, the game reports it (postMessage); it goes to the server, which keeps WYRD's
