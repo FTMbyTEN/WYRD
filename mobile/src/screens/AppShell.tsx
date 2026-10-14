@@ -285,8 +285,8 @@ export function AppShell() {
             <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => { open('cop'); setBackTo('you'); }} />
           </OverlayShell>
         )}
-        {/* ASK WYRD: over every screen but Dialogue Link itself */}
-        <WyrdCall visible={overlay !== 'link' && !(desktop && backTo === 'link')} onPress={callWyrd} raised={!desktop} />
+        {/* ASK WYRD: over every screen but home (which has its own Dialogue Link box) and Dialogue Link itself */}
+        <WyrdCall visible={overlay !== 'link' && !(desktop && backTo === 'link') && !(tab === 'wyrd' && !overlay)} onPress={callWyrd} raised={!desktop} />
         {overlay === 'tasks' && <TasksOverlay visible openId={taskFocus} onClose={() => { close(); void refreshTasks(); }} />}
       </Suspense>
     </View>
