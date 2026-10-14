@@ -34,6 +34,9 @@ interface Props {
   onOpenBook: (readingItemId: number) => void;
   // a request drafted elsewhere (Games' "+ New game"), put in the message bar when it changes
   starter?: { text: string; at: number } | null;
+  // where they are in the app (told to WYRD with each message), and how a change WYRD makes is applied
+  screen?: string;
+  onCustomize?: (setting: string, value: string) => void;
   // desktop: docked to the right of the page, resizable (see OverlayShell)
   dock?: { width: number; onResize: (w: number) => void; minWidth: number; maxWidth: number };
 }
@@ -109,7 +112,7 @@ const ATTACHED = /^📎 ([^\n]+)\n*/;
  *  from chat.getHistory kept live by the stream's `chat` event, and the tool hand-offs routed to
  *  the real overlays. A file you attach waits in the composer until you send your message with
  *  it; replies render their formatting (bold, lists, code) instead of showing the markers. */
-export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks, dock, starter }: Props) {
+export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks, dock, starter, screen, onCustomize }: Props) {
   const { turns } = useConversations(60);
   // phones (under 420px): no keyboard hint (no Enter key to speak of) and no PRIVATE badge, for room
   const { width: winW } = useWindowDimensions();
@@ -152,6 +155,12 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
     else if (action.type === 'open_drone') onOpenDrone();
     else if (action.type === 'open_book') onOpenBook(action.readingItemId);
     else if (action.type === 'open_tasks') onOpenTasks?.();
+    else if (action.type === 'customize') {
+      try {
+        const c = JSON.parse(action.html) as { setting: string; value: string };
+        onCustomize?.(c.setting, c.value);
+      } catch { /* not a change the app knows */ }
+    }
   }, [onOpenGlobe, onOpenAppPreview, onOpenDrone, onOpenBook, onOpenTasks]);
 
   const send = async (override?: string) => {
@@ -192,7 +201,7 @@ export function DialogueLinkOverlay({ visible, onClose, tts, onOpenGlobe, onOpen
         openDoc.current = file;
       }
       const open = openDoc.current;
-      const result = await api.chat(shown, open ? passagesFor(open.ix, text) : undefined);
+      const result = await api.chat(shown, open ? passagesFor(open.ix, text) : undefined, screen);
       // No server push on Serverpod -- publish the turn (and the reply's fresh mind state) so
       // every useConversations/useMind instance updates now, not on its next poll.
       if (result.fromMemory) setFromMemory((s) => new Set(s).add(result.reply));

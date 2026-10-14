@@ -250,6 +250,8 @@ export type ChatAction =
   | { type: 'open_drone' }
   | { type: 'open_book'; readingItemId: number }
   | { type: 'open_tasks' }
+  // customize_app: a change to the app (theme, accent, text_size) or a place to open; html is the JSON
+  | { type: 'customize'; html: string }
   | null;
 
 export interface ChatResult {

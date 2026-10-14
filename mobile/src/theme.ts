@@ -122,7 +122,49 @@ function deviceDark(): boolean {
  *  made once, from the palette chosen here, so a change of theme reloads (see setThemeMode). */
 export const isDark = themeMode() === 'dark' || (themeMode() === 'auto' && deviceDark());
 
-export const colors: Palette = isDark ? dark : light;
+// the accent WYRD was asked to use (customize_app), kept on this device: terracotta unless changed
+const ACCENT = 'wyrd.accent';
+function savedAccent(): string | null {
+  try {
+    const v = globalThis.localStorage?.getItem(ACCENT);
+    return v && /^#[0-9a-f]{6}$/i.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+function withAccent(p: Palette): Palette {
+  const a = savedAccent();
+  if (!a) return p;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  return { ...p, signal: a, signalSoft: `rgba(${r},${g},${b},${isDark ? 0.16 : 0.1})` };
+}
+
+export const colors: Palette = withAccent(isDark ? dark : light);
+
+/** A new accent colour (null: back to terracotta). Every screen's styles are made once, so the page reloads. */
+export function setAccent(hex: string | null) {
+  try {
+    if (hex) globalThis.localStorage?.setItem(ACCENT, hex);
+    else globalThis.localStorage?.removeItem(ACCENT);
+  } catch { /* not kept */ }
+  if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.reload();
+}
+
+// the text size WYRD was asked to use (customize_app): the whole page scaled, on the web
+const TEXT = 'wyrd.textSize';
+const ZOOM: Record<string, number> = { small: 0.9, normal: 1, large: 1.12, huge: 1.25 };
+function applyTextSize(size: string | null) {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  (document.documentElement.style as unknown as { zoom: string }).zoom = String(ZOOM[size ?? 'normal'] ?? 1);
+}
+export function setTextSize(size: string) {
+  try {
+    if (size === 'normal') globalThis.localStorage?.removeItem(TEXT);
+    else globalThis.localStorage?.setItem(TEXT, size);
+  } catch { /* not kept */ }
+  applyTextSize(size);
+}
+try { applyTextSize(globalThis.localStorage?.getItem(TEXT) ?? null); } catch { /* the default size */ }
 
 // just reloaded for a change of theme: stay covered in the new background until the app is drawn
 if (Platform.OS === 'web') startArrival(colors.bg);

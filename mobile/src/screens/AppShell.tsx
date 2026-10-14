@@ -10,7 +10,8 @@ import { WyrdTab } from './tabs/WyrdTab';
 import { ScreenEffects } from '../components/ScreenEffects';
 import { prefetchBrain, prefetchDialogue, useAgentBadge, useDroneAccess, useMind } from '../api/hooks';
 import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
-import { colors } from '../theme';
+import { colors, setAccent, setTextSize, setThemeMode } from '../theme';
+import { WyrdCall } from '../components/WyrdCall';
 import { useIsDesktop } from '../util/layout';
 import { preloadVoice, setSound, sfx, unlock, useSound, voice, type VoiceLine } from '../util/sound';
 
@@ -159,6 +160,38 @@ export function AppShell() {
   // Dialogue Link: a full-screen panel on phones; on desktop a glass panel docked on the right,
   // as wide as you drag it (remembered), still showing while something it opened is on top
   const maxChat = Math.max(420, Math.min(980, Math.round(winWidth * 0.62)));
+  // where they are, told to WYRD with each message, so it knows what "this" is
+  const TAB_SCREEN: Record<string, string> = {
+    wyrd: 'the home screen (WYRD tab: its brain, last thought, Dialogue Link box, chess challenge, NAIJA 2099 card)',
+    journal: 'the Journal (diary, dreams, reasoning, feed)',
+    academy: 'the Academy (library and reading)',
+    games: 'the Games tab (chess, Connect Four, Reversi, Tic-tac-toe, leaderboard, and YOUR GAMES that WYRD programmed for them)',
+    drone: 'the Drone tab',
+    you: 'the You page (profile, memories, settings)',
+    settings: 'the You page (profile, memories, settings)',
+  };
+  const OVERLAY_SCREEN: Record<string, string> = {
+    alerts: 'the Alerts panel', brain: 'BRAIN_3D', globe: 'the world globe', concept: 'the concept map',
+    growth: 'the growth panel', appPreview: 'an app or game WYRD built, open full screen', cop: 'the COP panel',
+    tasks: 'the Tasks panel', you: 'the You page (profile, memories, settings)',
+  };
+  const where = (o: Overlay) => (o && o !== 'link' ? OVERLAY_SCREEN[o] : TAB_SCREEN[tab]) ?? TAB_SCREEN[tab];
+  const [screen, setScreen] = useState('');
+  const callWyrd = () => { setScreen(where(overlay)); open('link'); setBackTo(overlay && overlay !== 'link' ? overlay : null); };
+  const PLACE: Record<string, () => void> = {
+    wyrd: () => { setOverlay(null); changeTab('wyrd'); }, academy: () => { setOverlay(null); changeTab('academy'); },
+    games: () => { setOverlay(null); changeTab('games'); }, journal: () => { setOverlay(null); changeTab('journal'); },
+    drone: () => { setOverlay(null); changeTab('drone'); }, you: () => open('you'), tasks: () => open('tasks'),
+    alerts: () => open('alerts'), cop: () => open('cop'), brain: () => open('brain'), globe: () => open('globe'),
+  };
+  // a change WYRD made (customize_app), applied as its reply arrives
+  const customize = (setting: string, value: string) => {
+    if (setting === 'theme' && (value === 'light' || value === 'dark' || value === 'auto')) setThemeMode(value);
+    else if (setting === 'accent') setAccent(/^#[0-9a-f]{6}$/i.test(value) ? value : null);
+    else if (setting === 'text_size') setTextSize(value);
+    else if (setting === 'open') PLACE[value]?.();
+  };
+
   const dialogue = linkOpened ? (
     <DialogueLinkOverlay
       visible={overlay === 'link' || (desktop && backTo === 'link')}
@@ -170,6 +203,8 @@ export function AppShell() {
       onOpenTasks={() => { setTaskFocus(null); openFromChat('tasks'); void refreshTasks(); }}
       onOpenBook={(id) => { setBookFocus({ id, at: Date.now() }); changeTab('academy'); }}
       starter={starter}
+      screen={screen || TAB_SCREEN[tab]}
+      onCustomize={customize}
       dock={desktop ? { width: Math.min(chatWidth, maxChat), onResize: resizeChat, minWidth: 380, maxWidth: maxChat } : undefined}
     />
   ) : null;
@@ -250,6 +285,8 @@ export function AppShell() {
             <YouTab tts={tts} onToggleTts={() => setTts((v) => !v)} onOpenCop={() => { open('cop'); setBackTo('you'); }} />
           </OverlayShell>
         )}
+        {/* ASK WYRD: over every screen but Dialogue Link itself */}
+        <WyrdCall visible={overlay !== 'link' && !(desktop && backTo === 'link')} onPress={callWyrd} raised={!desktop} />
         {overlay === 'tasks' && <TasksOverlay visible openId={taskFocus} onClose={() => { close(); void refreshTasks(); }} />}
       </Suspense>
     </View>

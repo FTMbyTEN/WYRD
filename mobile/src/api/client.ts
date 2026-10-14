@@ -140,7 +140,7 @@ function adaptChatResult(r: SpChatReply): ChatResult {
     chosenPath: 'serverpod',
     mind: adaptMind(r.mind),
     netFetched: false,
-    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'show_visual' || r.action.type === 'run_python' || r.action.type === 'open_drone' || r.action.type === 'open_book' || r.action.type === 'open_tasks')
+    action: r.action && (r.action.type === 'open_world_map' || r.action.type === 'preview_app' || r.action.type === 'show_visual' || r.action.type === 'run_python' || r.action.type === 'open_drone' || r.action.type === 'open_book' || r.action.type === 'open_tasks' || r.action.type === 'customize')
       ? (r.action as ChatResult['action'])
       : null,
   };
@@ -286,8 +286,13 @@ export const api = {
 
   // ---- chat / dialogue link ----
   /** [passages]: the parts of a file open in this browser relevant to the message. */
-  chat: (text: string, passages?: string[]) =>
-    callEndpoint<SpChatReply>('chat', 'sendMessage', passages?.length ? { text, passages } : { text }).then(adaptChatResult),
+  /** [screen]: where they are in the app as they ask, so WYRD knows what "this" is. */
+  chat: (text: string, passages?: string[], screen?: string) =>
+    callEndpoint<SpChatReply>('chat', 'sendMessage', {
+      text,
+      ...(passages?.length ? { passages } : {}),
+      ...(screen ? { screen } : {}),
+    }).then(adaptChatResult),
   /** One camera frame (base64 JPEG), described by WYRD's vision model. */
   /** What WYRD remembers seeing of the signed-in person (descriptions only), newest first. */
   sightings: (limit = 3) => callEndpoint<Sighting[]>('photo', 'getSightings', { limit }),
