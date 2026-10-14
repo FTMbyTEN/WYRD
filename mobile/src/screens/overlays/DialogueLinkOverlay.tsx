@@ -30,7 +30,7 @@ function withPage(screen: string) {
   let seen = '';
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
     const el = document.getElementById('wyrd-page');
-    seen = (el?.innerText ?? '').replace(/\s+\n/g, '\n').replace(/\n{2,}/g, '\n').trim().slice(0, 3500);
+    seen = (el?.innerText ?? '').replace(/\s+\n/g, '\n').replace(/\n{2,}/g, '\n').trim().slice(0, 9000);
   }
   return `${screen}. The app is in ${isDark ? 'dark' : 'light'} mode.${seen ? ` The text on their screen right now:\n${seen}` : ''}`;
 }
