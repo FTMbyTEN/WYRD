@@ -3,7 +3,7 @@ import {
   ActivityIndicator, Animated, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View,
 } from 'react-native';
 import { Mono } from '../../components/ui';
-import { colors } from '../../theme';
+import { colors, isDark } from '../../theme';
 import { api } from '../../api/client';
 import type { QuizStats, ReadingItem, ReadingSlice, WorkPartInfo } from '../../api/types';
 import { BookCover } from './BookCover';
@@ -59,7 +59,7 @@ export function ReadingRoom({ slice, busy, onNext, onRestart, onJump, onClose, o
   const item = slice.item;
   const { width } = useWindowDimensions();
   const [size, setSize] = useState(18);
-  const [night, setNight] = useState(false);
+  const [night, setNight] = useState(isDark);
   const [focus, setFocus] = useState(false);
   const [toc, setToc] = useState<WorkPartInfo[] | null>(null);
   const [showToc, setShowToc] = useState(false);

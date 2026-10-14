@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { Display, Mono } from '../../components/ui';
-import { colors, fonts } from '../../theme';
+import { colors, fonts, isDark } from '../../theme';
 import { api } from '../../api/client';
 import { cachedFetch } from '../../api/hooks';
 import type { QuizStats, ReadingItem, ReadingSlice } from '../../api/types';
@@ -128,7 +128,7 @@ export function AcademyTab({ focus, onAsk }: { focus?: { id: number; at: number 
               </View>
               <View style={{ flex: 1 }}>
                 <Display style={[styles.wingName, on && { color: colors.onSignal }]}>{w.name}</Display>
-                <Mono style={[styles.wingWhat, on && { color: '#FBE3D6' }]}>{w.what}</Mono>
+                <Mono style={[styles.wingWhat, on && { color: colors.onSignal }]}>{w.what}</Mono>
               </View>
             </Pressable>
           );
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   deskMeta: { fontSize: 9, letterSpacing: 1.4, color: colors.mint, marginBottom: 4 },
   plank: { height: 7, backgroundColor: colors.mint },
   plankShadow: { height: 5, marginHorizontal: 8, backgroundColor: colors.greenBorderDim },
-  busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,250,242,0.85)', alignItems: 'center', justifyContent: 'center' },
+  busy: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: isDark ? 'rgba(20,17,14,0.85)' : 'rgba(255,250,242,0.85)', alignItems: 'center', justifyContent: 'center' },
 
   footnote: { fontSize: 10, lineHeight: 15, color: colors.greenBorder, textAlign: 'center', marginTop: 8 },
   wings: { flexDirection: 'row', gap: 16 },

@@ -39,7 +39,7 @@ export function ContinueHero({ item, busy, wide, onContinue, onQuiz }: {
         <Mono style={styles.when}>Last opened {ago(item.updatedAt)}</Mono>
         <View style={styles.actions}>
           <Pressable onPress={onContinue} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.8 }]}>
-            {busy ? <ActivityIndicator color="#FFFAF2" /> : <Mono style={styles.primaryText}>PICK UP WHERE I LEFT OFF →</Mono>}
+            {busy ? <ActivityIndicator color={colors.onSignal} /> : <Mono style={styles.primaryText}>PICK UP WHERE I LEFT OFF →</Mono>}
           </Pressable>
           <Pressable onPress={onQuiz} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
             <Mono style={styles.secondaryText}>QUIZ ME ON IT</Mono>
@@ -53,7 +53,7 @@ export function ContinueHero({ item, busy, wide, onContinue, onQuiz }: {
 
 const styles = StyleSheet.create({
   hero: {
-    flexDirection: 'row', gap: 16, padding: 16, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 22, backgroundColor: '#FFFAF2', alignItems: 'center',
+    flexDirection: 'row', gap: 16, padding: 16, borderWidth: 1, borderColor: colors.greenBorder, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center',
   },
   heroWide: { padding: 24, gap: 28 },
   coverWrap: { transform: [{ rotate: '-3deg' }] },
