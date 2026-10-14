@@ -543,6 +543,8 @@ export const api = {
 
   // ---- games ---- (the server holds every position and checks every move)
   myGames: () => callEndpoint<CustomGame[]>('games', 'myGames', {}),
+  /** WATCH WYRD PLAY: the game ready for WYRD to play, or "building" while its play mode is added. */
+  readyForWyrd: (id: number) => callEndpoint<CustomGame | null>('games', 'readyForWyrd', { id }),
   deleteGame: (id: number) => callEndpoint<void>('games', 'deleteGame', { id }),
   gameRatings: () => callEndpoint<PlayerRating[]>('games', 'myRatings', {}),
   gameLeaderboard: (game: string) => callEndpoint<PlayerRating[]>('games', 'leaderboard', { game }),

@@ -114,6 +114,15 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
     const t = setInterval(load, 6000);
     return () => clearInterval(t);
   }, [room, world]);
+  // WATCH WYRD PLAY: straight in if the game has WYRD's play mode; else it's added (the tile shows
+  // "programming" for a minute, then the same button plays)
+  const watchWyrd = async (g: CustomGame) => {
+    if (g.html.includes('WYRD_PLAYS')) { sfx('open'); onPlay?.(wyrdPlaying(g.html)); return; }
+    try {
+      const next = await api.readyForWyrd(g.id);
+      if (next) setCustoms((cs) => cs.map((c) => (c.id === next.id ? next : c)));
+    } catch { /* the tile stays as it was */ }
+  };
   const remove = async (id: number) => {
     setConfirmDel(null);
     setCustoms((cs) => cs.filter((g) => g.id !== id));
@@ -245,9 +254,7 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
                 ) : (
                   <>
                     {/* the game's own WYRD PLAYS mode: WYRD at the controls, you watching (take over with a key or a tap) */}
-                    {g.html.includes('WYRD_PLAYS') ? (
-                      <Pressable onPress={() => { sfx('open'); onPlay?.(wyrdPlaying(g.html)); }} style={[styles.chip, styles.chipOn]} accessibilityLabel={`Watch WYRD play ${g.title}`}><Mono style={[styles.chipText, styles.chipTextOn]}>WATCH WYRD PLAY</Mono></Pressable>
-                    ) : null}
+                    <Pressable onPress={() => void watchWyrd(g)} style={[styles.chip, styles.chipOn]} accessibilityLabel={`Watch WYRD play ${g.title}`}><Mono style={[styles.chipText, styles.chipTextOn]}>WATCH WYRD PLAY</Mono></Pressable>
                     <Pressable onPress={() => onAskWyrd?.(`Change my game "${g.title}": `)} style={styles.chip}><Mono style={styles.chipText}>CHANGE IT</Mono></Pressable>
                     <Pressable onPress={() => setConfirmDel(g.id)} style={styles.chip} accessibilityLabel={`Delete ${g.title}`}><Mono style={styles.chipText}>✕</Mono></Pressable>
                   </>
