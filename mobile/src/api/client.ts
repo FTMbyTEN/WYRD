@@ -545,6 +545,9 @@ export const api = {
   myGames: () => callEndpoint<CustomGame[]>('games', 'myGames', {}),
   /** WATCH WYRD PLAY: the game ready for WYRD to play, or "building" while its play mode is added. */
   readyForWyrd: (id: number) => callEndpoint<CustomGame | null>('games', 'readyForWyrd', { id }),
+  /** One round WYRD played, reported by the game: how WYRD learns to play it. */
+  wyrdRound: (id: number, score: number, params: string, note: string) =>
+    callEndpoint<CustomGame | null>('games', 'wyrdRound', { id, score, params, note }),
   deleteGame: (id: number) => callEndpoint<void>('games', 'deleteGame', { id }),
   gameRatings: () => callEndpoint<PlayerRating[]>('games', 'myRatings', {}),
   gameLeaderboard: (game: string) => callEndpoint<PlayerRating[]>('games', 'leaderboard', { game }),

@@ -382,6 +382,10 @@ export interface CustomGame {
   blurb: string;
   html: string; // empty while WYRD is still writing it
   status: 'building' | 'failed' | null; // null: ready to play
+  // WYRD learning to play it: its best score, rounds played, and its best strategy (JSON)
+  wyrdBest: number | null;
+  wyrdRounds: number | null;
+  wyrdParams: string | null;
   createdAt: string;
   updatedAt: string;
 }

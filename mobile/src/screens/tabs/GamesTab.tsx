@@ -84,9 +84,13 @@ function withSide(m: GameMatch | null): GameMatch | null {
 }
 
 /** GAMES: play WYRD, or another person, for a rating. */
-/** [html] with WYRD at the controls from the moment it loads (the game's WYRD PLAYS mode). */
-function wyrdPlaying(html: string) {
-  const flag = '<script>window.WYRD_PLAYS=true</script>';
+/** [html] with WYRD at the controls from the moment it loads (the game's WYRD LEARNS mode), starting
+ *  from what it learned before: its best, its rounds and its best strategy. */
+function wyrdPlaying(html: string, g: CustomGame) {
+  let params: unknown = null;
+  try { params = g.wyrdParams ? JSON.parse(g.wyrdParams) : null; } catch { /* starts fresh */ }
+  const learned = JSON.stringify({ best: g.wyrdBest ?? 0, rounds: g.wyrdRounds ?? 0, params }).replace(/</g, '\\u003c');
+  const flag = `<script>window.WYRD_LEARNS=${learned}</script>`;
   const i = html.toLowerCase().indexOf('<head>');
   return i < 0 ? flag + html : html.slice(0, i + 6) + flag + html.slice(i + 6);
 }
@@ -117,12 +121,28 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
   // WATCH WYRD PLAY: straight in if the game has WYRD's play mode; else it's added (the tile shows
   // "programming" for a minute, then the same button plays)
   const watchWyrd = async (g: CustomGame) => {
-    if (g.html.includes('WYRD_PLAYS')) { sfx('open'); onPlay?.(wyrdPlaying(g.html)); return; }
+    if (g.html.includes('WYRD_LEARNS')) { watching.current = g.id; sfx('open'); onPlay?.(wyrdPlaying(g.html, g)); return; }
     try {
       const next = await api.readyForWyrd(g.id);
       if (next) setCustoms((cs) => cs.map((c) => (c.id === next.id ? next : c)));
     } catch { /* the tile stays as it was */ }
   };
+  // each round WYRD plays, the game reports it (postMessage); it goes to the server, which keeps WYRD's
+  // best and its strategy, so it starts the next session from what it learned
+  const watching = useRef<number | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onMessage = (e: MessageEvent) => {
+      const r = (e.data as { wyrdRound?: { score?: unknown; params?: unknown; note?: unknown } } | null)?.wyrdRound;
+      const id = watching.current;
+      if (!r || id == null || typeof r.score !== 'number' || !isFinite(r.score)) return;
+      api.wyrdRound(id, Math.round(r.score), JSON.stringify(r.params ?? {}), String(r.note ?? '').slice(0, 300))
+        .then((next) => { if (next) setCustoms((cs) => cs.map((c) => (c.id === next.id ? next : c))); })
+        .catch(() => { /* this round isn't counted */ });
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
   const remove = async (id: number) => {
     setConfirmDel(null);
     setCustoms((cs) => cs.filter((g) => g.id !== id));
@@ -254,7 +274,7 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
                 ) : (
                   <>
                     {/* the game's own WYRD PLAYS mode: WYRD at the controls, you watching (take over with a key or a tap) */}
-                    <Pressable onPress={() => void watchWyrd(g)} style={[styles.chip, styles.chipOn]} accessibilityLabel={`Watch WYRD play ${g.title}`}><Mono style={[styles.chipText, styles.chipTextOn]}>WATCH WYRD PLAY</Mono></Pressable>
+                    <Pressable onPress={() => void watchWyrd(g)} style={[styles.chip, styles.chipOn]} accessibilityLabel={`Watch WYRD play ${g.title}`}><Mono style={[styles.chipText, styles.chipTextOn]}>{g.wyrdRounds ? `WATCH WYRD PLAY · BEST ${g.wyrdBest}` : 'WATCH WYRD PLAY'}</Mono></Pressable>
                     <Pressable onPress={() => onAskWyrd?.(`Change my game "${g.title}": `)} style={styles.chip}><Mono style={styles.chipText}>CHANGE IT</Mono></Pressable>
                     <Pressable onPress={() => setConfirmDel(g.id)} style={styles.chip} accessibilityLabel={`Delete ${g.title}`}><Mono style={styles.chipText}>✕</Mono></Pressable>
                   </>
