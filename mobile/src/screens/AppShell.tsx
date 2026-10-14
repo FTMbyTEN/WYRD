@@ -12,6 +12,7 @@ import { prefetchBrain, prefetchDialogue, useAgentBadge, useDroneAccess, useMind
 import { useUnreadAlertCount, markAllAlertsRead } from '../api/alerts';
 import { colors, setAccent, setTextSize, setThemeMode } from '../theme';
 import { WyrdCall } from '../components/WyrdCall';
+import { setGamesOrder } from '../util/gamesOrder';
 import { useIsDesktop } from '../util/layout';
 import { preloadVoice, setSound, sfx, unlock, useSound, voice, type VoiceLine } from '../util/sound';
 
@@ -190,6 +191,7 @@ export function AppShell() {
     else if (setting === 'accent') setAccent(/^#[0-9a-f]{6}$/i.test(value) ? value : null);
     else if (setting === 'text_size') setTextSize(value);
     else if (setting === 'open') PLACE[value]?.();
+    else if (setting === 'games_order') setGamesOrder(value);
   };
 
   const dialogue = linkOpened ? (

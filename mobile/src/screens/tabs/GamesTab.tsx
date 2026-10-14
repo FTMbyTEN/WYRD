@@ -12,6 +12,7 @@ import { api, ApiError } from '../../api/client';
 import type { CustomGame, GameMatch, PlayerRating } from '../../api/types';
 import { sfx } from '../../util/sound';
 
+import { gamesOrder, inGamesOrder, onGamesOrder } from '../../util/gamesOrder';
 import { loadRoom, saveRoom, type GameKey, type GameRoom } from '../../util/gameRoom';
 
 // the open world loads only when someone walks in: its 3D engine stays out of everyone else's download
@@ -94,6 +95,9 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
   const [world, setWorld] = useState(false);
   const [customs, setCustoms] = useState<CustomGame[]>([]);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  // the cards' order, as WYRD was asked to arrange them
+  const [order, setOrder] = useState<string[]>(gamesOrder);
+  useEffect(() => onGamesOrder(setOrder), []);
   // WYRD writes a game in the background: look again every few seconds, so a new one appears (and a
   // building one turns playable) without leaving the page
   useEffect(() => {
@@ -163,7 +167,7 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
       ) : null}
 
       <View style={styles.grid}>
-        {CATALOG.map((g) => {
+        {inGamesOrder(CATALOG, (g) => g.name, order).map((g) => {
           const r = ratings.find((x) => x.game === g.key);
           return (
             <Pressable
@@ -192,7 +196,7 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
           <Mono style={styles.muted}>Ask WYRD for any game and it writes it, saves it here, and you play it. Ask again to change it.</Mono>
         </View>
         <View style={styles.grid}>
-          {customs.map((g) => g.status ? (
+          {inGamesOrder(customs, (g) => g.title, order).map((g) => g.status ? (
             <View key={g.id} style={[styles.card, wide && styles.cardWide, styles.cardSoon]}>
               <View style={styles.cardHead}>
                 <View style={[styles.cardTitle, { flex: 1, minWidth: 0 }]}>
