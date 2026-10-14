@@ -84,6 +84,13 @@ function withSide(m: GameMatch | null): GameMatch | null {
 }
 
 /** GAMES: play WYRD, or another person, for a rating. */
+/** [html] with WYRD at the controls from the moment it loads (the game's WYRD PLAYS mode). */
+function wyrdPlaying(html: string) {
+  const flag = '<script>window.WYRD_PLAYS=true</script>';
+  const i = html.toLowerCase().indexOf('<head>');
+  return i < 0 ? flag + html : html.slice(0, i + 6) + flag + html.slice(i + 6);
+}
+
 /** onAskWyrd: open Dialogue Link with a request drafted; onPlay: a game WYRD made, full screen. */
 export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) => void; onPlay?: (html: string) => void } = {}) {
   const { width, height } = useWindowDimensions();
@@ -237,6 +244,10 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
                   </>
                 ) : (
                   <>
+                    {/* the game's own WYRD PLAYS mode: WYRD at the controls, you watching (take over with a key or a tap) */}
+                    {g.html.includes('WYRD_PLAYS') ? (
+                      <Pressable onPress={() => { sfx('open'); onPlay?.(wyrdPlaying(g.html)); }} style={[styles.chip, styles.chipOn]} accessibilityLabel={`Watch WYRD play ${g.title}`}><Mono style={[styles.chipText, styles.chipTextOn]}>WATCH WYRD PLAY</Mono></Pressable>
+                    ) : null}
                     <Pressable onPress={() => onAskWyrd?.(`Change my game "${g.title}": `)} style={styles.chip}><Mono style={styles.chipText}>CHANGE IT</Mono></Pressable>
                     <Pressable onPress={() => setConfirmDel(g.id)} style={styles.chip} accessibilityLabel={`Delete ${g.title}`}><Mono style={styles.chipText}>✕</Mono></Pressable>
                   </>
