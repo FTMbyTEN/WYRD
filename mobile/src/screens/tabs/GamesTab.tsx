@@ -196,12 +196,12 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
         <Mono style={styles.muted}>Every win and loss moves your rating. Play WYRD at your level, or challenge another person while WYRD keeps score.</Mono>
       </View>
 
-      {canWebGL ? (
-        <Pressable onPress={() => { sfx('open'); setWorld(true); }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
+      {Platform.OS === 'web' ? (
+        <Pressable onPress={() => { sfx('open'); location.href = '/lagos-island'; }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
           <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-            <Mono style={styles.worldEyebrow}>NEW · OPEN WORLD · PROTOTYPE</Mono>
-            <Display style={styles.worldName}>Lagos, run by WYRD</Display>
-            <Mono style={styles.worldBlurb}>Walk an Ojuelegba-inspired district. Danfos in the traffic, a market under umbrellas, and WYRD's real brain on a tower in the plaza: its mood sets the sky, and every thought it fires lights up the city.</Mono>
+            <Mono style={styles.worldEyebrow}>MULTIPLAYER · PHONE AND PC</Mono>
+            <Display style={styles.worldName}>LAGOS ISLAND</Display>
+            <Mono style={styles.worldBlurb}>Lagos Island, Ikoyi, VI, Eko Atlantic, Lekki, Ajah and Ilashe as a little game town. Walk it, ride okada, chat with the people near you.</Mono>
           </View>
           <Mono style={styles.worldGo}>ENTER ›</Mono>
         </Pressable>

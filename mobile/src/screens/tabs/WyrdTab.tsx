@@ -267,12 +267,12 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
         </View>
         <DialogueLauncher onPress={onOpenLink} focus={mind?.focusTopic} />
         {onPlayChess ? <ChessChallenge onPlay={onPlayChess} /> : null}
-        {desktop ? (
-          <Pressable onPress={() => { location.hash = 'play'; location.reload(); }} style={({ pressed }) => [styles.city, pressed && styles.cityHover]} accessibilityLabel="Play NAIJA 2099">
+        {Platform.OS === 'web' ? (
+          <Pressable onPress={() => { location.href = '/lagos-island'; }} style={({ pressed }) => [styles.city, pressed && styles.cityHover]} accessibilityLabel="Play LAGOS ISLAND">
             <View style={styles.cityBadge} />
             <View style={{ flex: 1 }}>
-              <Display style={styles.cityTitle}>NAIJA 2099</Display>
-              <Mono style={styles.citySub}>Live your Lagos story, with WYRD as the Authority.</Mono>
+              <Display style={styles.cityTitle}>LAGOS ISLAND</Display>
+              <Mono style={styles.citySub}>Walk Lagos Island, Ikoyi, VI, Lekki and Ajah. Meet the people on it.</Mono>
             </View>
             <Mono style={styles.cityGo}>Play →</Mono>
           </Pressable>
