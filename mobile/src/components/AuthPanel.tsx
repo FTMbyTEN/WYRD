@@ -137,11 +137,11 @@ export function AuthPanel({ onClose, onActivity }: { onClose: () => void; onActi
 
       <View style={styles.fields}>
         {needsEmail && (
-          <Field label="EMAIL">
+          <Field label={mode === 'signin' ? 'EMAIL OR LAGOS ISLAND USERNAME' : 'EMAIL'}>
             <TextInput
               value={email}
               onChangeText={(t) => { setEmail(t); if (error) clearError(); }}
-              placeholder="you@example.com"
+              placeholder={mode === 'signin' ? 'you@example.com or your username' : 'you@example.com'}
               placeholderTextColor={colors.greenBorder}
               autoCapitalize="none"
               autoCorrect={false}

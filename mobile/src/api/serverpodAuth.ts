@@ -5,8 +5,11 @@ import { callEndpoint, storeAuthSuccess, clearAuthTokens, type AuthSuccess } fro
 // emailed to the user -> finish with a password), unlike the old Node backend's single-step
 // username+password register.
 
+/** Signs in with an email, or with a Lagos Island username (the island and WYRD share one account). */
 export function login(email: string, password: string): Promise<AuthSuccess> {
-  return callEndpoint<AuthSuccess>('emailIdp', 'login', { email, password }, { authenticated: false });
+  const id = email.trim();
+  if (!id.includes('@')) return callEndpoint<AuthSuccess>('islandAuth', 'login', { username: id, password }, { authenticated: false });
+  return callEndpoint<AuthSuccess>('emailIdp', 'login', { email: id, password }, { authenticated: false });
 }
 
 /** Starts registration; the server emails a verification code to [email]. Returns an
