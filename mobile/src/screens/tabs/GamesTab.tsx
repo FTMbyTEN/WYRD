@@ -200,7 +200,7 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
         <Pressable onPress={() => { sfx('open'); location.href = '/lagos-island'; }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
           <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
             <Mono style={styles.worldEyebrow}>MULTIPLAYER · PHONE AND PC</Mono>
-            <Display style={styles.worldName}>LAGOS ISLAND</Display>
+            <Display style={styles.worldName}>Lagos Island</Display>
             <Mono style={styles.worldBlurb}>Lagos Island, Ikoyi, VI, Eko Atlantic, Lekki, Ajah and Ilashe as a little game town. Walk it, ride okada, chat with the people near you.</Mono>
           </View>
           <Mono style={styles.worldGo}>ENTER ›</Mono>

@@ -163,7 +163,7 @@ export function AppShell() {
   const maxChat = Math.max(420, Math.min(980, Math.round(winWidth * 0.62)));
   // where they are, told to WYRD with each message, so it knows what "this" is
   const TAB_SCREEN: Record<string, string> = {
-    wyrd: 'the home screen (WYRD tab: its brain, last thought, Dialogue Link box, chess challenge, LAGOS ISLAND card)',
+    wyrd: 'the home screen (WYRD tab: its brain, last thought, Dialogue Link box, chess challenge, Lagos Island card)',
     journal: 'the Journal (diary, dreams, reasoning, feed)',
     academy: 'the Academy (library and reading)',
     games: 'the Games tab (chess, Connect Four, Reversi, Tic-tac-toe, leaderboard, and YOUR GAMES that WYRD programmed for them)',

@@ -268,10 +268,10 @@ export function WyrdTab({ onOpenBrain, onOpenLink, onOpenTask, showTasks, onClos
         <DialogueLauncher onPress={onOpenLink} focus={mind?.focusTopic} />
         {onPlayChess ? <ChessChallenge onPlay={onPlayChess} /> : null}
         {Platform.OS === 'web' ? (
-          <Pressable onPress={() => { location.href = '/lagos-island'; }} style={({ pressed }) => [styles.city, pressed && styles.cityHover]} accessibilityLabel="Play LAGOS ISLAND">
+          <Pressable onPress={() => { location.href = '/lagos-island'; }} style={({ pressed }) => [styles.city, pressed && styles.cityHover]} accessibilityLabel="Play Lagos Island">
             <View style={styles.cityBadge} />
             <View style={{ flex: 1 }}>
-              <Display style={styles.cityTitle}>LAGOS ISLAND</Display>
+              <Display style={styles.cityTitle}>Lagos Island</Display>
               <Mono style={styles.citySub}>Walk Lagos Island, Ikoyi, VI, Lekki and Ajah. Meet the people on it.</Mono>
             </View>
             <Mono style={styles.cityGo}>Play →</Mono>

@@ -12,7 +12,7 @@ import { useEnter } from '../components/motion';
 export const APPS: { key: TabKey; label: string; glyph: GlyphName; blurb: string; owner?: boolean }[] = [
   { key: 'drone', label: 'Drone', glyph: 'drone', blurb: 'Fly, watch, plan', owner: true },
   { key: 'journal', label: 'Journal', glyph: 'journal', blurb: 'Diary, dreams, growth', owner: true },
-  { key: 'games', label: 'Games', glyph: 'games', blurb: 'Chess, LAGOS ISLAND', },
+  { key: 'games', label: 'Games', glyph: 'games', blurb: 'Chess, Lagos Island', },
 ];
 
 // the glass look is shared with COP and ALERTS (components/glass)
