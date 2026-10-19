@@ -4,9 +4,32 @@
     {
       "name": "wyrd-mobile-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "mobile", "run", "web"],
+      "runtimeArgs": [
+        "--prefix",
+        "mobile",
+        "run",
+        "web"
+      ],
       "port": 8081,
       "autoPort": true
+    },
+    {
+      "name": "lagos-island-local",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        ".claude/lagos-island-server.cjs"
+      ],
+      "port": 5518
+    },
+    {
+      "name": "lagos-island-repo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        ".claude/lagos-island-web.cjs",
+        "../lagos-island/web",
+        "5519"
+      ],
+      "port": 5519
     }
   ]
 }
