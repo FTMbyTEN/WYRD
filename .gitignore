@@ -36,3 +36,7 @@ mobile/eas_build_info.json
 
 # retired code, kept locally only (kai0.0.1.jar)
 archive/
+
+# this computer only
+.claude/settings.local.json
+.cloudflare/
