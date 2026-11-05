@@ -196,17 +196,6 @@ export function GamesTab({ onAskWyrd, onPlay }: { onAskWyrd?: (draft: string) =>
         <Mono style={styles.muted}>Every win and loss moves your rating. Play WYRD at your level, or challenge another person while WYRD keeps score.</Mono>
       </View>
 
-      {Platform.OS === 'web' ? (
-        <Pressable onPress={() => { sfx('open'); location.href = '/lagos-island'; }} style={({ pressed }) => [styles.worldCard, pressed && styles.pressed]}>
-          <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
-            <Mono style={styles.worldEyebrow}>MULTIPLAYER · PHONE AND PC</Mono>
-            <Display style={styles.worldName}>Lagos Island</Display>
-            <Mono style={styles.worldBlurb}>Lagos Island, Ikoyi, VI, Eko Atlantic, Lekki, Ajah and Ilashe as a little game town. Walk it, ride okada, chat with the people near you.</Mono>
-          </View>
-          <Mono style={styles.worldGo}>ENTER ›</Mono>
-        </Pressable>
-      ) : null}
-
       <View style={styles.grid}>
         {inGamesOrder(CATALOG, (g) => g.name, order).map((g) => {
           const r = ratings.find((x) => x.game === g.key);
